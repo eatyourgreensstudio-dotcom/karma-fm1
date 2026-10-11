@@ -56,6 +56,7 @@
 #include "ui.c"
 #include "ui_song.c"
 #include "ui_studio.c"
+#include "ui_op.c"            /* the bands the LIVE screens share: header, knob readouts, track bar */
 #include "icons.c"           /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */
 #include "ui_draw.c"
 #include "ui_vis.c"           /* the full-screen visualiser (HOME on HOME, 2.4) */

@@ -38,7 +38,7 @@ static uint8_t sync_reload;                  /* engine / preset / project / user
 #define Y_VALUE 44
 #define Y_GAUGE 64
 #define Y_SEP_END 70
-#define Y_GRAPH 74
+#define Y_GRAPH 22
 #define H_GRAPH 124
 #define G_OY 24                       /* graphs draw in the lower 100 px; the focus readout sits on top */
 #define Y_FOOT 202
@@ -85,7 +85,7 @@ static struct {
     char focus_l[8], focus_v[8], focus_u[8];   /* the touched column, shown large */
     char big_l[4][8], big_v[4][10], big_u[4][8];   /* the four columns, for the big values (2.4: pages without a graph) */
     uint16_t big_c[4];
-    uint32_t graph_sig, head_sig, foot_sig, frame;
+    uint32_t graph_sig, head_sig, foot_sig, col_sig, frame;
     uint8_t graph_top;           /* the graph strip's top G_OY rows hold something */
 } ui;
 

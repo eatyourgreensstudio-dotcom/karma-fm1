@@ -78,6 +78,7 @@ static void up_ui(uint32_t op, uint32_t k) { (void)op; (void)k; }
 static void settings_save(void) {}
 #include "../firmware/src/ui_song.c"
 #include "../firmware/src/ui_studio.c"
+#include "../firmware/src/ui_op.c"
 #include "../firmware/src/icons.c"
 #include "../firmware/src/ui_draw.c"
 #include "../firmware/src/ui_vis.c"
@@ -752,12 +753,12 @@ int main(int argc, char **argv)
         TSEL->p[P_TFLT] = -32; ui.force = 1; frames(2); ppm("page-filter");
         check(!strcmp(ui.big_l[0], "FILT") && !strcmp(ui.big_v[0], "LP50") && !ui.big_l[1][0],
               "FILTER page: its one value drawn large (LP50 %)");
-        {   /* the big value in the graph strip: white pixels in the middle of the screen */
+        {   /* the value large in the knob band (ui_op.c): pixels lit under KNOB 1's label */
             uint32_t x, y, lit = 0;
-            for (y = Y_GRAPH + 30; y < Y_GRAPH + 90; y++)
-                for (x = 40; x < 200; x++)
+            for (y = OP_KNOB_Y + 24; y < OP_KNOB_Y + 56; y++)
+                for (x = 4; x < 60; x++)
                     lit += screen[y * 240u + x] != 0;
-            check(lit > 300u, "FILTER page: the graph strip shows it");
+            check(lit > 100u, "FILTER page: the knob band shows it");
         }
         TSEL->p[P_TFLT] = 0;
         SEL(9);

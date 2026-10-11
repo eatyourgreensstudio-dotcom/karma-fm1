@@ -1012,6 +1012,11 @@ static void layer_screen_draw(void)
         break;
     }
     layer_sub_shown = sub;
+    if (layer == LY_MIX) {                              /* the mixer: the band on stage (ui_op.c) */
+        op_mix_draw(val, ratio, (uint32_t)(fill_now != 0) | (uint32_t)(fill_bar_on != 0) << 1 | (uint32_t)(fill_arm != 0) << 2 |
+                    (uint32_t)(song.playing && clk_pos < BEAT_U / 4u) << 3);
+        return;
+    }
     layer_title(LAYER_NAME[layer % LY_COUNT], sub, col, &head);
     if (layer == LY_FX)
         punch_tiles_draw(tl, &tiles);
