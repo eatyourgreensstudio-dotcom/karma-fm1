@@ -4,6 +4,9 @@
  * footer (steps + engine / preset / page). */
 static void draw_menu(void);
 static uint32_t str_hash(uint32_t h, const char *s);
+/* (the knob band shows no icon: the look-ups by label, icons.c, are not built in) */
+#define param_icon(d, v) ICON_NONE
+#define engine_icon(n) ICON_NONE
 
 /* --------------------------------------------------------- drawing --- */
 static int is_eng_name(const char *s)                 /* one of the ENGINES[]->name strings */
@@ -327,7 +330,9 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ (ui.frame / 2u);                  /* scope: redraw every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u;
-    if (big_page(pg) && !is_drum(t))                 /* the character's scene (ui_op.c): moves while the track sounds */
+    if (pg->fam == FAM_FX && (pg->graph == GR_FX || big_page(pg)))   /* the wizard: moves while the track sounds */
+        h ^= ((is_drum(t) ? drums.peak : t->peak) > 64 || op_mx[song.sel & 3u] || op_hop[song.sel & 3u] ? ui.frame / 2u : 0u) * 40503u;
+    else if (big_page(pg) && !is_drum(t))            /* the character's scene (ui_op.c): moves while the track sounds */
         h ^= (t->peak > 64 || op_lvl || op_hit ? ui.frame / 2u : 0u) * 40503u + op_note * 977u + user_of(t) * 31u;
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
@@ -631,11 +636,6 @@ static void draw_graph(void)
     const track_t *t = TSEL;
     uint16_t c = TE_COL[song.sel & 3u];               /* LIVE: the curves in the track's colour */
     uint32_t sig, top, drum_note = !ui.home && is_drum(t) && !page_for_drum(pg);
-    if (!ui.home && pg->graph == GR_TRK) {
-        draw_tracks();
-        ui.graph_top = 1;                            /* the next graph draws its top rows again */
-        return;
-    }
     sig = graph_signature();
     if (!ui.force && sig == ui.graph_sig)
         return;
@@ -666,7 +666,8 @@ static void draw_graph(void)
             graph_scale(t, c);
             break;
         case GR_FX:
-            graph_fx(t, c);
+            cv_oy = 0;
+            op_fx_scene(opk.ratio);                  /* the wizard (ui_op.c) */
             break;
         case GR_SLCR:
             graph_slicer(t, c);
@@ -686,10 +687,15 @@ static void draw_graph(void)
         default:
             if (big_page(pg)) {
                 cv_oy = 0;
-                if (is_drum(t))
+                if (pg->fam == FAM_FX) {              /* FILTER, INSERT, DLY, REV/CHO: the wizard too */
+                    if (!is_drum(t))
+                        op_names(t);
+                    op_fx_scene(opk.ratio);
+                } else if (is_drum(t)) {
                     graph_big();
-                else
+                } else {
                     op_synth_scene((track_t *)t, opk.ratio, pg->id[0] == P_E0 && t->eng_req % NENGINES == 0u);
+                }
             }
             break;
         }

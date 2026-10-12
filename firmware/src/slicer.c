@@ -188,7 +188,7 @@ static void slicer_drums(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, u
     }
     for (i = 0; i < n; i++)
         sl_dbuf[i] = 0;
-    drums_render_mono(sl_dbuf, n);
+    drums_render_mono(rev, dly, sl_dbuf, n);
     slicer_track(t, sl_dbuf, n);
     {
         int32_t send = send_thr(song.g[G_DRREV] * 258, thr_rev), dsend = send_thr(song.g[G_DRDLY] * 258, thr_dly), pan = t->p[P_PAN];

@@ -27,8 +27,15 @@ _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, 
 static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
 #define DRUM_DEFAULT_KIT DRUM_SAMPLED   /* power-on: 808 */
 
+/* each sound's own sends, on top of the kit's (GLO > DRUMS REV, DLY): [lane] {reverb 0..15, delay 0..7}; the
+ * kit page's KNOB 3 and 4 (ui_studio.c), kept with the project (project.c proj_ds_put) */
+static uint8_t drum_send[DRUM_LANES][2];
+#define DRUM_SEND_REV 15
+#define DRUM_SEND_DLY 7
+
 static struct {
     voice_t v[NDRUM];
+    uint8_t lane[NDRUM];         /* the sound each voice plays (its sends) */
     uint32_t age;
     int16_t set;                 /* SMP_SETS index of "PERC" (GM map), -1 = none */
     int32_t tail;                /* declick: the last output of cut voices, decaying */
@@ -207,6 +214,7 @@ static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel,
     v->s[7] = 0;
     v->age = ++drums.age;
     drums.synth[i] = 1;
+    drums.lane[i] = (uint8_t)(note < 128u ? lane_of_note(note) : 0u);
     drums.kit[i] = (uint8_t)kit;
     ds_on(&drums.ds[i], snd, crush, note, vel);
 }
@@ -301,6 +309,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         uint32_t vi = (uint32_t)(v - drums.v);
         int32_t shift = kit == 1u ? (note <= 36u ? -5 : -2) : kit == 3u ? 2 : kit == 4u ? -1 : 0;
         drums.kit[vi] = (uint8_t)kit;
+        drums.lane[vi] = (uint8_t)lane_of_note(note);
         drums.synth[vi] = 0;
         drums.filter[vi] = 0;
         drums.env[vi] = 32767;
@@ -308,13 +317,29 @@ static void drum_on(uint32_t note, uint32_t vel)
     }
 }
 
+/* the reverb and delay sends of voice k, Q15: the kit's plus its sound's own; own_only: the sound's alone */
+static inline void drum_voice_sends(uint32_t k, int own_only, int32_t *rs, int32_t *ds)
+{
+    uint32_t ln = drums.lane[k] % DRUM_LANES;
+    int32_t r = drum_send[ln][0] * 127 / DRUM_SEND_REV, d = drum_send[ln][1] * 127 / DRUM_SEND_DLY;
+    if (own_only) {
+        *rs = r * 258;
+        *ds = d * 258;
+        return;
+    }
+    r += song.g[G_DRREV];
+    d += song.g[G_DRDLY];
+    *rs = send_thr((r > 127 ? 127 : r) * 258, thr_rev);   /* (2.6: the THROWs) */
+    *ds = send_thr((d > 127 ? 127 : d) * 258, thr_dly);
+}
+
 /* adds the drums into the dry mix and the reverb and delay sends; mono != 0: into mono instead, before
- * the pan and the sends (the SLICER, slicer.c slicer_drums, does those after it) */
+ * the pan and the kit's sends (the SLICER, slicer.c slicer_drums, does those after it), each sound's own
+ * sends from here (so they stay the sound's with the SLICER on) */
 static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n)
 {
     uint32_t k, i;
-    int32_t lvl = song.g[G_DRLVL] * 200, send = send_thr(song.g[G_DRREV] * 258, thr_rev),
-            dsend = send_thr(song.g[G_DRDLY] * 258, thr_dly), pk = drums.peak;   /* (2.6: the THROWs) */
+    int32_t lvl = song.g[G_DRLVL] * 200, send, dsend, pk = drums.peak;
     int32_t pan = trk[TRK_DRUM].p[P_PAN], gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
     for (i = 0; i < n && drums.tail; i++) {         /* declick tail, ~0.4 ms */
         if (mono) {
@@ -330,6 +355,7 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
         uint32_t m = n < CTL ? n : CTL;             /* (the mix runs in blocks of CTL) */
         if (!v->active || !drums.synth[k])
             continue;
+        drum_voice_sends(k, mono != 0, &send, &dsend);
         if (!ds_render(&drums.ds[k], ds_buf, m))
             v->active = 0;
         for (i = 0; i < m; i++) {
@@ -339,6 +365,10 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
                 pk = s < 0 ? -s : s;
             if (mono) {
                 mono[i] += s;
+                if (send)
+                    rev[i] += mulq15(s, send);
+                if (dsend)
+                    dly[i] += mulq15(s, dsend);
                 continue;
             }
             ml[i] += (s * gl) >> 12;
@@ -363,6 +393,7 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
         int32_t g;
         if (!v->active)
             continue;
+        drum_voice_sends(k, mono != 0, &send, &dsend);
         g = mulq15(lvl, v->vel * 258);
         g += g * 3 >> 2;                           /* x1.75 (+5 dB): as loud as the synthesised kits */
         for (i = 0; i < n; i++) {
@@ -395,6 +426,10 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
                 pk = s < 0 ? -s : s;
             if (mono) {
                 mono[i] += s;
+                if (send)
+                    rev[i] += mulq15(s, send);
+                if (dsend)
+                    dly[i] += mulq15(s, dsend);
                 continue;
             }
             ml[i] += (s * gl) >> 12;
@@ -409,4 +444,4 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
     drums.peak = pk;
 }
 static void drums_render(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, uint32_t n) { drums_mix(ml, mr, rev, dly, 0, n); }
-static void drums_render_mono(int32_t *mono, uint32_t n) { drums_mix(0, 0, 0, 0, mono, n); }
+static void drums_render_mono(int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n) { drums_mix(0, 0, rev, dly, mono, n); }

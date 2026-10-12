@@ -413,6 +413,36 @@ static void proj_tx_get(const project_t *p)
         song.g[ID[i]] = (int16_t)clamp(v[i], GP[ID[i]].min, GP[ID[i]].max);
 }
 
+/* each drum sound's own sends (drums.c drum_send): 7 bits a sound (reverb 4, delay 3), the 16 of them in the
+ * drum track's P_E1 .. P_E7, which it has no use for (its P_E0 is the kit); bit 6 of rsv[0] says they are
+ * there (a project from before: none, as it sounded) */
+static void proj_ds_put(project_t *p)
+{
+    proj_trk_t *t = &p->t[TRK_DRUM];
+    uint32_t l, b;
+    for (l = 1; l < 8u; l++)
+        t->e[l] = 0;
+    for (l = 0; l < DRUM_LANES; l++) {
+        uint32_t v = (drum_send[l][0] & 15u) | (drum_send[l][1] & 7u) << 4;
+        for (b = 0; b < 7u; b++)
+            if ((v >> b) & 1u)
+                t->e[1u + (l * 7u + b) / 16u] = (int16_t)((uint16_t)t->e[1u + (l * 7u + b) / 16u] | 1u << ((l * 7u + b) % 16u));
+    }
+    p->rsv[0] |= 0x40u;
+}
+static void proj_ds_get(const project_t *p)
+{
+    const proj_trk_t *t = &p->t[TRK_DRUM];
+    uint32_t l, b;
+    for (l = 0; l < DRUM_LANES; l++) {
+        uint32_t v = 0;
+        for (b = 0; b < 7u && (p->rsv[0] & 0x40u); b++)
+            v |= (((uint16_t)t->e[1u + (l * 7u + b) / 16u] >> ((l * 7u + b) % 16u)) & 1u) << b;
+        drum_send[l][0] = (uint8_t)(v & 15u);
+        drum_send[l][1] = (uint8_t)(v >> 4);
+    }
+}
+
 static void proj_capture(project_t *p)        /* what is playing now, as a project */
 {
     uint32_t i;
@@ -435,6 +465,7 @@ static void proj_capture(project_t *p)        /* what is playing now, as a proje
             pt_set_mf(&p->t[i], k, trk[i].micro[k], (uint32_t)trk[i].fill[k / 4u] >> (2u * (k % 4u)));
         memcpy(p->t[i].lock, trk[i].lock, sizeof trk[i].lock);
     }
+    proj_ds_put(p);
     p->sum = proj_sum(p);
 }
 
@@ -452,6 +483,7 @@ static void proj_apply(const project_t *p, int all)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
     song.g[G_DRDLY] = (int16_t)clamp(p->drdly, GP[G_DRDLY].min, GP[G_DRDLY].max);   /* (a load and a section, as REV) */
     proj_tx_get(p);                                     /* GLO > TEXTURE (2.6): a load and a section */
+    proj_ds_get(p);                                     /* each drum sound's own sends: a load and a section */
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];
         const proj_trk_t *s = &p->t[k];

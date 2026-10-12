@@ -15,6 +15,7 @@ static void op_trackbar(uint32_t *cache);
 static void op_drum_scene(uint32_t bank, uint32_t len);
 static void op_drum_steps(uint32_t bank, uint32_t len);
 static void op_home_body(void);
+static void op_box(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c);
 static int on_drum_page(void) { return !ui.home && cur_page()->scope == SC_DRUM; }
 
 /* ---------------------------------------------------------------- style --- */
@@ -321,13 +322,19 @@ static void drum_screen_draw(void)
             lcd_fill(0, 22, 240, 16, C_BLACK);
             lcd_fill(0, 138, 240, 16, C_BLACK);
         }
+        for (i = 0; i < DRUM_LANES; i++)
+            lit = lit * 131u + drum_send[i][0] + drum_send[i][1] * 16u;
         if (ui.force || lit * 31u + drum_lane + 1u != body_sig) {
             body_sig = lit * 31u + drum_lane + 1u;
             cv_begin(240, 100, C_BLACK);
-            for (i = 0; i < DRUM_LANES; i++) {
+            for (i = 0; i < DRUM_LANES; i++) {             /* under each name its own sends: reverb, delay */
                 int32_t x = 2 + (int32_t)(i % 4u) * 60, y = (int32_t)(i / 4u) * 25;
                 cv_rect(x, y, 56, 23, pad_lit[i] ? TE_DRUM : TE_G1);
-                te_text_c(x + 28, y + 4, LANE_SHORT[i], pad_lit[i] ? C_BLACK : i == drum_lane ? C_WHITE : TE_G3);
+                if (i == drum_lane)
+                    op_box(x, y, 56, 23, TE_COL[0]);
+                te_text_c(x + 28, y + 2, LANE_SHORT[i], pad_lit[i] ? C_BLACK : i == drum_lane ? C_WHITE : TE_G3);
+                cv_rect(x + 3, y + 19, drum_send[i][0] * 24 / DRUM_SEND_REV, 2, pad_lit[i] ? C_BLACK : TE_COL[2]);
+                cv_rect(x + 30, y + 19, drum_send[i][1] * 24 / DRUM_SEND_DLY, 2, pad_lit[i] ? C_BLACK : TE_COL[3]);
             }
             cv_blit(0, 38);
         }
@@ -336,7 +343,7 @@ static void drum_screen_draw(void)
     {
         static char v[4][12];
         const char *val[4] = {v[0], v[1], v[2], v[3]};
-        static const char *const LG[4] = {"sound", "step", "hit", "level"}, *const LK[4] = {"kit", "level", "reverb", "pan"};
+        static const char *const LG[4] = {"sound", "step", "hit", "level"}, *const LK[4] = {"sound", "kit", "reverb", "delay"};
         int32_t ratio[4];
         if (!drum_page) {
             const dstep_t *s = &TDRUM->dstep[drum_cursor];
@@ -351,14 +358,14 @@ static void drum_screen_draw(void)
                                                                      * hard right (2.5: it followed the stored order) */
             op_knobs(LG, val, 0, ratio, 0, 1u, &footer);
         } else {
-            fmt_int(v[0], (int32_t)kit + 1);
-            fmt_int(v[1], song.g[G_DRLVL] * 100 / 127);
-            fmt_int(v[2], song.g[G_DRREV] * 100 / 127);
-            fmt_int(v[3], TDRUM->p[P_PAN]);
-            ratio[0] = (int32_t)kit * 1000 / (int32_t)(DRUM_KITS - 1u);
-            ratio[1] = song.g[G_DRLVL] * 1000 / 127;
-            ratio[2] = song.g[G_DRREV] * 1000 / 127;
-            ratio[3] = (TDRUM->p[P_PAN] + 64) * 1000 / 127;
+            str_cpy(v[0], LANE_SHORT[drum_lane], 8);   /* KIT: the sound, the kit, the sound's own reverb and delay */
+            fmt_int(v[1], (int32_t)kit + 1);
+            fmt_int(v[2], drum_send[drum_lane][0] * 100 / DRUM_SEND_REV);
+            fmt_int(v[3], drum_send[drum_lane][1] * 100 / DRUM_SEND_DLY);
+            ratio[0] = (int32_t)drum_lane * 1000 / (DRUM_LANES - 1);
+            ratio[1] = (int32_t)kit * 1000 / (int32_t)(DRUM_KITS - 1u);
+            ratio[2] = drum_send[drum_lane][0] * 1000 / DRUM_SEND_REV;
+            ratio[3] = drum_send[drum_lane][1] * 1000 / DRUM_SEND_DLY;
             op_knobs(LK, val, 0, ratio, 0, 2u, &footer);
         }
     }
@@ -452,6 +459,12 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
         }
     }
     if ((s = panel_enc(EN_PRESET))) TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+    if (drum_page)                                      /* KIT: a key played picks its sound (KNOB 3, 4: its sends) */
+        for (k = 0; k < 27u; k++)
+            if ((fm1_in.notes >> k) & 1u) {
+                drum_lane = (uint8_t)lane_of_key(k);
+                break;
+            }
     for (k = 0; k < 4u; k++) if ((s = panel_enc(EN_K1 + k))) {
         ui.hot_col = (uint8_t)k;
         ui.hot_t = 40;
@@ -482,10 +495,14 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
                 sync_reload = 1;
             }
         } else {
-            if (k == 0) TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
-            if (k == 1) song.g[G_DRLVL] = (int16_t)clamp(song.g[G_DRLVL] + s, 0, 127);
-            if (k == 2) song.g[G_DRREV] = (int16_t)clamp(song.g[G_DRREV] + s, 0, 127);
-            if (k == 3) TDRUM->p[P_PAN] = (int16_t)clamp(TDRUM->p[P_PAN] + s, -64, 63);
+            if (k == 0) {                              /* the sound: heard */
+                uint8_t l = (uint8_t)clamp(drum_lane + s, 0, DRUM_LANES - 1);
+                if (l != drum_lane) audition_lane(l);
+                drum_lane = l;
+            }
+            if (k == 1) TDRUM->p[P_E0] = (int16_t)clamp(TDRUM->p[P_E0] + s, 0, DRUM_KITS - 1);
+            if (k == 2) drum_send[drum_lane][0] = (uint8_t)clamp(drum_send[drum_lane][0] + s, 0, DRUM_SEND_REV);
+            if (k == 3) drum_send[drum_lane][1] = (uint8_t)clamp(drum_send[drum_lane][1] + s, 0, DRUM_SEND_DLY);
         }
     }
 }

@@ -115,7 +115,7 @@ static void op_knobs(const char *const lab[4], const char *const val[4], const c
             cv_rect(x0, 22, 52, 1, TE_G1);
             cv_rect(x0, 22, ratio[k] * 52 / 1000, 1, TE_MID[k]);
         }
-        if (op_is_num(v)) {
+        if (op_is_num(v) && (int32_t)str_len(v) * 16 + uw <= 58) {   /* (with a unit that fits beside them) */
             if (*v == '-') {
                 cv_rect(x, 39, 7, 2, c);
                 x += 10;
@@ -727,6 +727,93 @@ static void op_band_member(uint32_t i, int32_t cx, int32_t fy, int up, int hl, i
         op_dog(cx, fy, up, c);
     else
         op_drummer(cx, fy, hl, hr);
+}
+
+/* ------------------------------------------------------------------- FX --- */
+/* the FX pages (the sends, and those without a graph: FILTER, INSERT, DLY, REV/CHO): a wizard, a spell a
+ * knob from the tip of its wand, each in the knob's colour and as strong as the knob is turned: KNOB 1 a
+ * bolt of lightning, KNOB 2 two ribbons that wave, KNOB 3 stars that bounce away, smaller each, KNOB 4
+ * rings that spread. The selected track's sound moves them, each note flicks the wand. */
+static void op_fx_scene(const int32_t ratio[4])
+{
+    static uint32_t ph;
+    uint32_t sel = song.sel & 3u, live, rnd, j;
+    int32_t flick, tx = 112, ty, x, py = 0, i, n;
+    op_band_tick();
+    live = op_mx[sel] != 0u || op_hop[sel] != 0u;
+    if (live)
+        ph += 48u;
+    flick = op_hop[sel] > 3u ? 5 : op_hop[sel] ? 2 : 0;
+    ty = 56 - flick;
+    for (x = 8; x < 232; x += 8)
+        cv_pset(x, 116, OP_PUR_D);
+    /* the wizard: a robe, a beard, a hat with its tip bent, an arm up with the wand */
+    cv_line(52, 115, 60, 82, OP_PUR);
+    cv_line(60, 82, 80, 82, OP_PUR);
+    cv_line(80, 82, 88, 115, OP_PUR);
+    cv_line(52, 115, 88, 115, OP_PUR);
+    op_ell(70, 71, 8, 8, OP_PUR);
+    cv_line(63, 76, 70, 94, C_WHITE);
+    cv_line(77, 76, 70, 94, C_WHITE);
+    cv_rect(66, 69, 2, 2, C_WHITE);
+    cv_rect(73, 69, 2, 2, C_WHITE);
+    cv_line(54, 64, 86, 64, OP_PUR);
+    cv_line(59, 64, 71, 34, OP_PUR);
+    cv_line(71, 34, 81, 64, OP_PUR);
+    cv_line(71, 34, 79, 29, OP_PUR);
+    cv_rect(78, 26, 1, 5, TE_COL[sel]);                 /* a star at its tip, in the track's colour */
+    cv_rect(76, 28, 5, 1, TE_COL[sel]);
+    cv_line(60, 86, 52, 98, OP_PUR);
+    cv_line(80, 86, 96, 72 - flick, OP_PUR);
+    cv_line(96, 72 - flick, tx, ty, C_WHITE);
+    if (ratio[3] > 0) {                                 /* KNOB 4: the rings */
+        int32_t maxr = 16 + ratio[3] * 30 / 1000;
+        n = 1 + ratio[3] * 3 / 1000;
+        for (i = 0; i < n; i++) {
+            int32_t r = 6 + (int32_t)((ph / 6u + (uint32_t)i * (uint32_t)maxr / (uint32_t)n) % (uint32_t)maxr);
+            op_arc(tx, ty, r, r, 800, 1248, r > maxr - 6 ? TE_DIM[3] : TE_COL[3]);
+        }
+    }
+    if (ratio[0] > 0) {                                 /* KNOB 1: the bolt, new at each frame while it sounds */
+        int32_t len = 50 + ratio[0] * 64 / 1000, jag = 2 + ratio[0] * 9 / 1000, px = tx + 2;
+        rnd = (live ? ui.frame / 2u : 7u) * 2654435761u + 1u;
+        py = ty - 2;
+        for (i = 1; i <= 6; i++) {
+            int32_t nx = tx + 2 + len * i / 6, ny;
+            rnd = rnd * 1664525u + 1013904223u;
+            ny = ty - 2 - (len * i / 6) * 26 / 114 + (i == 6 ? 0 : (int32_t)((rnd >> 12) % (uint32_t)(2 * jag + 1)) - jag);
+            cv_line(px, py, nx, ny, i > 4 && live ? C_WHITE : TE_COL[0]);
+            px = nx;
+            py = ny;
+        }
+    }
+    if (ratio[1] > 0) {                                 /* KNOB 2: the ribbons */
+        int32_t amp = 2 + ratio[1] * 7 / 1000;
+        for (j = 0; j < 2u; j++)
+            for (x = tx + 6; x <= 232; x += (int32_t)j + 1) {
+                int32_t y = ty + 12 + (int32_t)j * 7 + ((SINE[((uint32_t)x * 22u + ph * 2u + j * 300u) & 1023u] * amp) >> 15);
+                if (j == 0 && x > tx + 6)
+                    cv_line(x - 1, py, x, y, TE_COL[1]);
+                else
+                    cv_pset(x, y, TE_COL[1]);
+                py = y;
+            }
+    }
+    if (ratio[2] > 0) {                                 /* KNOB 3: the stars */
+        n = 1 + ratio[2] * 5 / 1000;
+        for (i = 0; i < n; i++) {
+            int32_t sx = tx + 14 + i * 19, s = 5 - i * 4 / 5, b = SINE[(ph * 3u + (uint32_t)i * 170u) & 1023u];
+            int32_t sy = ty + 44 - (((b < 0 ? -b : b) * (9 - i)) >> 15);
+            cv_rect(sx - s, sy, 2 * s + 1, 1, TE_COL[2]);
+            cv_rect(sx, sy - s, 1, 2 * s + 1, TE_COL[2]);
+            if (s > 2) {
+                cv_pset(sx - 2, sy - 2, TE_COL[2]);
+                cv_pset(sx + 2, sy - 2, TE_COL[2]);
+                cv_pset(sx - 2, sy + 2, TE_COL[2]);
+                cv_pset(sx + 2, sy + 2, TE_COL[2]);
+            }
+        }
+    }
 }
 
 /* ---------------------------------------------------------------- MIXER --- */
