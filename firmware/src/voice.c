@@ -68,7 +68,8 @@ static void track_lfo_tick(track_t *t)
 /* voices the engine may use (POLY and UNISON): its cap, else all of them */
 static uint32_t trk_nvoice(const track_t *t)
 {
-    uint32_t c = ENGINES[t->engine] == &ENG_PHYS ? phys_poly(t) : ENGINES[t->engine] == &ENG_PRISM ? prism_poly(t) :
+    uint32_t c = ENGINES[t->engine] == &ENG_PHYS ? phys_poly(t) : ENGINES[t->engine] == &ENG_ELEM ? elem_poly(t) :
+                 ENGINES[t->engine] == &ENG_PRISM ? prism_poly(t) :
                  ENGINES[t->engine]->poly;                 /* (PHYS, PRISM: by MODEL) */
     return c && c < NPOLY ? c : NPOLY;
 }

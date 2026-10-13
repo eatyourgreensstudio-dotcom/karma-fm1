@@ -4,7 +4,8 @@
  * MIT: phys_dsp.c) and Rings' sympathetic strings (Emilie Gillet; MIT: phys_symp.c); this file is the
  * Felucca engine around them.
  *
- * MODEL picks one of four (the values are stored: new ones are appended):
+ * MODEL picks one of four (the values are stored: new ones are appended); the four after them, Elements'
+ * exciters on the modal bank, are the ELEMENTS engine's (eng_elem.c: the same code, its own MODEL list):
  *   MODAL   a bank of 12 band-pass modes (bells, bars, plates): STRC stretches the partials
  *           (below 0.25 compressed, 0.25..0.3 harmonic, above more and more inharmonic), BRIT
  *           keeps the high modes ringing and opens the strike, DAMP the decay (127 rings on),
@@ -50,6 +51,13 @@
 
 enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_BOUNCE, PM_PICK, PM_BOW, PM_BLOW, PM_COUNT };
 #define PHYS_POLY 3
+#define PM_ELEM PM_BOUNCE          /* the first of ELEMENTS' models */
+/* the model a track plays: PHYS the first four, ELEMENTS (elem) the rest */
+static uint32_t phys_md(const track_t *t, uint32_t elem)
+{
+    uint32_t m = (uint32_t)t->p[P_E0];
+    return elem ? PM_ELEM + m % (PM_COUNT - PM_ELEM) : m % PM_ELEM;
+}
 /* output: model 1.0 -> this (VOICE_FS scale), then a soft knee; per model (a strike of all the modes in
  * phase peaks high but is short) */
 static const int32_t PHYS_GAIN[PM_COUNT] = {56000, 48000, 135000, 36000, 56000, 56000, 14000, 40000};   /* (SLOOP 2.5: x2, x4, x1.5, x3: the
@@ -65,7 +73,7 @@ typedef struct {
 } phys_slot_t;
 
 
-static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP", "BOUNC", "PICK", "BOW", "BLOW"};
+static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP", "BOUNC", "PICK", "BOW", "BLOW"};   /* (ELEMENTS: from PM_ELEM) */
 static const char *const N_PHYS_CHORD[] = {"OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT", 0};
 /* per model: STRC .. EXC under their own names (phys_desc; range and default as edit[], 0 = edit[]) */
 static const param_desc_t PHYS_D_HARM = {"HARM", F_PCT, 0, 127, 64, 0, 0};
@@ -88,7 +96,11 @@ static const param_desc_t *const PHYS_DESC[PM_COUNT][8] = {
 
 static const param_desc_t *phys_desc(const track_t *t, uint32_t k)
 {
-    return k < 8u ? PHYS_DESC[(uint32_t)t->p[P_E0] % PM_COUNT][k] : 0;
+    return k < 8u ? PHYS_DESC[phys_md(t, 0)][k] : 0;
+}
+static const param_desc_t *elem_desc(const track_t *t, uint32_t k)
+{
+    return k < 8u ? PHYS_DESC[phys_md(t, 1)][k] : 0;
 }
 
 /* SYMP: the sympathetic strings above the note, cents (CHRD's names) */
@@ -113,31 +125,33 @@ _Static_assert(PHYS_SOLO_AT + sizeof(px_bow_t) <= PHYS_ARENA && PHYS_SOLO_AT + s
                "the solo layout: the bank and the bow's / the pipe's memory in one arena");
 #define PHYS_SOLO(S) ((void *)((uint8_t *)(S) + PHYS_SOLO_AT))
 static uint8_t phys_lay[NPART];          /* 1 + the layout the slots are in (0 small, 1 SYMP, 2 solo), 0 = none yet */
-static uint32_t phys_layout(const track_t *t)
+static uint32_t phys_layout(uint32_t md)
 {
-    uint32_t md = (uint32_t)t->p[P_E0] % PM_COUNT;
     return md == PM_SYMP ? 1u : md == PM_BOW || md == PM_BLOW ? 2u : 0u;
 }
-static uint32_t phys_poly(const track_t *t)
+static uint32_t phys_poly_md(uint32_t md)
 {
     static const uint8_t N[3] = {3, 2, 1};
-    return N[phys_layout(t)];
+    return N[phys_layout(md)];
 }
-static phys_slot_t *phys_slot_of(track_t *t, voice_t *v)
+static uint32_t phys_poly(const track_t *t) { return phys_poly_md(phys_md(t, 0)); }
+static uint32_t elem_poly(const track_t *t) { return phys_poly_md(phys_md(t, 1)); }
+static phys_slot_t *phys_slot_of(track_t *t, voice_t *v, uint32_t elem)
 {
+    uint32_t md = phys_md(t, elem);
     uint32_t i, p, big, k, sz;
     uint8_t *a;
     if (t < &trk[0] || t >= &trk[NPART])
         return 0;
     p = (uint32_t)(t - trk);
     i = (uint32_t)(v - t->v);
-    big = phys_layout(t);
-    if (i >= phys_poly(t))
+    big = phys_layout(md);
+    if (i >= phys_poly_md(md))
         return 0;
-    a = (uint8_t *)eng_arena_of(t, ENGI_PHYS);
+    a = (uint8_t *)eng_arena_of(t, elem ? ENGI_ELEM : ENGI_PHYS);
     sz = big == 1u ? PHYS_SLOT_BIG : PHYS_SLOT_SMALL;      /* (solo: the one slot at the start) */
     if (phys_lay[p] != big + 1u) {                       /* the other layout: every slot starts over */
-        for (k = 0; k < phys_poly(t); k++)
+        for (k = 0; k < phys_poly_md(md); k++)
             ((phys_slot_t *)(a + k * sz))->model = 0xFF;
         phys_lay[p] = (uint8_t)(big + 1u);
     }
@@ -178,10 +192,10 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
     }
 }
 
-static void phys_note_on(track_t *t, voice_t *v)
+static void phys_note_on_e(track_t *t, voice_t *v, uint32_t elem)
 {
-    phys_slot_t *S = phys_slot_of(t, v);
-    uint32_t md = (uint32_t)t->p[P_E0] % PM_COUNT;
+    phys_slot_t *S = phys_slot_of(t, v, elem);
+    uint32_t md = phys_md(t, elem);
     if (!S)
         return;
     if ((!v->env && !v->env_out) || S->model != md)     /* a fresh voice (not a retrigger): from rest */
@@ -214,11 +228,11 @@ static __attribute__((noinline)) void phys_symp_pitches(const track_t *t, const 
     }
 }
 
-static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m, uint32_t elem)
 {
     const int16_t *p = t->p;
-    phys_slot_t *S = phys_slot_of(t, v);
-    uint32_t md = (uint32_t)p[P_E0] % PM_COUNT, i, f0 = m->inc;
+    phys_slot_t *S = phys_slot_of(t, v, elem);
+    uint32_t md = phys_md(t, elem), i, f0 = m->inc;
     int32_t y[CTL], ax[CTL];
     int32_t strc = p[P_E1] * 516, brit = clamp(p[P_E2] * 516 + m->cutoff * 2, 0, 65536);   /* Q16 0..1 */
     int32_t damp = p[P_E3] * 516, pos = p[P_E4], exc = p[P_E7] * 258;   /* exc Q15 */
@@ -303,6 +317,9 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     }
 }
 
+static void phys_note_on(track_t *t, voice_t *v) { phys_note_on_e(t, v, 0); }
+static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m) { phys_render_e(t, v, out, n, m, 0); }
+
 /* MODAL partials by STRC: 34 harmonic, 70 1 : 2.83 : 5.48 : 8.90 (a free bar, a chime: 1 : 2.76 : 5.40 : 8.93),
  * 98 1 : 3.57 : 7.65, 116 1 : 4.0 : 9.0 (a tuned bar: 1 : 4 : 10) */
 static const preset_t PHYS_PRESETS[] = {
@@ -340,26 +357,13 @@ static const preset_t PHYS_PRESETS[] = {
     {"TABLA", {PM_MEMB, 120, 70, 70, 50, 110, 20, 30}, {0, 100, 127, 50}, 0, 0, FX(0, 0, 10, 25)},
     {"CONGA", {PM_MEMB, 90, 60, 50, 40, 100, 8, 40}, {0, 100, 127, 40}, 0, 0, FX(0, 0, 10, 25)},
     {"TIMPANI", {PM_MEMB, 10, 50, 100, 20, 110, 6, 10}, {0, 100, 127, 90}, 0, 0, FX(0, 0, 0, 50), XP(P_TRANS + 1, -12)},
-    /* BOUNC: {MODEL, STRC, BRIT, DAMP, POS, ACC, LAST, EXC}; PICK: {.., GAP, EXC} (Elements' strikes) */
-    {"BOUNCE BAR", {PM_BOUNCE, 116, 60, 70, 24, 100, 70, 20}, {0, 100, 127, 60}, 0, 0, FX(0, 0, 14, 34)},
-    {"MARBLES", {PM_BOUNCE, 98, 100, 50, 10, 110, 40, 40}, {0, 100, 127, 40}, 0, 0, FX(0, 0, 20, 30)},
-    {"RATTLE BELL", {PM_BOUNCE, 70, 90, 110, 12, 90, 110, 6}, {0, 100, 127, 96}, 0, 0, FX(0, 10, 24, 56)},
-    {"PICKED BAR", {PM_PICK, 116, 70, 80, 24, 100, 50, 20}, {0, 100, 127, 56}, 0, 0, FX(0, 0, 16, 32)},
-    {"PICK CHIME", {PM_PICK, 70, 104, 112, 10, 100, 90, 10}, {0, 100, 127, 96}, 0, 0, FX(0, 12, 26, 60)},
-    /* BOW: {MODEL, STRC, BRIT, DAMP, POS, ACC, BOW, TONE}; BLOW: {.., BLOW, TONE} (Elements' bow and blow; one note) */
-    {"BOW STRING", {PM_BOW, 34, 60, 100, 12, 80, 100, 80}, {30, 90, 127, 70}, 0, 0, FX(0, 14, 10, 50)},
-    {"BOW GLASS", {PM_BOW, 98, 80, 118, 8, 60, 110, 90}, {50, 90, 127, 100}, 0, 0, FX(0, 24, 20, 72)},
-    {"BOW BASS", {PM_BOW, 34, 45, 96, 16, 110, 100, 70}, {10, 90, 127, 50}, 0, 1, FX(0, 0, 0, 20), XP(P_TRANS + 1, -12)},
-    {"PIPE", {PM_BLOW, 34, 60, 100, 12, 80, 127, 80}, {20, 90, 127, 60}, 0, 0, FX(0, 10, 16, 50)},
-    {"BREATHY", {PM_BLOW, 34, 70, 90, 12, 80, 50, 90}, {30, 90, 127, 70}, 0, 0, FX(0, 16, 20, 56)},
-    {"BLOWN BELL", {PM_BLOW, 70, 100, 120, 12, 100, 110, 110}, {10, 90, 127, 100}, 0, 0, FX(0, 20, 24, 66)},
 };
 
 static const engine_t ENG_PHYS = {
     .name = "PHYS",
     .page_title = {"BODY", "EXCT"},
     .edit = {
-        {"MODEL", F_ENUM, 0, PM_COUNT - 1, 0, N_PHYS_MODEL, 0},
+        {"MODEL", F_ENUM, 0, PM_ELEM - 1, 0, N_PHYS_MODEL, 0},
         {"STRC", F_PCT, 0, 127, 64, 0, 0},
         {"BRIT", F_PCT, 0, 127, 80, 0, 0},
         {"DAMP", F_PCT, 0, 127, 80, 0, 0},

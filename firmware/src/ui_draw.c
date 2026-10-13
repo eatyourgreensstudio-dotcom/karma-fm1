@@ -48,7 +48,8 @@ static void draw_head(void)
     const char *title = ui.home ? "HOME" : pg->scope == SC_ENGINE && !is_drum(TSEL) ? e->page_title[pg->id[0] != P_E0] : pg->title;
     if (mlu.on)                                       /* MIDI LEARN on (2.6, GLO + F#3) */
         title = "LEARN";
-    op_header(!is_drum(TSEL) && TSEL->eng_req % NENGINES == ENGI_PRISM ? "PLAITS" : TAG[song.sel & 3u],   /* (that engine: by name) */
+    op_header(!is_drum(TSEL) && TSEL->eng_req % NENGINES == ENGI_PRISM ? "PLAITS" :
+              !is_drum(TSEL) && TSEL->eng_req % NENGINES == ENGI_ELEM ? "ELEMENTS" : TAG[song.sel & 3u],   /* (that engine: by name) */
               TE_COL[song.sel & 3u], title, &ui.head_sig);
 }
 /* (the bands cover the screen: header, graph, the pages strip, the knob band, the track bar) */

@@ -354,7 +354,7 @@ static void go_home(void)
  * writes the sequencer: every pattern is the one the player records or enters. */
 
 /* the parts' sounds at power-on (engine, preset): bass, pad, lead */
-static const uint8_t TRK_DEF[NPART][2] = {{0, 0}, {1, 0}, {ENGI_PRISM, 0}};   /* ANALOG 808 BOOM, DIGITAL RHODES, PRISM FOLD LEAD */
+static const uint8_t TRK_DEF[NPART][2] = {{0, 0}, {ENGI_ELEM, 3}, {ENGI_PRISM, 0}};   /* ANALOG 808 BOOM, ELEMENTS PICKED BAR, PRISM FOLD LEAD */
 static uint32_t trk_def_engine(uint32_t i) { return i < NPART ? TRK_DEF[i][0] : 0u; }
 
 static int seq_is_empty(const track_t *t) { return track_empty(t); }
@@ -473,8 +473,8 @@ static const struct { uint8_t kind, e; const char *name; } BANK[] = {
     {BK_PAD, 8, "VIBE HAZE"}, {BK_PAD, 5, "CHOIR AAH"}, {BK_PAD, 5, "SOUL OOH"}, {BK_PAD, ENGI_FM6, "SOFT PAD"},
     {BK_PAD, 6, "ENSEMBLE"}, {BK_PAD, 8, "STR CLOUD"}, {BK_PAD, 8, "SHIMMER"}, {BK_PAD, 8, "DRONE"},
     {BK_PAD, ENGI_PHYS, "BOWED MTL"}, {BK_PAD, ENGI_NOISE, "WIND"}, {BK_PAD, ENGI_PHYS, "CELLO BOW"},
-    {BK_PAD, ENGI_PHYS, "BOW STRING"}, {BK_PAD, ENGI_PHYS, "BOW GLASS"}, {BK_BASS, ENGI_PHYS, "BOW BASS"},
-    {BK_LEAD, ENGI_PHYS, "PIPE"}, {BK_LEAD, ENGI_PHYS, "BREATHY"}, {BK_LEAD, ENGI_PHYS, "BLOWN BELL"},
+    {BK_PAD, ENGI_ELEM, "BOW STRING"}, {BK_PAD, ENGI_ELEM, "BOW GLASS"}, {BK_BASS, ENGI_ELEM, "BOW BASS"},
+    {BK_LEAD, ENGI_ELEM, "PIPE"}, {BK_LEAD, ENGI_ELEM, "BREATHY"}, {BK_LEAD, ENGI_ELEM, "BLOWN BELL"},
     {BK_PAD, ENGI_PHYS, "GLASS BOWL"}, {BK_PAD, ENGI_NOISE, "OCEAN"}, {BK_PAD, 2, "CZ PAD"},
     {BK_PAD, 5, "VOX PAD"}, {BK_PAD, 8, "PNO FREEZE"}, {BK_PAD, 8, "HORN CLOUD"}, {BK_PAD, 0, "SINE PAD"},
     {BK_PAD, 6, "PULSE PAD"}, {BK_LEAD, 0, "SUPERSAW"}, {BK_LEAD, 0, "G-FUNK LD"}, {BK_LEAD, 6, "SYNC LEAD"},
@@ -498,8 +498,8 @@ static const struct { uint8_t kind, e; const char *name; } BANK[] = {
     {BK_STAB, 2, "CZ BRASS"}, 
     {BK_STAB, ENGI_FM6, "BRASS SECT"}, {BK_STAB, 6, "80S POLY"}, {BK_STAB, 3, "CHIP CHORD"},
     {BK_STAB, 6, "POWER STAB"}, {BK_FX, 4, "GM KIT"}, {BK_FX, ENGI_PHYS, "HAND DRUM"},
-    {BK_FX, ENGI_PHYS, "BOUNCE BAR"}, {BK_FX, ENGI_PHYS, "MARBLES"}, {BK_PLUCK, ENGI_PHYS, "RATTLE BELL"},
-    {BK_PLUCK, ENGI_PHYS, "PICKED BAR"}, {BK_PLUCK, ENGI_PHYS, "PICK CHIME"},
+    {BK_FX, ENGI_ELEM, "BOUNCE BAR"}, {BK_FX, ENGI_ELEM, "MARBLES"}, {BK_PLUCK, ENGI_ELEM, "RATTLE BELL"},
+    {BK_PLUCK, ENGI_ELEM, "PICKED BAR"}, {BK_PLUCK, ENGI_ELEM, "PICK CHIME"},
     {BK_FX, ENGI_PHYS, "MEMB TOMS"}, {BK_FX, ENGI_NOISE, "RAIN"}, {BK_FX, ENGI_NOISE, "NZ METAL"},
     {BK_FX, ENGI_PHYS, "TABLA"}, {BK_FX, ENGI_PHYS, "CONGA"}, {BK_FX, ENGI_PHYS, "TIMPANI"},
     {BK_FX, ENGI_NOISE, "VINYL"}, {BK_FX, ENGI_NOISE, "HISS"}, {BK_FX, ENGI_NOISE, "RISER"},
