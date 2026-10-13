@@ -750,6 +750,10 @@ static void draw_columns(void)                         /* the four knobs of the 
         unit[c] = opk.unit[c];
     }
     op_knobs(lab, val, unit, opk.ratio, opk.dim, song.sel * 7u + ui.page * 31u + ui.home, &ui.col_sig);
+    {                                                   /* the track bar under them: it follows the track selected here */
+        static uint32_t bar;
+        op_trackbar(&bar);
+    }
 }
 static void draw_columns_set(void)
 {
