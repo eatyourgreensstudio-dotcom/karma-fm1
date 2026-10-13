@@ -40,6 +40,8 @@
  *           to the waves). The waves are stored integrated and differentiated after the read, which keeps the
  *           interpolation from aliasing. The main output (her AUX, the same in 5 bits, is not made).
  *
+ * No 64-bit division anywhere (the target's library has none: the link fails; the host does not notice), 64-bit
+ * products only where a block or a sample needs one.
  * Number formats: phases 32 bit (a cycle = 2^32), increments cycles per sample Q32; the slope Q16 (1.0 =
  * 65536); the parameters 0..32767 (Q15); the output Q15.
  * Departures from the float code: the frequency and the pulse width are held over a block (hers glide over it;
@@ -75,7 +77,9 @@ static inline int32_t pr_iblep_next(uint32_t t)
 static int32_t pr_tame(uint32_t f0, uint32_t harmonics_q8, uint32_t order)
 {
     int32_t f = (int32_t)((f0 * harmonics_q8) >> 8), max_f = (int32_t)(32768u / order), a;
-    a = 32768 - (int32_t)(((int64_t)(f - max_f) << 15) / (32768 - max_f));
+    if (f >= 32768)                                   /* (at Nyquist and above: nothing; and the sum below fits) */
+        return 0;
+    a = 32768 - ((f - max_f) << 15) / (32768 - max_f);   /* (32 bits: the CPU's library has no 64-bit divide) */
     a = a < 0 ? 0 : a > 32767 ? 32767 : a;
     return (((a * a) >> 15) * a) >> 15;
 }
@@ -379,7 +383,7 @@ static void pr_wave_render(pr_wave_t *s, uint32_t inc, int32_t harmonics, int32_
     cutoff = f0 * 64;                                                             /* min(128 f0, 1), Q15 */
     cutoff = cutoff > 32767 ? 32767 : cutoff;
     /* (0.95 - f0) / (f0 131072) for waves of 16 bits and Q15 out: (0.95 - f0) / (4 f0), Q16 */
-    gain = ((int64_t)(62259 - f0) << 14) / f0;
+    gain = ((62259 - f0) << 14) / f0;                                             /* (fits 32 bits: no 64-bit divide) */
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x, y, z, xi, yi, zi, xf, yf, zf, z0, z1, pi, pf, a, b, c0, c1, m0, m1, mix, y15;
         for (k = 0; k < 3; k++) {
