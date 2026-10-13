@@ -96,6 +96,10 @@ enum {                          /* global parameters */
     G_TXRATE, G_TXWHEN, G_TXDUCK,           /* its source, level, tone, movement; its rate, when it plays, the DUCK pump.
                                              * In a project (project.c: the spare bytes) */
     G_BEND,                     /* SLOOP 2.6, GLO > MIDI 2: the pitch bend's range, 1..12 semitones (a setting of the FM-1) */
+    G_CLSEND,                   /* FX > CLOUD (cloud.c): SEND shows and sets the selected track's send (the drum track: the
+                                 * selected sound's): ui_studio.c cloud_ui_sync keeps it and cloud_send / drum_cloud together */
+    G_CLPOS, G_CLSIZE, G_CLPIT, /* .. the grains: where in the recording, how long, at what pitch */
+    G_CLDENS, G_CLTEX, G_CLFB, G_CLFRZ,   /* .. how many, their window, the feedback, FREEZE. Not in a project (yet) */
     G_COUNT
 };
 

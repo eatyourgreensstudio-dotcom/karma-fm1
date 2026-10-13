@@ -764,7 +764,8 @@ int main(int argc, char **argv)
         }
         TSEL->p[P_TFLT] = 0;
         SEL(9);
-        check(!strcmp(PT(), "REV/CHO"), "SELECT on FX: on to the last page, REV/CHO");
+        SEL(9);                                         /* (two turns: the pages are more than one takes) */
+        check(!strcmp(PT(), "CLOUD 2"), "SELECT on FX: on to the last page, CLOUD 2");
         tap(B_EDIT); SEL(-9);
         check(!strcmp(PT(), "EDIT 1"), "SELECT on EDIT: back to the first page");
         SEL(9);

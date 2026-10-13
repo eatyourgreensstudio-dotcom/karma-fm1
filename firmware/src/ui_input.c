@@ -352,6 +352,8 @@ static void project_new(void)
 {
     uint32_t i;
     memset(drum_send, 0, sizeof drum_send);             /* (every drum sound dry again) */
+    memset(cloud_send, 0, sizeof cloud_send);           /* .. and nothing sent to the CLOUD */
+    memset(drum_cloud, 0, sizeof drum_cloud);
     transport_req = 2;
     panic_req = (1u << NTRK) - 1u;
     for (i = 0; i < NTRK; i++) {

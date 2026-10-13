@@ -30,6 +30,10 @@ static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_
 /* each sound's own sends, on top of the kit's (GLO > DRUMS REV, DLY): [lane] {reverb 0..15, delay 0..7}; the
  * kit page's KNOB 3 and 4 (ui_studio.c), kept with the project (project.c proj_ds_put) */
 static uint8_t drum_send[DRUM_LANES][2];
+/* the CLOUD (cloud.c, a send as the reverb and the delay): what the tracks send it this block, each synth track's
+ * send and each drum sound's own (0..127; the FX > CLOUD page's SEND) */
+static int32_t cloud_bus[CTL];
+static uint8_t cloud_send[NPART], drum_cloud[DRUM_LANES];
 #define DRUM_SEND_REV 15
 #define DRUM_SEND_DLY 7
 
@@ -339,7 +343,7 @@ static inline void drum_voice_sends(uint32_t k, int own_only, int32_t *rs, int32
 static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n)
 {
     uint32_t k, i;
-    int32_t lvl = song.g[G_DRLVL] * 200, send, dsend, pk = drums.peak;
+    int32_t lvl = song.g[G_DRLVL] * 200, send, dsend, csend, pk = drums.peak;
     int32_t pan = trk[TRK_DRUM].p[P_PAN], gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
     for (i = 0; i < n && drums.tail; i++) {         /* declick tail, ~0.4 ms */
         if (mono) {
@@ -356,11 +360,14 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
         if (!v->active || !drums.synth[k])
             continue;
         drum_voice_sends(k, mono != 0, &send, &dsend);
+        csend = drum_cloud[drums.lane[k] % DRUM_LANES] * 258;   /* the sound's own send to the CLOUD (cloud.c) */
         if (!ds_render(&drums.ds[k], ds_buf, m))
             v->active = 0;
         for (i = 0; i < m; i++) {
             int32_t s = mulq15(ds_buf[i], mulq15(lvl, 32767 - drums.a0 - (((drums.a1 - drums.a0) * (int32_t)i) >> CTL_LOG2)));
             v->s[7] = s;
+            if (csend)
+                cloud_bus[i] += mulq15(s, csend);
             if (s > pk || -s > pk)
                 pk = s < 0 ? -s : s;
             if (mono) {
@@ -394,6 +401,7 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
         if (!v->active)
             continue;
         drum_voice_sends(k, mono != 0, &send, &dsend);
+        csend = drum_cloud[drums.lane[k] % DRUM_LANES] * 258;   /* the sound's own send to the CLOUD (cloud.c) */
         g = mulq15(lvl, v->vel * 258);
         g += g * 3 >> 2;                           /* x1.75 (+5 dB): as loud as the synthesised kits */
         for (i = 0; i < n; i++) {
@@ -422,6 +430,8 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
                 if (drums.env[k] <= 0) v->active = 0;
             }
             v->s[7] = s;
+            if (csend)
+                cloud_bus[i] += mulq15(s, csend);
             if (s > pk || -s > pk)
                 pk = s < 0 ? -s : s;
             if (mono) {

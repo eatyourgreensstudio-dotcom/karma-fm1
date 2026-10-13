@@ -2,7 +2,8 @@
 /* PUNCH-IN FX, pocket-operator style: hold FX, press a key (the 16 white ones, F3..G5, and,
  * 2.6, the 11 black ones) and the whole mix goes through that effect while the key is held;
  * release it and the mix comes back. Beat-synced to the tempo; loops start on the grid of the
- * running transport. A mono ring of the mix (PUNCH_N samples, 0.74 s) feeds the loops, reverse,
+ * running transport. A mono ring of the mix (PUNCH_N samples, 0.74 s; 8 bits mu-law since the CLOUD shares its
+ * memory) feeds the loops, reverse,
  * tape stop, half speed, wobble, echo, rewind, octave up and the flanger; the filters, kills,
  * crush and gate run in stereo. FREEZE holds the reverb (fx.c). Every change crossfades over
  * 64 samples. Runs in the audio ISR (mix_block, fx.c). */
@@ -23,7 +24,11 @@ static const char *const PUNCH_NAME[PUNCH_NFX] = {
 #define PX_FRZ_CAP 8192u                  /* FREEZE: samples of the mix poured into the held reverb (186 ms) */
 #define PX_RWD_ACC 17                     /* REWIND: speed change per sample (Q16): +1 to -3 in 0.35 s */
 #define PX_RWD_MAX (3 << 16)
-static int16_t punch_ring[PUNCH_N] __attribute__((section(".pool")));
+static int16_t punch_ring[PUNCH_N] __attribute__((section(".pool")));   /* a sample: the high byte, mu-law, its bits
+                                          * turned over (0 = silence); the low byte is the CLOUD's recording (cloud.c) */
+_Static_assert(PUNCH_N == CLD_N, "the punch-in ring and the CLOUD's recording are the same words");
+#define PUNCH_PUT(i, v) do { uint16_t *q_ = (uint16_t *)&punch_ring[(i) & (PUNCH_N - 1u)]; \
+                             *q_ = (uint16_t)((*q_ & 0x00FFu) | (~(uint32_t)cl_mulaw(v) & 0xFFu) << 8); } while (0)
 static struct {
     volatile int8_t req;          /* effect asked for by the keys (-1 none), ISR keyboard_block */
     volatile uint8_t hold;        /* FX button held (UI main loop) */
@@ -54,7 +59,7 @@ static int px_replay(int32_t fx) { return fx <= PX_HALF || fx == PX_LOOP8T; } /*
 
 static uint32_t beat_samples(void) { return (uint32_t)FS * 60u / (uint32_t)song.g[G_BPM]; }
 
-static int32_t ring_raw(uint32_t i) { return punch_ring[i & (PUNCH_N - 1u)]; }   /* the stored 16 bits (mix / 8) */
+static int32_t ring_raw(uint32_t i) { return CL_ULAW[~((uint32_t)(uint16_t)punch_ring[i & (PUNCH_N - 1u)] >> 8) & 0xFFu]; }   /* the sample kept (mix / 8) */
 static int32_t ring_at(uint32_t i) { return ring_raw(i) << 3; }
 static int32_t ring_q16(uint32_t p)                 /* read at Q16 position, linear (on the stored values: no overflow) */
 {
@@ -258,7 +263,7 @@ static void punch_process(int32_t *l, int32_t *r, uint32_t n)
     }
     if (punch.cur < 0 && want < 0) {                   /* idle: only the ring */
         for (i = 0; i < n; i++)
-            punch_ring[punch.w++ & (PUNCH_N - 1u)] = (int16_t)clamp((l[i] + r[i]) >> 4, -32768, 32767);
+            PUNCH_PUT(punch.w++, clamp((l[i] + r[i]) >> 4, -32768, 32767));
         return;
     }
     if (punch.cur < 0 && want >= 0)
@@ -297,7 +302,7 @@ static void punch_process(int32_t *l, int32_t *r, uint32_t n)
         int32_t fx = punch.cur;
         uint32_t target = want == fx ? 32767u : 0u;
         if (!punch_owns(fx, punch.w))                   /* (a held loop keeps its material) */
-            punch_ring[punch.w & (PUNCH_N - 1u)] = (int16_t)clamp(m >> 3, -32768, 32767);
+            PUNCH_PUT(punch.w, clamp(m >> 3, -32768, 32767));
         switch (fx) {
         case PX_LPF:
             wl = tsvf_lp(&c1, x >> 1, &punch.f1l, &punch.f2l) << 1;
@@ -369,8 +374,7 @@ static void punch_process(int32_t *l, int32_t *r, uint32_t n)
                      dr = (26u << 16) + (uint32_t)((sine_i(punch.lfo + 0x40000000u) + 32768) * 240);
             int32_t el = ring_raw_q16((punch.w << 16) - dl), er = ring_raw_q16((punch.w << 16) - dr);
             punch.lfo += binc >> 2;
-            punch_ring[punch.w & (PUNCH_N - 1u)] =       /* feedback (the ring is the delay line) */
-                (int16_t)clamp((m >> 3) + (((el + er) * 9000) >> 15), -32768, 32767);
+            PUNCH_PUT(punch.w, clamp((m >> 3) + (((el + er) * 9000) >> 15), -32768, 32767));   /* feedback (the ring is the delay line) */
             wl = ((x + (el << 3)) * 5) >> 3;
             wr = ((y + (er << 3)) * 5) >> 3;
             break;
@@ -404,7 +408,7 @@ static void punch_process(int32_t *l, int32_t *r, uint32_t n)
             uint32_t d = echo_d;
             int32_t e;
             e = (ring_raw(punch.w - d) * 18000) >> 12;  /* (x 8 after: no overflow on a hot mix) */
-            punch_ring[punch.w & (PUNCH_N - 1u)] = (int16_t)clamp((m + e) >> 3, -32768, 32767);   /* feedback */
+            PUNCH_PUT(punch.w, clamp((m + e) >> 3, -32768, 32767));   /* feedback */
             wl = x + e;
             wr = y + e;
             break;

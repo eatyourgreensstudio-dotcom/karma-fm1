@@ -196,6 +196,14 @@ static const param_desc_t GP[G_COUNT] = {
     [G_TXRATE] = PE("RATE", N_TXRATE, 2),
     [G_TXWHEN] = PE("WHEN", N_TXWHEN, 0),         /* PLAY: while the transport runs (fades in / out); ALWAYS */
     [G_TXDUCK] = PE("DUCK", N_ONOFF, 0),          /* ON: the kick pumps it too (GLO > MASTER > DUCK) */
+    [G_CLSEND] = PD("SEND", F_PCT, 0, 127, 0),   /* FX > CLOUD (cloud.c) */
+    [G_CLPOS] = PD("POS", F_PCT, 0, 127, 24),
+    [G_CLSIZE] = PD("SIZE", F_PCT, 0, 127, 64),
+    [G_CLPIT] = PD("PITCH", F_SEMI, -24, 24, 0),
+    [G_CLDENS] = PD("DENS", F_PCT, 0, 127, 104),
+    [G_CLTEX] = PD("TEXT", F_PCT, 0, 127, 90),
+    [G_CLFB] = PD("FDBK", F_PCT, 0, 127, 0),
+    [G_CLFRZ] = PE("FRZ", N_ONOFF, 0),
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -400,6 +408,8 @@ static const page_t PAGES[] = {
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet; the drum track too */
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REV/CHO", FAM_FX, SC_GLOBAL, GR_NONE, {G_RSIZE, G_RDAMP, G_CRATE, G_CDEPTH}},
+    {"CLOUD", FAM_FX, SC_GLOBAL, GR_NONE, {G_CLSEND, G_CLPOS, G_CLSIZE, G_CLPIT}},     /* Clouds' grains (cloud.c): the */
+    {"CLOUD 2", FAM_FX, SC_GLOBAL, GR_NONE, {G_CLDENS, G_CLTEX, G_CLFB, G_CLFRZ}},   /* track's send, then the cloud's own */
     {"SEL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_CHORD}},
     {"SEL 2", FAM_SCL, SC_TRACK, GR_SCALE, {P_TRANS, P_STRUM, P_VLEAD, 0xFF}},   /* (2.4: the chords played) */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},

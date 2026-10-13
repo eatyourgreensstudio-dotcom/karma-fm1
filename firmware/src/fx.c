@@ -4,6 +4,7 @@
  * Stereo dry mix; the chorus and the reverb come back in stereo, the delay in the middle. */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
 #define CHO_LEN 2048u
+#include "cloud.c"               /* the CLOUD send effect (Clouds' grains), in mix_block below */
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 /* the reverb: two input diffusers, then four delay lines mixed by a Hadamard matrix (a feedback delay
@@ -672,6 +673,7 @@ static void mix_part_run(track_t *t, uint32_t n)
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] ? clamp(t->p[P_LEVEL] + t->p[P_ED_FX], 1, 127) : 0], pan = t->p[P_PAN];   /* (+ the sound's trim: 1/2 dB steps, as LEVEL's) */
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = send_thr(t->p[P_DLY] * 258, thr_dly), r = send_thr(t->p[P_REV] * 258, thr_rev);
+        int32_t cs = cloud_send[(uint32_t)(t - trk) % NPART] * 258;   /* the track's send to the CLOUD (cloud.c) */
         int32_t pk = t->peak;
         int32_t xmax = c > d ? c : d;
         int32_t ga = mulq15(g0, duck.g0), gb = mulq15(g1, duck.g1);   /* mute x duck, ramped over the block */
@@ -706,6 +708,8 @@ static void mix_part_run(track_t *t, uint32_t n)
                 send_d[i] += mulq15(xs, d);
             if (r)
                 send_r[i] += mulq15(xs, r);
+            if (cs)
+                cloud_bus[i] += mulq15(xs, cs);
             mix_l[i] += ((x >> 4) * gl) >> 8;           /* (x may pass 2^19: >> 4 first) */
             mix_r[i] += ((x >> 4) * gr) >> 8;
         }
@@ -1101,6 +1105,7 @@ static void mix_block(int32_t *out, uint32_t n)
         mix_l[i] += wet_l[i];
         mix_r[i] += wet_r[i];
     }
+    cloud_process(cloud_bus, mix_l, mix_r, n);          /* the CLOUD: grains of what the tracks sent it (cloud.c) */
     dust_process(mix_l, mix_r, n);
     punch_process(mix_l, mix_r, n);
     djf_process(mix_l, mix_r, n);
