@@ -106,6 +106,7 @@ static void graph_adsr(const track_t *t, uint16_t c)
     (void)c;
 #define EGY(lvl) (bot - (lvl) * (bot - top) / 1000)
     ty = bot;
+    op_env_ghost((uint32_t)(t - trk), 128, 93, cur);                    /* the track's character, behind it all */
     cv_rect(0, bot + 1, 240, 1, TE_G1);
     for (y = top; y < bot; y += 3)                                      /* the corners, down to the floor */
         cv_pset(x1, y, OP_PUR_D);
@@ -163,7 +164,8 @@ static void graph_adsr(const track_t *t, uint16_t c)
     te_digit(20, -2, 12, 26, 2, (uint32_t)(cur * 99 / 1000) % 10u, v ? C_WHITE : TE_G2);
     op_box(196, 0, 40, 18, gate ? C_WHITE : TE_G2);
     te_text_c(216, 1, "GATE", gate ? C_WHITE : TE_G2);
-    op_env_rider((uint32_t)(t - trk), tx, ty, stage == 3);
+    if (v)                                                              /* where the voice is on the line */
+        te_disc(tx, ty, 3, C_WHITE);
 #undef EGY
 }
 

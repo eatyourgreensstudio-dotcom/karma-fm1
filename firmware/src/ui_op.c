@@ -473,38 +473,22 @@ static void op_gorilla(int32_t cx, int32_t fy, int up, uint16_t c)
         }
     }
 }
-/* the island girl (PLAITS): a grass skirt, a flower in her hair, a lei. op_sway: her hips, -3..3 (her arms go
- * the same way) */
-static int32_t op_sway;
-static void op_hula(int32_t cx, int32_t fy, int up, uint16_t c)
+/* the flying saucer (PLAITS), small: a dome, a hull, lights, feet */
+static void op_saucer(int32_t cx, int32_t fy, int up, uint16_t c)
 {
-    int32_t h = op_sway, s = h < 0 ? -1 : 1, w = (ui.frame / 6u) & 1u ? 2 : 0, i;
-    cv_line(CX(h - 2), FY(-6), CX(-2), FY(0), op_ink);
-    cv_line(CX(h + 2), FY(-6), CX(2), FY(0), op_ink);
-    for (i = -3; i <= 3; i++)                                    /* the skirt */
-        cv_line(CX(h + i), FY(-13), CX(h + i * 3), FY(-5), TE_COL[1]);
-    cv_rect(CX(h - 3), FY(-14), SZ(7), SZ(1), c);
-    cv_line(CX(h - 3), FY(-13), CX(-3), FY(-19), op_ink);
-    cv_line(CX(h + 3), FY(-13), CX(3), FY(-19), op_ink);
-    cv_rect(CX(-3), FY(-20), SZ(7), SZ(2), c);
-    op_arc(CX(0), FY(-21), SZ(3), SZ(2), 0, 512, TE_COL[3]);     /* the lei */
-    op_ell(CX(0), FY(-25), SZ(4), SZ(4), op_ink);
-    cv_line(CX(-4), FY(-26), CX(-6), FY(-16), op_ink);           /* long hair */
-    cv_line(CX(-4), FY(-28), CX(-7), FY(-18), op_ink);
-    cv_line(CX(4), FY(-26), CX(6), FY(-16), op_ink);
-    cv_line(CX(4), FY(-28), CX(7), FY(-18), op_ink);
-    te_disc(CX(4), FY(-29), SZ(1), TE_COL[3]);
-    cv_rect(CX(-2), FY(-26), SZ(1), SZ(1), C_WHITE);
-    cv_rect(CX(1), FY(-26), SZ(1), SZ(1), C_WHITE);
-    op_arc(CX(0), FY(-24), SZ(1), SZ(1), 128, 384, op_ink);
-    if (up) {
-        cv_line(CX(-3), FY(-19), CX(-9), FY(-28), op_ink);
-        cv_line(CX(3), FY(-19), CX(9), FY(-28), op_ink);
-    } else {                                                     /* both arms out to the side she sways to, rippling */
-        cv_line(CX(s * 3), FY(-19), CX(s * 9), FY(-18 - w), op_ink);
-        cv_line(CX(s * 9), FY(-18 - w), CX(s * 14), FY(-20 + w), op_ink);
-        cv_line(CX(-s * 3), FY(-19), CX(s * 1), FY(-15), op_ink);
-        cv_line(CX(s * 1), FY(-15), CX(s * 8), FY(-14 + w), op_ink);
+    int32_t h = up ? -4 : 0;
+    op_arc(CX(0), FY(-17 + h), SZ(5), SZ(6), 512, 1024, op_ink);
+    cv_rect(CX(-2), FY(-20 + h), SZ(2), SZ(1), C_WHITE);
+    cv_rect(CX(1), FY(-20 + h), SZ(2), SZ(1), C_WHITE);
+    op_ell(CX(0), FY(-14 + h), SZ(12), SZ(3), op_ink);
+    cv_rect(CX(-7), FY(-14 + h), SZ(2), SZ(1), c);
+    cv_rect(CX(-1), FY(-13 + h), SZ(2), SZ(1), c);
+    cv_rect(CX(5), FY(-14 + h), SZ(2), SZ(1), c);
+    cv_line(CX(-5), FY(-11 + h), CX(-7), FY(-6 + h), op_ink);
+    cv_line(CX(5), FY(-11 + h), CX(7), FY(-6 + h), op_ink);
+    if (!up) {                                                   /* its beam to the floor */
+        cv_line(CX(-2), FY(-10), CX(-4), FY(0), c);
+        cv_line(CX(2), FY(-10), CX(4), FY(0), c);
     }
 }
 /* the drummer, off the kit (the mixer): headphones, a stick in each hand; hl / hr: that stick comes down */
@@ -555,22 +539,29 @@ static const voice_t *op_env_voice(const track_t *t)
     }
     return best;
 }
-/* the track's character at (x, y) on the envelope's line, each with its own way to travel it: the Buddha on
- * a cloud, the gorilla on a drum, the island girl on a board; down: the note is let go (arms up on the way down) */
-static void op_env_rider(uint32_t trk_i, int32_t x, int32_t y, int down)
+/* the envelope page: the track's character behind the line, dim, as large as the voice's envelope is high
+ * (lvl 0..1000: from about half at rest to most of the picture), standing on (cx, bot) */
+static void op_env_ghost(uint32_t trk_i, int32_t cx, int32_t bot, int32_t lvl)
 {
-    op_k = 2;
-    if (trk_i % 3u == 0u) {
-        op_ell(x, y - 3, 13, 3, C_WHITE);
-        op_buddha(x, y - 4, down, TE_COL[0]);
-    } else if (trk_i % 3u == 1u) {
-        op_box(x - 6, y - 6, 12, 6, TE_COL[3]);
-        op_gorilla(x, y - 6, down, TE_COL[1]);
-    } else {
-        cv_line(x - 11, y - 1, x + 11, y - 1, C_WHITE);
-        op_hula(x, y - 2, down, TE_COL[2]);
+    const uint16_t pal[16] = {0, OP_PUR_D, RGB(30, 26, 58), TE_G2, TE_DIM[trk_i % 3u], TE_DIM[1], TE_DIM[3], TE_DIM[0], C_BLACK,
+                              RGB(44, 40, 84)};
+    const uint8_t *d = trk_i % 3u == 0u ? OP_SPR_BUDDHA : trk_i % 3u == 1u ? OP_SPR_GORILLA : OP_SPR_SAUCER;
+    int32_t w = trk_i % 3u == 2u ? OP_SPR_SAUCER_W : OP_SPR_W, h = trk_i % 3u == 2u ? OP_SPR_SAUCER_H : OP_SPR_H;
+    int32_t k = 120 + lvl * 100 / 1000, ow = w * k >> 8, oh = h * k >> 8, x, y;   /* the size, of 256 */
+    if (trk_i % 3u == 2u) {                             /* (the saucer: larger for its size, and it rises too) */
+        k = 170 + lvl * 86 / 1000;
+        ow = w * k >> 8;
+        oh = h * k >> 8;
+        bot -= 8 + lvl * 26 / 1000;
     }
-    op_k = 3;
+    for (y = 0; y < oh; y++) {
+        const uint8_t *row = d + (uint32_t)((y << 8) / k) * (uint32_t)(w / 2);
+        for (x = 0; x < ow; x++) {
+            uint32_t sx = (uint32_t)((x << 8) / k), v = (row[sx >> 1] >> ((sx & 1u) * 4u)) & 15u;
+            if (v)
+                cv_pset(cx - ow / 2 + x, bot - oh + y, pal[v]);
+        }
+    }
 }
 
 /* The three scenes draw into the graph canvas (240 x 124, ui_draw.c draw_graph). ratio: the four knobs,
@@ -591,7 +582,7 @@ static void op_scene_sumo(track_t *t, const int32_t ratio[4], int analog_wave)
     if (op_hit > prev)
         side = -side;
     prev = op_hit;
-    lean = op_hit > 3u;
+    lean = op_hit && op_hit < 5u;                       /* the foot is down on the note; then the other one goes up */
     cx = 120 + (lean ? side * 4 : op_lvl ? (SINE[(op_ph / 3u) & 1023u] * 3) >> 15 : 0);
     if (ratio[2] >= 0)                                  /* KNOB 3: the moon */
         op_ell(222 - (op_px ? 146 : 0), 70 - ratio[2] * 34 / 1000, 5, 5, TE_COL[2]);
@@ -607,11 +598,11 @@ static void op_scene_sumo(track_t *t, const int32_t ratio[4], int analog_wave)
         int32_t hx = cx + (lean ? side * 9 : 0), co = SINE[(a + 256u) & 1023u], si = SINE[a & 1023u];
         cv_line(hx + ((co * 22) >> 15), 40 + ((si * 22) >> 15), hx + ((co * 28) >> 15), 40 + ((si * 28) >> 15), TE_COL[1]);
     }
-    op_ell(120, 120, 84, 3, op_hit && op_hit < 4u ? OP_PUR : OP_PUR_D);   /* the ring: it rings under the stamp */
+    op_ell(120, 120, 84, 3, op_hit > 4u ? C_WHITE : OP_PUR_D);   /* the ring: it rings under the stamp */
     op_sprite(lean ? OP_SPR_BUDDHA_LEAN : OP_SPR_BUDDHA, cx - 56, 20, lean && side < 0, TE_COL[0]);
     n = ratio[3] <= 0 ? 0 : 2 + ratio[3] * 7 / 1000;    /* KNOB 4: dust where the foot came down */
-    for (i = 0; op_hit && op_hit < 4u && i < n; i++) {
-        int32_t fx = 120 - side * 40, d = (4 - (int32_t)op_hit) * 3;
+    for (i = 0; op_hit > 4u && i < n; i++) {
+        int32_t fx = 120 + side * 40, d = (9 - (int32_t)op_hit) * 3;
         rnd = rnd * 1664525u + 1013904223u;
         x = (int32_t)((rnd >> 8) % 21u) - 10;
         cv_line(fx + x, 118 - d / 2, fx + x * 2, 116 - d - (int32_t)((rnd >> 20) % 5u), TE_COL[3]);
@@ -620,14 +611,16 @@ static void op_scene_sumo(track_t *t, const int32_t ratio[4], int analog_wave)
 }
 
 /* synth 2, the gorilla (ELEMENTS): it plays congas. A note: a hand comes down on one (they take turns), the head
- * flashes, the hand flies back up; with sound it nods along. KNOB 1 the size of the drums, KNOB 2 the vines,
+ * flashes; then the other hand goes up, ready; with sound it nods along. KNOB 1 the size of the drums, KNOB 2 the vines,
  * KNOB 3 a moon that rises, KNOB 4 the rings of sound off the drum */
 static void op_scene_conga(const int32_t ratio[4])
 {
-    static uint8_t prev, hand;
-    int32_t big = ratio[0] < 0 ? 0 : ratio[0] * 6 / 1000, x, i, n, s, upp = op_hit && op_hit < 6u;
-    if (op_hit > prev)
-        hand ^= 1u;
+    static uint8_t prev, hand, next = 1;                /* the hand that struck last, the one in the air for the next */
+    int32_t big = ratio[0] < 0 ? 0 : ratio[0] * 6 / 1000, x, i, n, s, upp = op_hit < 4u;
+    if (op_hit > prev) {                                /* a note: the raised hand is down at once, as the drummer's stick */
+        hand = next;
+        next ^= 1u;
+    }
     prev = op_hit;
     for (x = 8; x < 232; x += 8)
         cv_pset(x, 122, OP_PUR_D);
@@ -647,10 +640,10 @@ static void op_scene_conga(const int32_t ratio[4])
         cv_line(x + sw / 2, y0 + len / 2, x + sw / 2 + 4, y0 + len / 2 + 4, TE_COL[1]);
         cv_line(x + sw / 3, y0 + len / 3, x + sw / 3 - 4, y0 + len / 3 + 4, TE_COL[1]);
     }
-    op_sprite(upp ? OP_SPR_GORILLA_UP : OP_SPR_GORILLA, 64, 18 - (op_lvl && (op_ph / 160u) & 1u ? 1 : 0), upp && hand, TE_COL[1]);
+    op_sprite(upp ? OP_SPR_GORILLA_UP : OP_SPR_GORILLA, 64, 18 - (op_lvl && (op_ph / 160u) & 1u ? 1 : 0), upp && next, TE_COL[1]);
     for (s = -1; s <= 1; s += 2) {                      /* KNOB 1: the congas, in front of it */
-        int32_t dx = 120 + s * 35, rx = 13 + big, top = 99, mine = (s > 0) == (hand != 0), hot = op_hit > 5u && mine;
-        if (upp && mine)                                /* (its hand is in the air: the whole head shows) */
+        int32_t dx = 120 + s * 35, rx = 13 + big, top = 99, mine = (s > 0) == (hand != 0), hot = op_hit > 3u && mine;
+        if (upp && (s > 0) == (next != 0))                                /* (its hand is in the air: the whole head shows) */
             cv_rect(dx - rx, top - 2, rx * 2 + 1, 5, C_BLACK);
         cv_rect(dx - rx - 2, top + 1, rx * 2 + 5, 122 - top - 1, C_BLACK);   /* a belly, a narrower foot, two hoops */
         op_ell(dx, top, rx, 3, hot ? C_WHITE : TE_COL[0]);
@@ -670,43 +663,57 @@ static void op_scene_conga(const int32_t ratio[4])
     }
 }
 
-/* synth 3, the island girl (PLAITS): she dances a hula on the beach. With sound she sways from side to side, her
- * hands rippling; a note: she turns to the other side. KNOB 1 the sea behind her, KNOB 2 the palm's leaves,
- * KNOB 3 the sun that rises, KNOB 4 petals in the air */
-static void op_scene_hula(const int32_t ratio[4])
+/* synth 3, the flying saucer (PLAITS): it hovers among the stars. Its height is the last note's pitch (it glides
+ * there); with sound it rocks, the lights on its rim run round and the stars pass, faster the louder; a note: its
+ * beam flashes down and the lights all light. KNOB 1 the beam's width, KNOB 2 a planet that grows, KNOB 3 more
+ * stars, KNOB 4 sparks drawn up the beam */
+static void op_scene_saucer(const int32_t ratio[4])
 {
-    static const int8_t LEAF[7][2] = {{-20, -3}, {18, -5}, {-15, 10}, {14, 9}, {-9, -14}, {9, -15}, {-22, 6}};
-    static uint8_t prev;
-    static int32_t dir = 1;
-    int32_t sea = 1 + (ratio[0] < 0 ? 0 : ratio[0] * 5 / 1000), x, py = 0, i, n, sw = op_lvl ? (int32_t)((op_ph / 240u) & 1u) : 0;
-    int32_t ty = op_px ? 80 : 66, rock = op_lvl ? (SINE[(op_ph / 2u) & 1023u] * 3) >> 15 : 0;
-    if (op_hit > prev)
-        dir = -dir;
-    prev = op_hit;
-    if (ratio[2] >= 0)                                  /* KNOB 3: the sun */
-        op_ell(30, 100 - ratio[2] * 34 / 1000, 7, 7, TE_COL[2]);
-    for (x = 4; x <= 236; x += 4) {                     /* KNOB 1: the sea */
-        int32_t y = 88 - ((SINE[((uint32_t)x * 24u + op_ph) & 1023u] * sea) >> 15);
-        if (x > 4)
-            cv_line(x - 4, py, x, y, TE_COL[0]);
-        py = y;
-    }
-    for (x = 8; x < 232; x += 8)
-        cv_pset(x, 122, OP_PUR_D);
-    cv_line(216, 122, 210, 98, OP_PUR);                 /* KNOB 2: the palm (lower under PRISM's picture) */
-    cv_line(217, 122, 211, 98, OP_PUR);
-    cv_line(210, 98, 204, ty, OP_PUR);
-    cv_line(211, 98, 205, ty, OP_PUR);
-    n = 3 + (ratio[1] < 0 ? 0 : ratio[1] * 4 / 1000);
-    for (i = 0; i < n; i++) {
-        cv_line(204, ty, 204 + LEAF[i][0] / 2, ty + LEAF[i][1] / 2 - 3, TE_COL[1]);
-        cv_line(204 + LEAF[i][0] / 2, ty + LEAF[i][1] / 2 - 3, 204 + LEAF[i][0] + sw, ty + LEAF[i][1] + sw, TE_COL[1]);
-    }
-    op_sprite(op_lvl && (ui.frame / 8u) & 1u ? OP_SPR_HULA_B : OP_SPR_HULA, 64 + rock + (op_hit ? dir * 2 : 0), 20, dir < 0, TE_COL[2]);
-    n = ratio[3] <= 0 ? 0 : 1 + ratio[3] * 10 / 1000;   /* KNOB 4: the petals, falling */
+    static int32_t alt = 60;
+    int32_t ty = clamp(84 - ((int32_t)op_note - 36) * 5 / 4, 44, 84), i, n, x0, y0, bw, live = op_lvl || op_hit;
+    alt += (ty - alt) / 3;
+    x0 = 60 + (op_lvl ? (SINE[(op_ph / 2u) & 1023u] * 3) >> 15 : 0);
+    y0 = alt - 30 + (op_lvl ? (SINE[(op_ph / 3u + 256u) & 1023u] * 2) >> 15 : 0);
+    n = 8 + (ratio[2] < 0 ? 0 : ratio[2] * 26 / 1000);  /* KNOB 3: the stars, three depths, some twinkling */
     for (i = 0; i < n; i++) {
         uint32_t h = (uint32_t)(i + 1) * 2654435761u;
-        cv_rect(8 + (int32_t)((h >> 5) % 224u + (op_ph / 64u)) % 224, 58 + (int32_t)(((h >> 15) + op_ph / 24u) % 62u), 2, 2, TE_COL[3]);
+        int32_t x = (int32_t)(((h >> 4) % 240u + 240u * 64u - (op_ph >> (3u + (uint32_t)i % 3u)) % 240u) % 240u);
+        int32_t y = 22 + (int32_t)((h >> 14) % 100u), big = i % 5 == 0 && ((ui.frame / 8u + (uint32_t)i) & 3u);
+        cv_rect(x, y, 1 + big, 1, TE_COL[2]);
+        if (big && i % 10 == 0) {
+            cv_pset(x, y - 1, TE_COL[2]);
+            cv_pset(x, y + 1, TE_COL[2]);
+        }
+    }
+    if (ratio[1] >= 0) {                                /* KNOB 2: the planet and its ring */
+        int32_t r = 5 + ratio[1] * 10 / 1000, px = 206, py = 96;
+        op_ell(px, py, r, r, TE_COL[1]);
+        op_arc(px, py, r + 7, 3, 0, 512, TE_COL[1]);
+        cv_pset(px - r - 7, py, TE_COL[1]);
+        cv_pset(px + r + 7, py, TE_COL[1]);
+        op_arc(px - 2, py - 2, r * 2 / 3, r * 2 / 3, 576, 768, TE_COL[1]);
+    }
+    bw = 6 + (ratio[0] < 0 ? 0 : ratio[0] * 20 / 1000); /* KNOB 1: the beam: wide open on a note, a glimmer with sound */
+    if (op_hit || op_lvl) {
+        uint16_t c = op_hit > 5u ? C_WHITE : op_hit ? TE_COL[0] : TE_DIM[0];
+        int32_t bot = op_hit ? 122 : y0 + 60;
+        if (bot > 122)
+            bot = 122;
+        cv_line(x0 + 48 - 12, y0 + 44, x0 + 48 - 12 - bw, bot, c);
+        cv_line(x0 + 48 + 12, y0 + 44, x0 + 48 + 12 + bw, bot, c);
+        if (op_hit)
+            op_ell(x0 + 48, 121, 12 + bw, 2, c);
+    }
+    n = ratio[3] <= 0 || !live ? 0 : 2 + ratio[3] * 8 / 1000;   /* KNOB 4: the sparks, rising */
+    for (i = 0; i < n; i++) {
+        uint32_t h = (uint32_t)(i + 1) * 2246822519u;
+        int32_t up = (int32_t)(((h >> 7) + op_ph / 12u) % 64u);
+        cv_rect(x0 + 48 - 10 + (int32_t)((h >> 3) % 21u), 120 - up * (120 - y0 - 44) / 64, 2, 2, TE_COL[3]);
+    }
+    op_sprite_wh(OP_SPR_SAUCER, OP_SPR_SAUCER_W, OP_SPR_SAUCER_H, x0, y0, 0, TE_COL[2]);
+    for (i = 0; i < 7; i++) {                           /* the rim: one light runs round; all of them on a note */
+        int on = op_hit > 4u || (live && (uint32_t)i == (op_ph / 160u) % 7u);
+        te_disc(x0 + OP_SAUCER_LIGHTS[i][0], y0 + OP_SAUCER_LIGHTS[i][1], 2, on ? TE_COL[3] : TE_DIM[3]);
     }
 }
 
@@ -812,7 +819,7 @@ static void op_synth_scene(track_t *t, const int32_t ratio[4], int analog_wave)
     switch ((uint32_t)(t - trk) % 3u) {
     case 0: op_scene_sumo(t, ratio, analog_wave); break;
     case 1: op_scene_conga(ratio); break;
-    default: op_scene_hula(ratio); break;
+    default: op_scene_saucer(ratio); break;
     }
     if (op_px)
         op_prism_panel(t);
@@ -862,7 +869,7 @@ static void op_band_member(uint32_t i, int32_t cx, int32_t fy, int up, int hl, i
     else if (i == 1)
         op_gorilla(cx, fy, up, c);
     else if (i == 2)
-        op_hula(cx, fy, up, c);
+        op_saucer(cx, fy, up, c);
     else
         op_drummer(cx, fy, hl, hr);
 }

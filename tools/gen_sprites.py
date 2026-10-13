@@ -171,61 +171,32 @@ def gorilla(up):
     return p.im
 
 
-def hula(b):
-    """The island girl in a hula: long hair, a flower, a lei, a grass skirt. Hips to the right of the picture, both
-    arms out to the left; b: the hands the other way up (they ripple)."""
-    p = Pic()
-    hip = 61
-    # the hair, behind her: long, to the waist
-    p.poly([(41, 14), (36, 34), (34, 58), (42, 62), (46, 40), (66, 40), (70, 62), (78, 58), (76, 34), (71, 14), (56, 5)],
-           DIM, INK)
-    for x0, x1 in ((39, 37), (73, 75)):
-        p.line([(x0, 24), (x1, 54)], INK, 1)
-    # the legs and feet
-    p.tube([(hip - 6, 78), (50, 97)], 6, SKIN, INK, 1)
-    p.tube([(hip + 6, 78), (64, 97)], 6, SKIN, INK, 1)
-    p.ell(48, 100, 6, 3, SKIN, INK, 1)
-    p.ell(66, 100, 6, 3, SKIN, INK, 1)
-    p.line([(46, 93), (55, 93)], GREEN, 2)                                    # leaves at the ankles
-    p.line([(60, 93), (69, 93)], GREEN, 2)
-    # the body: shoulders, a waist, the hips out to one side
-    p.poly([(45, 37), (67, 37), (65, 50), (hip + 13, 62), (hip - 13, 62), (48, 50)], SKIN, INK)
-    p.d.rounded_rectangle((45, 39, 67, 47), 3, fill=COL, outline=INK)         # the top
-    p.dot(hip - 2, 56, 1, INK)
-    # the skirt: strands of grass from the hips, swinging out
-    for i in range(-9, 10):
-        x0 = hip + i * 1.5
-        x1 = hip + i * 3.4 + 4
-        p.line([(x0, 62), (x1, 84 + (i % 3) * 2 - abs(i) * 0.4)], GREEN, 2 if i % 2 else 1)
-    p.d.rounded_rectangle((hip - 15, 60, hip + 15, 65), 2, fill=COL, outline=INK)
-    # the arms: both to the left, the wrists bent
-    wy = -5 if b else 5
-    p.tube([(46, 39), (30, 36), (15, 40)], 4, SKIN, INK, 1)
-    p.tube([(15, 40), (7, 40 + wy)], 3, SKIN, INK, 1)
-    p.ell(5, 40 + wy * 1.3, 3, 2, SKIN, INK, 1)
-    p.ell(27, 50 - wy * 1.3, 3, 2, SKIN, INK, 1)
-    p.tube([(64, 40), (56, 52), (38, 50)], 4, SKIN, INK, 1)
-    p.tube([(38, 50), (29, 50 - wy)], 3, SKIN, INK, 1)
-    # the lei
-    for i in range(9):
-        a = math.radians(10 + i * 20)
-        p.dot(56 + 10 * math.cos(a), 33 + 9 * math.sin(a), 2, ORANGE if i % 2 else WHITE)
-    # the head
-    p.tube([(56, 30), (56, 36)], 5, SKIN, INK, 1)
-    p.ell(56, 20, 12, 13, SKIN)
-    p.d.chord((43, 5, 69, 26), 180, 360, fill=DIM, outline=INK)               # the hair over the forehead
-    p.ell(51, 21, 2, 2, WHITE, None)                                          # eyes, lashes
-    p.ell(61, 21, 2, 2, WHITE, None)
-    p.dot(51, 21, 0.6, BLACK)
-    p.dot(61, 21, 0.6, BLACK)
-    p.line([(48, 18), (53, 17)], INK)
-    p.line([(59, 17), (64, 18)], INK)
-    p.arc(56, 24, 5, 4, 20, 160, WHITE, 1)                                    # a smile
-    for i in range(5):                                                        # the flower in her hair
-        a = math.radians(i * 72 - 90)
-        p.dot(70 + 4 * math.cos(a), 11 + 4 * math.sin(a), 3, ORANGE)
-    p.dot(70, 11, 2, WHITE)
+def saucer():
+    """The flying saucer (PLAITS), 96 x 52: a glass dome with its pilot, a wide hull, a darker belly, three feet.
+    The lights on its rim are the scene's (SAUCER_LIGHTS below: where they are)."""
+    p = Pic(96, 52)
+    p.line([(48, 6), (48, 1)], INK)                                           # an aerial
+    p.dot(48, 1, 1.5, COL)
+    p.d.chord((29, 4, 67, 44), 180, 360, fill=BLACK, outline=INK)             # the dome
+    p.arc(48, 24, 15, 16, 200, 250, WHITE)
+    p.ell(48, 15, 8, 7, SKIN, INK, 1)                                         # the pilot: a big head, big eyes
+    p.ell(44, 14, 3, 2, WHITE, None)
+    p.ell(52, 14, 3, 2, WHITE, None)
+    p.dot(45, 14, 0.6, BLACK)
+    p.dot(51, 14, 0.6, BLACK)
+    for x in (30, 48, 66):                                                    # the feet
+        p.line([(x, 40), (x + (x - 48) // 5, 50)], INK, 2)
+        p.dot(x + (x - 48) // 5, 50, 1.5, INK)
+    p.ell(48, 38, 27, 8, DIM, INK, 2)                                         # the belly
+    p.ell(48, 30, 47, 10, SKIN, INK, 2)                                       # the hull
+    p.arc(48, 27, 40, 6, 10, 170, INK)
+    p.arc(48, 27, 21, 5, 180, 360, COL, 2)                                    # the dome's collar
+    for x, y in SAUCER_LIGHTS:
+        p.dot(x, y, 2.5, BLACK)
     return p.im
+
+
+SAUCER_LIGHTS = [(12, 31), (24, 34), (36, 35), (48, 36), (60, 35), (72, 34), (84, 31)]
 
 
 def wizard():
@@ -270,8 +241,9 @@ def drummer(mouth):
     """The drummer behind the kit (64 x 52): headphones, a cap, a grin; mouth: open (on the kick). The arms and
     the sticks are the scene's, from the shoulders (14, 36) and (50, 36)."""
     p = Pic(64, 52)
-    p.poly([(10, 36), (4, 52), (60, 52), (54, 36), (40, 30), (24, 30)], COL, INK)            # the shirt
-    p.arc(32, 30, 8, 6, 0, 180, INK)
+    p.poly([(10, 36), (4, 52), (60, 52), (54, 36), (40, 30), (24, 30)], COL, INK)            # the shirt: black, its
+    p.poly([(12, 38), (7, 52), (57, 52), (52, 38), (40, 32), (24, 32)], BLACK, None)         # edge in the track's colour
+    p.arc(32, 31, 8, 6, 0, 180, COL)
     p.tube([(32, 26), (32, 31)], 6, SKIN, INK, 1)
     p.ell(32, 16, 13, 13, SKIN)                                                              # the head
     p.d.chord((19, 2, 45, 22), 180, 360, fill=DIM, outline=INK)                              # a cap, its peak
@@ -291,7 +263,7 @@ def drummer(mouth):
 
 
 POSES = [("WIZARD", wizard()), ("DRUMMER", drummer(False)), ("DRUMMER_HIT", drummer(True)), ("BUDDHA", buddha(False)), ("BUDDHA_LEAN", buddha(True)), ("GORILLA", gorilla(False)),
-         ("GORILLA_UP", gorilla(True)), ("HULA", hula(False)), ("HULA_B", hula(True))]
+         ("GORILLA_UP", gorilla(True)), ("SAUCER", saucer())]
 
 
 def main():
@@ -307,6 +279,7 @@ def main():
         for i in range(0, len(by), 28):
             L.append("    " + ",".join(str(b) for b in by[i:i + 28]) + ",")
         L.append("};")
+    L.append("static const uint8_t OP_SAUCER_LIGHTS[%d][2] = {%s};" % (len(SAUCER_LIGHTS), ", ".join("{%d, %d}" % q for q in SAUCER_LIGHTS)))
     OUT.write_text("\n".join(L) + "\n")
     print(OUT, sum(im.size[0] * im.size[1] // 2 for _, im in POSES), "B")
     if len(sys.argv) > 1:
@@ -316,6 +289,8 @@ def main():
         for i, (name, im) in enumerate(POSES):
             rgb = Image.new("RGB", im.size)
             col = (255, 98, 26) if i < 3 else {0: (40, 124, 255), 1: (30, 204, 112), 2: (236, 236, 240)}[(i - 3) // 2]
+            if not i:
+                col = (40, 124, 255)
             rgb.putdata([col if v == COL else RGB[v] for v in im.getdata()])
             k = i + 1 if i else 0                    # (the wizard alone in its column)
             sheet.paste(rgb.resize((im.size[0] * s, im.size[1] * s), Image.NEAREST),
