@@ -178,9 +178,12 @@ static void op_trackbar(uint32_t *cache)
  * 4 bits a pixel; (x0, y0): the top left, flip: mirrored, c: the track's colour */
 #include "op_sprites.h"
 #define OP_SKIN RGB(92, 84, 150)
+static uint8_t op_dim;                                  /* the next pictures dim (a muted, a silent track) */
 static void op_sprite_wh(const uint8_t *d, int32_t w, int32_t h, int32_t x0, int32_t y0, int flip, uint16_t c)
 {
-    const uint16_t pal[16] = {0, OP_PUR, OP_PUR_D, C_WHITE, c, TE_COL[1], TE_COL[3], TE_COL[0], C_BLACK, OP_SKIN};
+    const uint16_t lit[16] = {0, OP_PUR, OP_PUR_D, C_WHITE, c, TE_COL[1], TE_COL[3], TE_COL[0], C_BLACK, OP_SKIN};
+    const uint16_t dim[16] = {0, OP_PUR_D, RGB(30, 26, 58), TE_G3, c, TE_DIM[1], TE_DIM[3], TE_DIM[0], C_BLACK, RGB(40, 36, 76)};
+    const uint16_t *pal = op_dim ? dim : lit;
     int32_t x, y;
     for (y = 0; y < h; y++)
         for (x = 0; x < w; x += 2) {
@@ -400,115 +403,10 @@ static int32_t op_wave(uint32_t ph, uint32_t kind, int32_t morph)
     }
 }
 
-/* the synth tracks' characters .. and small, as lines (the envelope, the mixer, HOME), standing on (cx, fy), drawn op_k / 2 times the size they are written at (1.5 in their
- * scenes, 1 on the envelope); up: arms in the air (a jump); c: the track's colour */
+/* the characters small (the mixer: op_k 2, HOME: op_k 1), still pictures: op_k says which size, op_ink dim a muted
+ * or silent track */
 static int32_t op_k = 3;
-static uint16_t op_ink = OP_PUR;                        /* their line colour (dim: a muted track) */
-#define CX(d) (cx + (d) * op_k / 2)
-#define FY(d) (fy + (d) * op_k / 2)
-#define SZ(n) (((n) * op_k + 1) / 2)
-/* the Buddha (the bass): a round sumo of a Buddha. op_lean: -1 / 1 it leans that way, the other foot off the floor */
-static int32_t op_lean;
-static void op_buddha(int32_t cx, int32_t fy, int up, uint16_t c)
-{
-    int32_t b = op_lean * 3, ll = op_lean > 0 ? -6 : 0, lr = op_lean < 0 ? -6 : 0;
-    cv_line(CX(b - 5), FY(-5), CX(-10 + ll / 2), FY(-3 + ll), op_ink);   /* the legs: wide, bent (one up: out to its side) */
-    cv_line(CX(-10 + ll / 2), FY(-3 + ll), CX(-9 + ll / 2), FY(ll), op_ink);
-    cv_line(CX(-12 + ll / 2), FY(ll), CX(-7 + ll / 2), FY(ll), op_ink);
-    cv_line(CX(b + 5), FY(-5), CX(10 - lr / 2), FY(-3 + lr), op_ink);
-    cv_line(CX(10 - lr / 2), FY(-3 + lr), CX(9 - lr / 2), FY(lr), op_ink);
-    cv_line(CX(7 - lr / 2), FY(lr), CX(12 - lr / 2), FY(lr), op_ink);
-    op_ell(CX(b), FY(-11), SZ(9), SZ(7), op_ink);                /* the belly, its belt */
-    cv_rect(CX(b - 7), FY(-7), SZ(15), SZ(1), c);
-    te_disc(CX(b), FY(-10), SZ(1), c);
-    if (up) {
-        cv_line(CX(b - 8), FY(-14), CX(b - 12), FY(-23), op_ink);
-        cv_line(CX(b + 8), FY(-14), CX(b + 12), FY(-23), op_ink);
-    } else {                                                     /* the hands on the thighs */
-        cv_line(CX(b - 8), FY(-14), CX(b - 12), FY(-9), op_ink);
-        cv_line(CX(b - 12), FY(-9), CX(b - 9), FY(-5), op_ink);
-        cv_line(CX(b + 8), FY(-14), CX(b + 12), FY(-9), op_ink);
-        cv_line(CX(b + 12), FY(-9), CX(b + 9), FY(-5), op_ink);
-    }
-    op_ell(CX(b), FY(-23), SZ(5), SZ(5), op_ink);                /* the head: long ears, a topknot, eyes closed */
-    cv_line(CX(b - 5), FY(-24), CX(b - 6), FY(-19), op_ink);
-    cv_line(CX(b + 5), FY(-24), CX(b + 6), FY(-19), op_ink);
-    te_disc(CX(b), FY(-26), SZ(1), c);                           /* (bald: the mark on his forehead) */
-    cv_rect(CX(b - 3), FY(-24), SZ(2), 1, C_WHITE);
-    cv_rect(CX(b + 2), FY(-24), SZ(2), 1, C_WHITE);
-    op_arc(CX(b), FY(-22), SZ(2), SZ(2), 128, 384, op_ink);
-}
-/* the gorilla (ELEMENTS). op_gl, op_gr: its hands: 0 hanging, 1 in the air, 2 down on a drum */
-static uint8_t op_gl, op_gr;
-static void op_gorilla(int32_t cx, int32_t fy, int up, uint16_t c)
-{
-    int32_t s;
-    cv_line(CX(-4), FY(-4), CX(-6), FY(0), op_ink);
-    cv_line(CX(-9), FY(0), CX(-4), FY(0), op_ink);
-    cv_line(CX(4), FY(-4), CX(6), FY(0), op_ink);
-    cv_line(CX(4), FY(0), CX(9), FY(0), op_ink);
-    op_ell(CX(0), FY(-11), SZ(9), SZ(8), op_ink);
-    op_ell(CX(0), FY(-12), SZ(5), SZ(4), c);                     /* the chest */
-    op_ell(CX(0), FY(-24), SZ(6), SZ(6), op_ink);                /* the head: a high skull, ears, a heavy brow, a wide muzzle */
-    op_ell(CX(-7), FY(-25), SZ(1), SZ(2), op_ink);
-    op_ell(CX(7), FY(-25), SZ(1), SZ(2), op_ink);
-    cv_rect(CX(-5), FY(-27), SZ(11), SZ(1), op_ink);
-    cv_rect(CX(-3), FY(-25), SZ(2), SZ(1), C_WHITE);
-    cv_rect(CX(2), FY(-25), SZ(2), SZ(1), C_WHITE);
-    op_ell(CX(0), FY(-21), SZ(4), SZ(3), op_ink);
-    cv_rect(CX(-1), FY(-22), 1, 1, op_ink);
-    cv_rect(CX(1), FY(-22), 1, 1, op_ink);
-    cv_line(CX(-2), FY(-20), CX(2), FY(-20), op_ink);
-    for (s = -1; s <= 1; s += 2) {                               /* the arms: long */
-        uint32_t a = up ? 1u : s < 0 ? op_gl : op_gr;
-        if (a == 1u) {
-            cv_line(CX(s * 7), FY(-16), CX(s * 13), FY(-18), op_ink);
-            cv_line(CX(s * 13), FY(-18), CX(s * 12), FY(-27), op_ink);
-        } else if (a == 2u) {
-            cv_line(CX(s * 7), FY(-16), CX(s * 14), FY(-17), op_ink);
-            cv_line(CX(s * 14), FY(-17), CX(s * 13), FY(-13), op_ink);
-        } else {
-            cv_line(CX(s * 7), FY(-16), CX(s * 12), FY(-10), op_ink);
-            cv_line(CX(s * 12), FY(-10), CX(s * 11), FY(-2), op_ink);
-        }
-    }
-}
-/* the flying saucer (PLAITS), small: a dome, a hull, lights, feet */
-static void op_saucer(int32_t cx, int32_t fy, int up, uint16_t c)
-{
-    int32_t h = up ? -4 : 0;
-    op_arc(CX(0), FY(-17 + h), SZ(5), SZ(6), 512, 1024, op_ink);
-    cv_rect(CX(-2), FY(-20 + h), SZ(2), SZ(1), C_WHITE);
-    cv_rect(CX(1), FY(-20 + h), SZ(2), SZ(1), C_WHITE);
-    op_ell(CX(0), FY(-14 + h), SZ(12), SZ(3), op_ink);
-    cv_rect(CX(-7), FY(-14 + h), SZ(2), SZ(1), c);
-    cv_rect(CX(-1), FY(-13 + h), SZ(2), SZ(1), c);
-    cv_rect(CX(5), FY(-14 + h), SZ(2), SZ(1), c);
-    cv_line(CX(-5), FY(-11 + h), CX(-7), FY(-6 + h), op_ink);
-    cv_line(CX(5), FY(-11 + h), CX(7), FY(-6 + h), op_ink);
-    if (!up) {                                                   /* its beam to the floor */
-        cv_line(CX(-2), FY(-10), CX(-4), FY(0), c);
-        cv_line(CX(2), FY(-10), CX(4), FY(0), c);
-    }
-}
-/* the drummer, off the kit (the mixer): headphones, a stick in each hand; hl / hr: that stick comes down */
-static void op_drummer(int32_t cx, int32_t fy, int hl, int hr)
-{
-    cv_line(CX(-3), FY(0), CX(-2), FY(-8), op_ink);
-    cv_line(CX(3), FY(0), CX(2), FY(-8), op_ink);
-    op_box(CX(-3), FY(-16), SZ(7), SZ(9), op_ink);
-    op_ell(CX(0), FY(-21), SZ(5), SZ(5), op_ink);
-    op_arc(CX(0), FY(-21), SZ(6), SZ(6), 576, 960, op_ink);
-    cv_rect(CX(-7), FY(-23), SZ(2), SZ(4), op_ink);
-    cv_rect(CX(5), FY(-23), SZ(2), SZ(4), op_ink);
-    cv_rect(CX(-2), FY(-22), 1, 1, C_WHITE);
-    cv_rect(CX(2), FY(-22), 1, 1, C_WHITE);
-    cv_line(CX(-3), FY(-14), CX(-10), hl ? FY(-8) : FY(-21), TE_COL[3]);
-    cv_line(CX(3), FY(-14), CX(10), hr ? FY(-8) : FY(-21), TE_COL[3]);
-}
-#undef CX
-#undef FY
-#undef SZ
+static uint16_t op_ink = OP_PUR;
 
 /* the sound of the track, at the top of the graph canvas: engine, preset */
 static void op_names(const track_t *t)
@@ -864,14 +762,25 @@ static void op_band_tick(void)
 }
 static void op_band_member(uint32_t i, int32_t cx, int32_t fy, int up, int hl, int hr, uint16_t c)
 {
-    if (i == 0)
-        op_buddha(cx, fy, up, c);
-    else if (i == 1)
-        op_gorilla(cx, fy, up, c);
-    else if (i == 2)
-        op_saucer(cx, fy, up, c);
-    else
-        op_drummer(cx, fy, hl, hr);
+    static const uint8_t *const SPR[2][4] = {{OP_SPR_BUDDHA_MX, OP_SPR_GORILLA_MX, OP_SPR_SAUCER_MX, OP_SPR_DRUMMER_MX},
+                                             {OP_SPR_BUDDHA_HM, OP_SPR_GORILLA_HM, OP_SPR_SAUCER_HM, OP_SPR_DRUMMER_HM}};
+    static const uint8_t WH[2][4][2] = {
+        {{OP_SPR_BUDDHA_MX_W, OP_SPR_BUDDHA_MX_H}, {OP_SPR_GORILLA_MX_W, OP_SPR_GORILLA_MX_H}, {OP_SPR_SAUCER_MX_W, OP_SPR_SAUCER_MX_H},
+         {OP_SPR_DRUMMER_MX_W, OP_SPR_DRUMMER_MX_H}},
+        {{OP_SPR_BUDDHA_HM_W, OP_SPR_BUDDHA_HM_H}, {OP_SPR_GORILLA_HM_W, OP_SPR_GORILLA_HM_H}, {OP_SPR_SAUCER_HM_W, OP_SPR_SAUCER_HM_H},
+         {OP_SPR_DRUMMER_HM_W, OP_SPR_DRUMMER_HM_H}}};
+    uint32_t sm = op_k == 1, k = i & 3u;
+    int32_t w = WH[sm][k][0], h = WH[sm][k][1], x0 = cx - w / 2, y0 = fy - h + 1;
+    (void)up;
+    op_dim = op_ink == OP_PUR_D;
+    if (k == 2u)                                        /* the saucer hovers */
+        y0 -= sm ? 2 : 5;
+    op_sprite_wh(SPR[sm][k], w, h, x0, y0, 0, c);
+    op_dim = 0;
+    if (k == 3u && !sm) {                               /* the drummer's sticks: hl / hr: that one comes down */
+        cv_line(x0 + 7, y0 + 21, x0 - 2, hl ? y0 + 27 : y0 + 9, TE_COL[3]);
+        cv_line(x0 + 28, y0 + 21, x0 + 37, hr ? y0 + 27 : y0 + 9, TE_COL[3]);
+    }
 }
 
 /* ------------------------------------------------------------------- FX --- */
