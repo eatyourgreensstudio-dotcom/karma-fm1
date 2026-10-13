@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* A tour of the screens in one take, for posting: the real UI and audio (the ui_pages_test harness) play the
- * simulator's demo pattern while the screens are walked and their knobs turned; each frame (240 x 240 RGB) and
+ * pattern Ariel had in the simulator (op_tour_pattern.h) while the screens are walked and their knobs turned; each frame (240 x 240 RGB) and
  * its audio (16 bit stereo, 44.1 kHz) go to files, ffmpeg makes the video (tools/op_tour.sh).
  *   op_tour OUTDIR   ->  OUTDIR/tour.{rgb,pcm}
- * The take: the mixer with only the kick; ELEMENTS comes in (its scene, its envelope); the bass (scene, envelope);
- * PLAITS (scene, envelope); the whole kit (the grid, the pads); the FX wizard, the CLOUD; the mixer; HOME. */
+ * The take: the mixer with only the kick; track 2 comes in (its scene, its envelope); the bass (scene, envelope);
+ * PLAITS (scene, envelope); the drums (the grid, the pads); the FX wizard, the CLOUD; the mixer; HOME. */
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"
+#include "op_tour_pattern.h"
 
 static FILE *fv, *fa;
 static uint32_t nframe;
@@ -37,7 +38,7 @@ static void vframe(void)                            /* frame() of the harness, t
     nframe++;
 }
 
-/* the take is counted in bars (120 BPM: 2 s): a part runs until the take is that many bars old, so the cuts fall
+/* the take is counted in bars (of the pattern's tempo): a part runs until the take is that many bars old, so the cuts fall
  * on the bar. Meanwhile KNOB 1..4 turn k[] detents out over its first half and back over its second; the knobs
  * speed up when turned fast, so the way back may not land where it started: the values are put back at the end
  * (the sound ends as it began) */
@@ -56,7 +57,7 @@ static void part(double bars, int k1, int k2, int k3, int k4)
     for (j = 0; j < NTRK; j++)
         keep_lv[j] = (uint8_t)trk[j].p[P_LEVEL];
     bars_done += bars;
-    f1 = (uint32_t)(bars_done * 2.0 * FS / (22.0 * CTL) + 0.5);
+    f1 = (uint32_t)(bars_done * 240.0 / song.g[G_BPM] * FS / (22.0 * CTL) + 0.5);
     n = f1 > f0 ? f1 - f0 : 1u;
     ui.force = 1;
     for (i = 0; i < n; i++) {
@@ -99,46 +100,35 @@ static void page_on(int n) { encs[panel.enc[EN_SELECT]] += n; vframe(); }
 
 int main(int argc, char **argv)
 {
-    static const uint8_t BEAT[16] = {0x11, 0x10, 0x10, 0x10, 0x14, 0x10, 0x10, 0x21, 0x11, 0x10, 0x01, 0x10, 0x1C, 0x10, 0x10, 0x20};
-    static const uint8_t BASS[16] = {36, 0, 0, 36, 0, 0, 39, 0, 36, 0, 0, 43, 0, 41, 0, 0};
-    static const uint8_t LEAD[16] = {0, 0, 72, 0, 75, 0, 0, 79, 0, 77, 0, 0, 75, 0, 72, 0};
-    static const uint8_t BARS[16] = {60, 0, 0, 67, 0, 0, 72, 0, 63, 0, 0, 67, 0, 0, 70, 0};   /* ELEMENTS: the demo's chord, played out */
-    static dstep_t kit[NSTEP];
     const char *dir = argc > 1 ? argv[1] : "build/video";
     char p[600];
-    uint32_t i, j;
+    uint32_t i;
     bank_resolve();
     panel = PANEL_DEFAULT;
     layers_init();
     settings.palette = 4;
     palette_set(4);
     host_tracks_init();
-    for (i = 0; i < NPART; i++) { set_engine_of(&trk[i], TRK_DEF[i][0]); apply_preset_to(&trk[i], TRK_DEF[i][1]); trk[i].engine = trk[i].eng_req; }
-    TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
-    for (j = 0; j < NTRK; j++) {
-        steps_clear(&trk[j]);
-        trk[j].p[P_SLEN] = 16;
-        trk[j].seq_active = 1;
+    _Static_assert(P_COUNT == TOUR_NP && G_COUNT == TOUR_NG && sizeof trk[0].step == 640 && sizeof trk[0].lock == 96 &&
+                   sizeof trk[0].fill == 16, "the pattern was read from this layout: read it again after a change");
+    for (i = 0; i < NTRK; i++) {                    /* Ariel's pattern, as it stood in his simulator (op_tour_pattern.h) */
+        if (i < NPART)
+            set_engine_of(&trk[i], TOUR_ENG[2u * i]);
+        memcpy(trk[i].p, &TOUR_P[i * TOUR_NP], sizeof trk[i].p);
+        trk[i].preset = TOUR_ENG[2u * i + 1u];
+        trk[i].engine = trk[i].eng_req;
+        memcpy(trk[i].step, &TOUR_STEP[i * 640u], 640);
+        memcpy(trk[i].micro, &TOUR_MICRO[i * 64u], 64);
+        memcpy(trk[i].lock, &TOUR_LOCK[i * 96u], 96);
+        memcpy(trk[i].fill, &TOUR_FILL[i * 16u], 16);
+        trk[i].seq_active = 1;
     }
-    for (j = 0; j < 16u; j++) {                     /* the simulator's demo pattern (web/emu/sloop_web.c web_demo) */
-        if (BEAT[j] & 1u) dstep_set(&TDRUM->dstep[j], 0, LV_HARD, 0);
-        if (BEAT[j] & 4u) dstep_set(&TDRUM->dstep[j], 2, LV_NORM, 0);
-        if (BEAT[j] & 8u) dstep_set(&TDRUM->dstep[j], 3, LV_GHOST, 0);
-        if (BEAT[j] & 0x10u) dstep_set(&TDRUM->dstep[j], 4, j % 4u ? LV_SOFT : LV_NORM, j == 14u ? 2u : 0u);
-        if (BEAT[j] & 0x20u) dstep_set(&TDRUM->dstep[j], 5, LV_NORM, 0);
-        if (BASS[j]) { trk[0].step[j].n = 1; trk[0].step[j].note[0] = BASS[j]; trk[0].step[j].time = ST_NOTE; }
-        if (BARS[j]) { trk[1].step[j].n = 1; trk[1].step[j].note[0] = BARS[j]; trk[1].step[j].time = ST_NOTE; }
-        if (LEAD[j]) { trk[2].step[j].n = 1; trk[2].step[j].note[0] = LEAD[j]; trk[2].step[j].time = ST_NOTE; }
-    }
-    memcpy(kit, TDRUM->dstep, sizeof kit);          /* the whole kit, for later: first the kick alone */
-    for (j = 0; j < 16u; j++) {
-        memset(&TDRUM->dstep[j], 0, sizeof(dstep_t));
-        if (BEAT[j] & 1u) dstep_set(&TDRUM->dstep[j], 0, LV_HARD, 0);
-    }
+    for (i = 0; i < G_COUNT; i++)
+        song.g[i] = TOUR_G[i];
+    if (trk[2].p[P_LEVEL] < 40)
+        trk[2].p[P_LEVEL] = 64;                     /* (PLAITS stood at 8 of 127 in his mixer: up, to be heard) */
     for (i = 0; i < NPART; i++)
         trk[i].p[P_MUTE] = 1;
-    song.g[G_BPM] = 120;
-    song.g[G_DRREV] = 0;
     song.batt_raw = 620;
     snprintf(p, sizeof p, "%s/tour.rgb", dir); fv = fopen(p, "wb");
     snprintf(p, sizeof p, "%s/tour.pcm", dir); fa = fopen(p, "wb");
@@ -175,11 +165,10 @@ int main(int argc, char **argv)
     open_family(FAM_ENV);
     part(1, 8, 10, 0, 12);
 
-    memcpy(TDRUM->dstep, kit, sizeof kit);          /* the whole kit */
     song.sel = TRK_DRUM; studio_open(SC_DRUM); drum_page = 0; drum_lane = 0; drum_cursor = 0;
-    part(2, 4, 0, 0, 0);                            /* the grid (KNOB 1: through the sounds) */
+    part(2, 0, 0, 0, 0);                            /* the grid: the drummer on his kick */
     drum_page = 1;
-    part(1, 0, 0, 6, 0);                            /* the pads; the snare's reverb */
+    part(1, 0, 0, 5, 0);                            /* the pads; the kick's own reverb, up and back */
 
     go_home(); song.sel = 2; open_family(FAM_FX);
     part(1, 0, 14, 18, 20);                         /* the wizard: chorus, delay, reverb */
