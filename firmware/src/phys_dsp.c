@@ -21,6 +21,7 @@
  * SOFTWARE.
  */
 #include "strike_dsp.c"          /* Elements' strike exciters (MIT, Emilie Gillet): BOUNCE, PICK on the modal bank */
+#include "bow_dsp.c"             /* .. and her bow and blow: BOW, BLOW */
 /* Physical models of DaisySP (Source/PhysicalModeling, Filters, Noise, Utility; MIT) in fixed
  * point for a CPU without an FPU. The PHYS engine (eng_phys.c) plays them.
  *
@@ -219,13 +220,14 @@ typedef struct {
     int32_t benv;                                        /* MEMB: the pitch bend after a strike, Q16 (1 at it) */
     uint8_t trig;
     /* Elements' strike exciters (strike_dsp.c) on the bank, the engine sets them before the block: */
-    uint8_t gen;                                         /* 0 the strike above (or Dust), PX_GEN_BOUNCE, PX_GEN_PICK */
+    uint8_t gen;                                         /* 0 the strike above (or Dust), or PX_GEN_* below */
     uint8_t gate;                                        /* the key is down (BOUNCE hits while it is) */
     int32_t par;                                         /* her parameter, Q16: how long the bounces last / the pick's bend */
     el_bounce_t bn;
     el_pick_t pk;
 } px_modal_t;
-enum { PX_GEN_STRIKE, PX_GEN_BOUNCE, PX_GEN_PICK };
+enum { PX_GEN_STRIKE, PX_GEN_BOUNCE, PX_GEN_PICK,
+       PX_GEN_BOW, PX_GEN_BLOW };                        /* fed from outside (px_bow_run, px_blow_run): ext below */
 #define PX_BOUNCE_SPAN (44100u * 15u / 100u)             /* her 0.15 s, in samples */
 #define PX_PICK_SCALE 90317u                             /* samples here for one of her 32 kHz, Q16 */
 
@@ -240,6 +242,8 @@ typedef struct {                                         /* per block */
     uint32_t dust_inv;                                   /* 2^47 / thr: a hit u / thr = u inv >> 32, Q15 */
     int32_t dust_gain;                                   /* (4 - 3 dust_f) accent bow, Q16 */
     int32_t dust_dc;                                     /* its mean, Q20 (taken off the aux) */
+    const int32_t *ext;                                  /* BOW, BLOW: the block's exciter, Q24 (BOW: before the low-pass) */
+    uint32_t mf[EL_BOW_N];                               /* the first modes' frequencies (cycles Q32), for the bow */
 } px_modal_blk_t;
 
 /* Resonator::CalcStiff, Q16 in and out */
@@ -271,6 +275,7 @@ static __attribute__((noinline)) void px_modal_exciter(px_modal_blk_t *B, px_mod
     px_svf_coef(&B->ex, cut, bow ? 179u : 384u);         /* q 0.7 / 1.5 */
     B->strike = 0;
     B->pulse = 0;
+    B->ext = 0;
     B->dust_thr = 0;
     if (bow) {                                           /* Dust: density 0.3 (5e-5 + (1 - 5e-5) b^4) */
         int32_t dn = px_m(brightness, brightness, 16), df;
@@ -290,7 +295,7 @@ static __attribute__((noinline)) void px_modal_exciter(px_modal_blk_t *B, px_mod
             el_bounce_start(&M->bn);
         else if (M->trig && M->gen == PX_GEN_PICK)       /* .. the plectrum catches (it catches harder with the accent) */
             el_pick_start(&M->pk, M->par, accent >> 1, PX_PICK_SCALE);
-        else if (M->trig)
+        else if (M->trig && !M->gen)
             B->strike = B->pulse;
         M->trig = 0;
     }
@@ -329,6 +334,8 @@ static __attribute__((noinline)) void px_modal_block(px_modal_blk_t *B, px_modal
         int32_t att, amp;
         if (mf >= 2143260078u)
             break;
+        if (i < EL_BOW_N)
+            B->mf[i] = (uint32_t)mf;
         att = 65536 - (int32_t)(mf >> 15);               /* 1 - 2 f */
         amp = px_m(px_sin(phs + 0x40000000u), 16384, 16);   /* cos(2 pi pos i) / 4, Q30 * Q16 -> Q30 */
         {
@@ -425,7 +432,12 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
         n = 32u;
     for (i = 0; i < n; i++)                              /* (no else below: a cold block after the function, */
         aux[i] = x[i] = 0;                               /* jumping back, reads as a loop to the budget) */
-    if (B->dust_thr || B->strike || M->e1 || M->e2 || M->gen) {
+    if (B->ext && M->gen == PX_GEN_BLOW) {               /* as it comes */
+        for (i = 0; i < n; i++) {
+            x[i] = B->ext[i] >> 2;
+            aux[i] = B->ext[i] >> 4;
+        }
+    } else if (B->dust_thr || B->strike || M->e1 || M->e2 || M->gen) {
         int32_t e1 = M->e1, e2 = M->e2, t, bp, big = 0;
         uint32_t rs = M->rng;
         const px_svf_t ex = B->ex;
@@ -443,6 +455,8 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
                 int32_t h = el_pick_tick(&M->pk);
                 if (h)
                     in = (((int64_t)B->pulse * h) >> 16) * 256;
+            } else if (M->gen == PX_GEN_BOW) {
+                in = B->ext ? B->ext[i] : 0;
             } else if (!i && B->strike) {
                 in = (int64_t)B->strike << 8;
             }
@@ -477,6 +491,107 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
         }
         out[i] = (int32_t)(acc >> 30);                   /* Q28 * Q22 -> Q20 */
     }
+}
+
+/* ------------------------------------------------------- Bow and blow --- */
+/* Elements' other two exciters on the bank (bow_dsp.c): they hold the note for as long as the key is down. Their
+ * delay memory is large, so they play one note (eng_phys.c: the solo layout). */
+typedef struct {
+    el_bow_t w;
+    el_flow_t fl;
+    int32_t v;                                           /* the bow's pressure at the end of the last block, Q16 */
+} px_bow_t;
+typedef struct {
+    el_tube_t t;
+    el_diff_t d;
+    uint32_t rng;
+    int32_t n1, n2;                                      /* the breath's low-pass, Q24 */
+    int32_t e;                                           /* the envelope at the end of the last block, Q16 */
+} px_blow_t;
+#define PX_FLOW_SCALE 15735                              /* her bow's noise: parameter 0.7, ^4 */
+#define PX_FLOW_THR 93839722u                            /* (0.0001 + that / 8) of 2^32 a sample, x 32 / 44.1 (hers: 32 kHz) */
+
+/* her exciters' tone: a low-pass at 32 Hz x 500^t (t Q16 0..1); cycles Q32 */
+static uint32_t px_tone_cut(int32_t t)
+{
+    uint64_t c = ((uint64_t)3116550u * px_exp2(px_m(t, 587582, 16))) >> 16;
+    return c > 2143260078u ? 2143260078u : (uint32_t)c;
+}
+
+/* BOW: after px_modal_block (struck by nothing: M->gen = PX_GEN_BOW). The bow's noise into the bank and the
+ * bowed waveguides beside it. v: the bow's pressure now (her envelope x level), tone: its noise, accent: Q16
+ * (how rough the bow is) */
+static __attribute__((noinline)) void px_bow_run(px_modal_blk_t *B, px_modal_t *M, px_bow_t *W, int32_t v, int32_t tone,
+                                                 int32_t accent, int32_t *out, int32_t *aux, uint32_t n)
+{
+    int32_t ext[32], v0 = W->v, dv, g = 65536 + 7 * accent, vi;
+    el_bowg_t G[EL_BOW_N];
+    uint32_t i, nw = B->n < EL_BOW_N ? B->n : EL_BOW_N;
+    if (n > 32u)
+        n = 32u;
+    dv = n ? (v - v0) / (int32_t)n : 0;
+    for (i = 0, vi = v0; i < n; i++) {                   /* her input: noise x pressure / 128 (x her accent: here 1 to */
+        vi += dv;                                        /* 8, a rough bow speaks sooner); the bank here takes 4 of hers */
+        ext[i] = px_m(el_flow_tick(&W->fl, PX_FLOW_SCALE, PX_FLOW_THR), px_m(vi, g, 16), 13);   /* (its modes' gains: a quarter) */
+    }
+    px_svf_coef(&B->ex, px_tone_cut(tone), 128u);        /* her q: 0.5 */
+    B->ext = ext;
+    px_modal_run(B, M, out, aux, n);
+    for (i = 0; i < nw; i++) {                           /* Resonator::ComputeFilters, the bowed part */
+        px_svf_t c;
+        uint32_t mf = B->mf[i];
+        px_svf_coef(&c, mf, 256u + (uint32_t)(((uint64_t)mf * 529200u) >> 32));   /* q = 1 + 1500 f (of 32 kHz) */
+        G[i].g = c.g;
+        G[i].rpg = c.rpg;
+        G[i].gh = c.gh;
+        G[i].r = c.rpg - c.g;
+        G[i].w = B->m[i].a * 2;                          /* x 8, and the quarter back */
+        G[i].delay = el_bow_delay(i, 0xFFFFFFFFu / mf);
+    }
+    el_bow_run(&W->w, G, nw, aux, v0, v, out, n);        /* (aux: the bank's input / 4 = hers, as Q22) */
+    W->v = v;
+}
+
+/* BLOW: after px_modal_block (M->gen = PX_GEN_BLOW). Noise, through the pipe (above 2 / 3 of the level, as her
+ * knob), smeared, into the bank. f0: the note; level, tone, damping, accent: Q16 0..1; e: the envelope, Q16 */
+static __attribute__((noinline)) void px_blow_run(px_modal_blk_t *B, px_modal_t *M, px_blow_t *W, uint32_t f0, int32_t level,
+                                                  int32_t tone, int32_t damping, int32_t e, int32_t accent,
+                                                  int32_t *out, int32_t *aux, uint32_t n)
+{
+    int32_t io[32], bl = level + (level >> 1), tube, e0 = W->e, de, g = 32768 + accent, n1 = W->n1, n2 = W->n2;
+    px_svf_t lp;
+    el_tube_blk_t TB;
+    uint32_t i;
+    if (n > 32u)
+        n = 32u;
+    tube = bl > 65536 ? (bl - 65536) * 2 : 0;
+    bl = px_m(bl > 65536 ? 65536 : bl, 26214, 16);       /* x 0.4 */
+    px_svf_coef(&lp, px_tone_cut(tone), 179u);
+    for (i = 0; i < n; i++) {                            /* the breath: white noise, low-passed */
+        int32_t in = (int32_t)(el_word(&W->rng) >> 8) - (1 << 23), t, bp;
+        t = (int32_t)(((int64_t)lp.gh * (in - px_m(lp.rpg, n1, 28) - n2)) >> 30);
+        bp = n1 + t;
+        n1 = bp + t;
+        t = px_m(lp.g, bp, 28);
+        bp = n2 + t;
+        n2 = bp + t;
+        io[i] = bp >> 4;
+    }
+    W->n1 = px_clamp(n1, -(1 << 28), 1 << 28);
+    W->n2 = px_clamp(n2, -(1 << 28), 1 << 28);
+    el_tube_block(&TB, f0 < 65536u ? 65536u : f0, damping, tube);
+    el_tube_run(&W->t, &TB, e, tube >> 1, io, n);
+    for (i = 0; i < n; i++)
+        io[i] = px_m(io[i], bl, 16);
+    el_diff_run(&W->d, io, n);
+    de = n ? (e - e0) / (int32_t)n : 0;
+    for (i = 0; i < n; i++) {                            /* her input: this x envelope x accent / 16; here 4 of it, Q24 */
+        e0 += de;
+        io[i] = px_m(px_clamp(io[i], -(8 << 20), 8 << 20), px_m(e0, g, 16), 14);
+    }
+    W->e = e;
+    B->ext = io;
+    px_modal_run(B, M, out, aux, n);
 }
 
 /* ------------------------------------------------------------ String --- */

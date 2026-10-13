@@ -28,6 +28,15 @@
  *           Gillet). LAST is how long the bounces keep going
  *   PICK    the bank plucked by Elements' plectrum: a soft catch, then the pluck as it lets go, the body muted
  *           a little while it touches. GAP is the time between the two
+ *   BOW     the bank bowed, Elements' way (bow_dsp.c, MIT, Emilie Gillet): beside the bank each of its first
+ *           eight modes runs round a loop the bow's friction feeds, so the body sings for as long as the key is
+ *           held, slowly at first, as a real bow takes hold. BOW is the pressure (low: only the bow's hiss),
+ *           TONE the colour of that hiss; ACC (and so a harder key) makes the bow rougher, up to 8 times her
+ *           noise, and the note speaks sooner for it
+ *   BLOW    the bank blown: noise, smeared, and above 2 / 3 of BLOW a pipe with a reed tuned to the note (her
+ *           tube) in front of it. TONE is the colour of the breath (her sampled noise is not here: white noise
+ *           through her low-pass instead)
+ *           Both follow the track's envelope as the bow's / breath's own, and play one note at a time.
  * ACC is the accent at full velocity (brighter, longer, louder strike; velocity scales it), EXC
  * mixes the exciter itself into the output (the mallet / pick). The track's ENV / LFO -> FLT move BRIT.
  *
@@ -39,11 +48,11 @@
 #include "phys_dsp.c"
 #include "phys_symp.c"
 
-enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_BOUNCE, PM_PICK, PM_COUNT };
+enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_BOUNCE, PM_PICK, PM_BOW, PM_BLOW, PM_COUNT };
 #define PHYS_POLY 3
 /* output: model 1.0 -> this (VOICE_FS scale), then a soft knee; per model (a strike of all the modes in
  * phase peaks high but is short) */
-static const int32_t PHYS_GAIN[PM_COUNT] = {56000, 48000, 135000, 36000, 56000, 56000};   /* (SLOOP 2.5: x2, x4, x1.5, x3: the
+static const int32_t PHYS_GAIN[PM_COUNT] = {56000, 48000, 135000, 36000, 56000, 56000, 14000, 40000};   /* (SLOOP 2.5: x2, x4, x1.5, x3: the
                                                                                * level of SLOOP's other engines) */
 
 typedef struct {
@@ -56,7 +65,7 @@ typedef struct {
 } phys_slot_t;
 
 
-static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP", "BOUNC", "PICK"};
+static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP", "BOUNC", "PICK", "BOW", "BLOW"};
 static const char *const N_PHYS_CHORD[] = {"OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT", 0};
 /* per model: STRC .. EXC under their own names (phys_desc; range and default as edit[], 0 = edit[]) */
 static const param_desc_t PHYS_D_HARM = {"HARM", F_PCT, 0, 127, 64, 0, 0};
@@ -66,11 +75,15 @@ static const param_desc_t PHYS_D_SYMP = {"SYMP", F_PCT, 0, 127, 20, 0, 0};
 static const param_desc_t PHYS_D_BUZZ = {"BUZZ", F_PCT, 0, 127, 0, 0, 0};
 static const param_desc_t PHYS_D_LAST = {"LAST", F_PCT, 0, 127, 0, 0, 0};
 static const param_desc_t PHYS_D_GAP = {"GAP", F_PCT, 0, 127, 0, 0, 0};
+static const param_desc_t PHYS_D_BLOW = {"BLOW", F_PCT, 0, 127, 64, 0, 0};
+static const param_desc_t PHYS_D_TONE = {"TONE", F_PCT, 0, 127, 64, 0, 0};
 static const param_desc_t *const PHYS_DESC[PM_COUNT][8] = {
     [PM_MEMB] = {0, &PHYS_D_HARM, 0, 0, 0, 0, &PHYS_D_BEND, 0},
     [PM_SYMP] = {0, &PHYS_D_CHRD, 0, 0, &PHYS_D_SYMP, 0, &PHYS_D_BUZZ, 0},
     [PM_BOUNCE] = {0, 0, 0, 0, 0, 0, &PHYS_D_LAST, 0},
     [PM_PICK] = {0, 0, 0, 0, 0, 0, &PHYS_D_GAP, 0},
+    [PM_BOW] = {0, 0, 0, 0, 0, 0, 0, &PHYS_D_TONE},
+    [PM_BLOW] = {0, 0, 0, 0, 0, 0, &PHYS_D_BLOW, &PHYS_D_TONE},
 };
 
 static const param_desc_t *phys_desc(const track_t *t, uint32_t k)
@@ -88,15 +101,27 @@ static const int8_t PHYS_DETUNE[PX_NSYMP] = {1, -1, 0};   /* 1/16 semitone (6 ce
 /* SLOOP 2.5: the slots live in the part's engine arena (engines.c), in one of two layouts over the same
  * bytes: SYMP (the largest: a string and three sympathetic lines) two slots, the other models three
  * smaller ones (a string or a modal bank). A switch of layout starts the part's notes over, as a MODEL
- * change under a note always did. SYMP plays two voices (phys_poly), the others three. */
+ * change under a note always did. SYMP plays two voices (phys_poly), the others three. A third layout, solo:
+ * BOW and BLOW play one voice, its bank in the first bytes and its delay memory (px_bow_t / px_blow_t) in all
+ * the rest. */
 #define PHYS_SLOT_BIG ((sizeof(phys_slot_t) + 7u) & ~7u)
 #define PHYS_SLOT_SMALL ((__builtin_offsetof(phys_slot_t, u) + sizeof(px_string_t) + 7u) & ~7u)
 #define PHYS_ARENA (2u * PHYS_SLOT_BIG > 3u * PHYS_SLOT_SMALL ? 2u * PHYS_SLOT_BIG : 3u * PHYS_SLOT_SMALL)
 _Static_assert(sizeof(px_modal_t) <= sizeof(px_string_t), "a small PHYS slot holds MODAL and MEMB too");
-static uint8_t phys_lay[NPART];          /* 1 + the layout the slots are in (0 small, 1 SYMP), 0 = none yet */
+#define PHYS_SOLO_AT ((__builtin_offsetof(phys_slot_t, u) + sizeof(px_modal_t) + 7u) & ~7u)
+_Static_assert(PHYS_SOLO_AT + sizeof(px_bow_t) <= PHYS_ARENA && PHYS_SOLO_AT + sizeof(px_blow_t) <= PHYS_ARENA,
+               "the solo layout: the bank and the bow's / the pipe's memory in one arena");
+#define PHYS_SOLO(S) ((void *)((uint8_t *)(S) + PHYS_SOLO_AT))
+static uint8_t phys_lay[NPART];          /* 1 + the layout the slots are in (0 small, 1 SYMP, 2 solo), 0 = none yet */
+static uint32_t phys_layout(const track_t *t)
+{
+    uint32_t md = (uint32_t)t->p[P_E0] % PM_COUNT;
+    return md == PM_SYMP ? 1u : md == PM_BOW || md == PM_BLOW ? 2u : 0u;
+}
 static uint32_t phys_poly(const track_t *t)
 {
-    return (uint32_t)t->p[P_E0] % PM_COUNT == PM_SYMP ? 2u : 3u;
+    static const uint8_t N[3] = {3, 2, 1};
+    return N[phys_layout(t)];
 }
 static phys_slot_t *phys_slot_of(track_t *t, voice_t *v)
 {
@@ -106,11 +131,11 @@ static phys_slot_t *phys_slot_of(track_t *t, voice_t *v)
         return 0;
     p = (uint32_t)(t - trk);
     i = (uint32_t)(v - t->v);
-    big = (uint32_t)t->p[P_E0] % PM_COUNT == PM_SYMP;
+    big = phys_layout(t);
     if (i >= phys_poly(t))
         return 0;
     a = (uint8_t *)eng_arena_of(t, ENGI_PHYS);
-    sz = big ? PHYS_SLOT_BIG : PHYS_SLOT_SMALL;
+    sz = big == 1u ? PHYS_SLOT_BIG : PHYS_SLOT_SMALL;      /* (solo: the one slot at the start) */
     if (phys_lay[p] != big + 1u) {                       /* the other layout: every slot starts over */
         for (k = 0; k < phys_poly(t); k++)
             ((phys_slot_t *)(a + k * sz))->model = 0xFF;
@@ -126,6 +151,12 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
     uint32_t n = md == PM_SYMP ? sizeof(px_symp_t) : md == PM_STRING ? sizeof(px_string_t) : sizeof(px_modal_t);
     for (i = 0; i < n / 4u; i++)
         w[i] = 0;
+    if (md == PM_BOW || md == PM_BLOW) {                 /* (solo: the slot is the arena's start) */
+        w = (uint32_t *)PHYS_SOLO(S);
+        n = md == PM_BOW ? sizeof(px_bow_t) : sizeof(px_blow_t);
+        for (i = 0; i < n / 4u; i++)
+            w[i] = 0;
+    }
     S->model = (uint8_t)md;
     seed |= 1u;
     switch (md) {
@@ -133,6 +164,12 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
     case PM_SYMP:                                        /* (the main string is the union's px_string_t) */
         S->u.s.rng = seed;
         S->u.s.src = 1u << 30;
+        break;
+    case PM_BOW:
+        ((px_bow_t *)PHYS_SOLO(S))->fl.rng = seed;
+        break;
+    case PM_BLOW:
+        ((px_blow_t *)PHYS_SOLO(S))->rng = seed;
         break;
     default:
         S->u.m.rng = seed;
@@ -155,6 +192,9 @@ static void phys_note_on(track_t *t, voice_t *v)
     case PM_BOUNCE:
     case PM_PICK:
         S->u.m.trig = 1;                                 /* a retrigger strikes the ringing body again */
+        break;
+    case PM_BOW:                                         /* (nothing strikes: the envelope is the bow, the breath) */
+    case PM_BLOW:
         break;
     default:                                             /* STRNG, SYMP */
         S->u.s.trig = 1;
@@ -207,6 +247,25 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         M->par = p[P_E6] * 516;
         px_modal_block(&B, M, f0, strc, brit, clamp(damp - (md == PM_PICK ? M->pk.damp >> 3 : 0), 0, 65536), acc, pos * 129, 0);
         px_modal_run(&B, M, y, ax, n);
+        break;
+    }
+    case PM_BOW: {                                       /* BOW: the pressure (never none: the model always sounds), */
+        px_modal_blk_t B;                                /* TONE: her bow timbre, darker on a dark body as hers */
+        px_modal_t *M = &S->u.m;
+        int32_t lv = 16384 + p[P_E6] * 387, v = px_m(m->envq15 * 2, lv, 16);
+        M->gen = PX_GEN_BOW;
+        px_modal_block(&B, M, f0, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0);
+        px_bow_run(&B, M, (px_bow_t *)PHYS_SOLO(S), v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, y, ax, n);
+        exc = 0;
+        break;
+    }
+    case PM_BLOW: {
+        px_modal_blk_t B;
+        px_modal_t *M = &S->u.m;
+        M->gen = PX_GEN_BLOW;
+        px_modal_block(&B, M, f0, strc, brit, damp, acc, pos * 129, 0);
+        px_blow_run(&B, M, (px_blow_t *)PHYS_SOLO(S), f0, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, y, ax, n);
+        exc = 0;
         break;
     }
     case PM_MEMB: {
@@ -287,6 +346,13 @@ static const preset_t PHYS_PRESETS[] = {
     {"RATTLE BELL", {PM_BOUNCE, 70, 90, 110, 12, 90, 110, 6}, {0, 100, 127, 96}, 0, 0, FX(0, 10, 24, 56)},
     {"PICKED BAR", {PM_PICK, 116, 70, 80, 24, 100, 50, 20}, {0, 100, 127, 56}, 0, 0, FX(0, 0, 16, 32)},
     {"PICK CHIME", {PM_PICK, 70, 104, 112, 10, 100, 90, 10}, {0, 100, 127, 96}, 0, 0, FX(0, 12, 26, 60)},
+    /* BOW: {MODEL, STRC, BRIT, DAMP, POS, ACC, BOW, TONE}; BLOW: {.., BLOW, TONE} (Elements' bow and blow; one note) */
+    {"BOW STRING", {PM_BOW, 34, 60, 100, 12, 80, 100, 80}, {30, 90, 127, 70}, 0, 0, FX(0, 14, 10, 50)},
+    {"BOW GLASS", {PM_BOW, 98, 80, 118, 8, 60, 110, 90}, {50, 90, 127, 100}, 0, 0, FX(0, 24, 20, 72)},
+    {"BOW BASS", {PM_BOW, 34, 45, 96, 16, 110, 100, 70}, {10, 90, 127, 50}, 0, 1, FX(0, 0, 0, 20), XP(P_TRANS + 1, -12)},
+    {"PIPE", {PM_BLOW, 34, 60, 100, 12, 80, 127, 80}, {20, 90, 127, 60}, 0, 0, FX(0, 10, 16, 50)},
+    {"BREATHY", {PM_BLOW, 34, 70, 90, 12, 80, 50, 90}, {30, 90, 127, 70}, 0, 0, FX(0, 16, 20, 56)},
+    {"BLOWN BELL", {PM_BLOW, 70, 100, 120, 12, 100, 110, 110}, {10, 90, 127, 100}, 0, 0, FX(0, 20, 24, 66)},
 };
 
 static const engine_t ENG_PHYS = {
