@@ -88,8 +88,8 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
             pr_wave_render(&sl->wave, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         else if (sl && model == PRM_HARM)
             pr_harm_render(&sl->harm, m->inc, p[P_E1] * 258, timb, mrph, b, k);
-        else if (sl && model == PRM_CHORD)
-            pr_chord_render(&sl->chord, m->inc, p[P_E1] * 258, timb, mrph, b, k, 0);
+        else if (sl && model == PRM_CHORD)           /* the knob's eleventh: the middle of that chord's range of hers */
+            pr_chord_render(&sl->chord, m->inc, (2 * (p[P_E1] * 11 / 128) + 1) * 1460, timb, mrph, b, k, 0);
         else
             pr_fold_render(&s, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         for (i = 0; i < k; i++) {
@@ -149,7 +149,8 @@ static const preset_t PRISM_PRESETS[] = {
 /* CHORD: its three controls by what they do there */
 static const param_desc_t *prism_desc(const track_t *t, uint32_t k)
 {
-    static const param_desc_t D[3] = {{"CHORD", F_PCT, 0, 127, 64, 0, 0}, {"INVRT", F_PCT, 0, 127, 40, 0, 0},
+    static const char *const CH[] = {"OCT", "5TH", "SUS4", "MIN", "MIN7", "MIN9", "MIN11", "6/9", "MAJ9", "MAJ7", "MAJ", 0};
+    static const param_desc_t D[3] = {{"CHORD", F_INT, 0, 127, 64, CH, 0}, {"INVRT", F_PCT, 0, 127, 40, 0, 0},
                                       {"SOUND", F_PCT, 0, 127, 64, 0, 0}};
     return prism_model(t) == PRM_CHORD && k >= 1u && k <= 3u ? &D[k - 1u] : 0;
 }

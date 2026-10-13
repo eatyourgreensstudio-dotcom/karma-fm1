@@ -362,6 +362,7 @@ static void op_drum_steps(uint32_t bank, uint32_t len)
  * character in its own scene (below), moved by the sound: the track's meter, its last note, each note
  * as it starts. */
 static uint32_t op_ph;                                  /* the wave scrolls while there is sound */
+static int32_t op_px;                                   /* PRISM's picture is at the top right: the scenes' things there go left by this */
 static int32_t op_lvl;                                  /* the meter, falling */
 
 /* one cycle of the wave, ph in 1/1024: kind 0..4 ANALOG's SAW SQR TRI SIN PWM, 5 a sine with more
@@ -546,7 +547,7 @@ static void op_scene_surf(track_t *t, const int32_t ratio[4], int analog_wave)
     for (x = 8; x < 232; x += 8)
         cv_pset(x, 94, OP_PUR_D);
     if (ratio[2] >= 0)                                  /* KNOB 3: the moon */
-        op_ell(220, 60 - ratio[2] * 34 / 1000, 5, 5, TE_COL[2]);
+        op_ell(220 - (op_px ? 144 : 0), 60 - ratio[2] * 34 / 1000, 5, 5, TE_COL[2]);
     if (ratio[1] > 0)                                   /* KNOB 2: the second wave, further away as it rises */
         for (x = 8; x <= 232; x += 2)
             cv_pset(x, WY(x, cyc + cyc * (uint32_t)ratio[1] / 4000u, op_ph + (uint32_t)ratio[1] / 4u), TE_COL[1]);
@@ -599,10 +600,11 @@ static void op_scene_fly(const int32_t ratio[4])
     }
     if (ratio[1] >= 0) {                                /* KNOB 2: the planet and its ring */
         int32_t r = 4 + ratio[1] * 9 / 1000;
-        op_ell(206, 44, r, r, TE_COL[1]);
-        op_arc(206, 44, r + 6, 2, 0, 512, TE_COL[1]);
-        cv_pset(206 - r - 6, 44, TE_COL[1]);
-        cv_pset(206 + r + 6, 44, TE_COL[1]);
+        int32_t px = 206 - (op_px ? 132 : 0);
+        op_ell(px, 44, r, r, TE_COL[1]);
+        op_arc(px, 44, r + 6, 2, 0, 512, TE_COL[1]);
+        cv_pset(px - r - 6, 44, TE_COL[1]);
+        cv_pset(px + r + 6, 44, TE_COL[1]);
     }
     for (i = 0; i < (int32_t)sizeof trail; i++) {       /* KNOB 1: the trail */
         int32_t x = 116 - i * 4, y = trail[i] - 18 + ((SINE[((uint32_t)i * 96u + op_ph * 2u) & 1023u] * wob) >> 15);
@@ -640,11 +642,11 @@ static void op_scene_fetch(const int32_t ratio[4])
         cv_line(x, GY(x) - 1, x + 2, GY(x) - 5, TE_COL[1]);
     }
     if (ratio[2] >= 0) {                                /* KNOB 3: the cloud */
-        int32_t cy = 58 - ratio[2] * 26 / 1000;
-        op_arc(178, cy, 6, 5, 512, 1024, TE_COL[2]);
-        op_arc(187, cy - 3, 8, 7, 512, 1024, TE_COL[2]);
-        op_arc(197, cy, 6, 5, 512, 1024, TE_COL[2]);
-        cv_line(172, cy, 203, cy, TE_COL[2]);
+        int32_t cy = 58 - ratio[2] * 26 / 1000, cx = op_px ? 54 : 172;
+        op_arc(cx + 6, cy, 6, 5, 512, 1024, TE_COL[2]);
+        op_arc(cx + 15, cy - 3, 8, 7, 512, 1024, TE_COL[2]);
+        op_arc(cx + 25, cy, 6, 5, 512, 1024, TE_COL[2]);
+        cv_line(cx, cy, cx + 31, cy, TE_COL[2]);
     }
     air = op_hit ? (SINE[(8 - op_hit) * 64] * 12) >> 15 : 0;
     fy = GY(96) - air - (op_lvl && (op_ph / 160u) & 1u ? 1 : 0);
@@ -662,10 +664,98 @@ static void op_scene_fetch(const int32_t ratio[4])
 #undef GY
 }
 
+/* PRISM: the model's own picture, 80 x 40 at the top right, from the three controls as they stand (not from the
+ * sound: it shows what the knobs set). FOLD and WAVE: a cycle of the wave, made by the model itself; HARM: its 24
+ * harmonics; SWARM: the eight oscillators, as far apart as HARM spreads them, as long as MRPH makes their grains;
+ * CHORD: its notes on an octave of keys (green: CHORD's knob), the inversion under it (white: INVRT's). Kept until
+ * a control moves. */
+static void op_prism_panel(const track_t *t)
+{
+    static int8_t pts[80];
+    static uint32_t key = 0xFFFFFFFFu;
+    static const uint16_t TONES[11] = {0x001, 0x081, 0x0A1, 0x089, 0x489, 0x40D, 0x429, 0x215, 0x815, 0x891, 0x091};
+    static const uint8_t WHITE[7] = {0, 2, 4, 5, 7, 9, 11}, BLACK[5] = {1, 3, 6, 8, 10}, BX[5] = {7, 17, 37, 47, 57};
+    uint32_t model = prism_model(t), k = (uint32_t)t->p[P_E0] | (uint32_t)t->p[P_E1] << 4 | (uint32_t)t->p[P_E2] << 12 |
+                                         (uint32_t)t->p[P_E3] << 20, i;
+    int32_t h = t->p[P_E1] * 258, tb = t->p[P_E2] * 258, mo = t->p[P_E3] * 258, x0 = 152, y0 = 22, x;
+    if (model == PRM_FOLD || model == PRM_WAVE || model == PRM_HARM) {
+        if (k != key) {                                 /* a control moved: the picture again */
+            int16_t b[32];
+            key = k;
+            if (model == PRM_HARM) {
+                pr_harm_t hs;
+                int32_t top = 1;
+                pr_harm_init(&hs);
+                for (i = 0; i < 60u; i++)               /* (her spectrum takes some blocks to settle) */
+                    pr_harm_render(&hs, 0x01000000u, h, tb, mo, b, 1);
+                for (i = 0; i < PR_HARM_N; i++)
+                    top = hs.amp[i] > top ? hs.amp[i] : top;
+                for (i = 0; i < PR_HARM_N; i++) {       /* (the square root of each: the quiet ones show too) */
+                    uint32_t r = (uint32_t)hs.amp[i] * 1296u / (uint32_t)top, q = 0;
+                    while ((q + 1u) * (q + 1u) <= r)
+                        q++;
+                    pts[i] = (int8_t)q;
+                }
+            } else {                                    /* two cycles of 160 samples, the second one kept */
+                pr_fold_t fs;
+                pr_wave_t ws;
+                uint32_t blk;
+                pr_fold_init(&fs);
+                pr_wave_init(&ws);
+                for (blk = 0; blk < 10u; blk++) {
+                    if (model == PRM_FOLD)
+                        pr_fold_render(&fs, 0x0199999Au, h, tb, mo, b, 32);
+                    else
+                        pr_wave_render(&ws, 0x0199999Au, h, tb, mo, b, 32);
+                    for (i = 0; blk >= 5u && i < 32u; i += 2u)
+                        pts[(blk - 5u) * 16u + i / 2u] = (int8_t)(b[i] * 18 / 32768);
+                }
+            }
+        }
+        if (model == PRM_HARM) {
+            for (i = 0; i < PR_HARM_N; i++) {
+                cv_rect(x0 + 4 + (int32_t)i * 3, y0 + 38 - pts[i], 2, pts[i] + 1, TE_COL[0]);
+            }
+        } else {
+            for (x = 0; x < 80; x += 4)
+                cv_pset(x0 + x, y0 + 20, OP_PUR_D);
+            for (i = 1; i < 80u; i++)
+                cv_line(x0 + (int32_t)i - 1, y0 + 20 - pts[i - 1], x0 + (int32_t)i, y0 + 20 - pts[i], TE_COL[0]);
+        }
+    } else if (model == PRM_SWARM) {
+        int32_t spread = h, len = 8 + mo * 30 / 32767, n = 2 + tb * 10 / 32767;   /* (HARM as it is: its cube is the pitch) */
+        for (i = 0; i < 8u; i++) {                      /* (their ranks: -1 .. 1.33, as the model's) */
+            int32_t y = y0 + 22 - (((int32_t)i - 3) * spread * 13 / 3) / 32767;
+            cv_line(x0 + 40 - len, y + 2, x0 + 40 + len, y - 2, TE_COL[0]);
+            cv_line(x0 + 40 + len, y - 2, x0 + 40 + len, y + 2, TE_COL[0]);
+        }
+        for (i = 0; i < (uint32_t)n; i++)               /* TIMB: the grains' rate */
+            cv_rect(x0 + 2 + (int32_t)i * 6, y0, 3, 2, TE_COL[2]);
+    } else {                                            /* CHORD */
+        uint32_t tones = TONES[(uint32_t)t->p[P_E1] * 11u / 128u];
+        for (i = 0; i < 7u; i++) {
+            int32_t on = (tones >> WHITE[i]) & 1u;
+            if (on)
+                cv_rect(x0 + 5 + (int32_t)i * 10, y0 + 2, 9, 30, WHITE[i] ? TE_COL[1] : C_WHITE);
+            else
+                op_box(x0 + 5 + (int32_t)i * 10, y0 + 2, 9, 30, OP_PUR);
+        }
+        for (i = 0; i < 5u; i++) {
+            int32_t on = (tones >> BLACK[i]) & 1u;
+            cv_rect(x0 + 5 + BX[i], y0 + 2, 5, 17, on ? TE_COL[1] : C_BLACK);
+            if (!on)
+                op_box(x0 + 5 + BX[i], y0 + 2, 5, 17, OP_PUR);
+        }
+        for (i = 0; i < 20u; i++)                       /* INVRT: twenty steps up */
+            cv_rect(x0 + 1 + (int32_t)i * 4, y0 + 36, 3, 2, (int32_t)i <= t->p[P_E2] * 20 / 128 ? TE_COL[2] : OP_PUR_D);
+    }
+}
+
 static void op_synth_scene(track_t *t, const int32_t ratio[4], int analog_wave)
 {
     int32_t m = meter_px(t->peak);
     char b[8];
+    op_px = t->eng_req % NENGINES == ENGI_PRISM;
     t->peak = 0;
     op_lvl = m > op_lvl ? m : op_lvl > 4 ? op_lvl - 4 : 0;
     if (op_lvl || op_hit)
@@ -678,6 +768,8 @@ static void op_synth_scene(track_t *t, const int32_t ratio[4], int analog_wave)
     case 1: op_scene_fly(ratio); break;
     default: op_scene_fetch(ratio); break;
     }
+    if (op_px)
+        op_prism_panel(t);
 }
 
 /* the pages of the family, the one shown filled (one page: nothing) */
