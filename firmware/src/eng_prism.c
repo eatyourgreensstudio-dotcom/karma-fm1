@@ -156,7 +156,7 @@ static const param_desc_t *prism_desc(const track_t *t, uint32_t k)
 }
 
 static const engine_t ENG_PRISM = {
-    "PRISM", {"TONE", "MOD"},
+    "PLAITS", {"TONE", "MOD"},      /* (the name Ariel wants on his build; the files and the code say PRISM) */
     {
         {"MODEL", F_ENUM, 0, PRM_COUNT - 1, 0, N_PRISM_MODEL, 0},
         {"HARM", F_PCT, 0, 127, 64, 0, 0},

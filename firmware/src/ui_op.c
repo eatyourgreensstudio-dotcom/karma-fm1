@@ -36,10 +36,16 @@ static void op_header(const char *tag, uint16_t tc, const char *title, uint32_t 
         return;
     *cache = sig;
     cv_begin(240, OP_HEAD_H, C_BLACK);
-    op_box(2, 1, 38, 18, tc);
-    te_text_c(21, 2, tag, tc);
-    str_cpy(b, title, 10);                             /* (9 characters: up to the tempo) */
-    cv_text(46, 2, &FONT_S, b, TE_G3);
+    {   /* the tag in its box (four characters, or as wide as a longer one), the title up to the tempo */
+        int32_t w = text_w(&FONT_S, tag) + 6;
+        w = w < 38 ? 38 : w;
+        op_box(2, 1, w, 18, tc);
+        te_text_c(2 + w / 2, 2, tag, tc);
+        str_cpy(b, title, 10);
+        while (b[0] && w + 8 + text_w(&FONT_S, b) > 122)
+            b[str_len(b) - 1u] = 0;
+        cv_text(w + 8, 2, &FONT_S, b, TE_G3);
+    }
     fmt_int(b, song.g[G_BPM]);
     cv_text(150 - text_w(&FONT_S, b), 2, &FONT_S, b, ui.bpm_t ? C_WHITE : TE_G4);
     if (playing) {
