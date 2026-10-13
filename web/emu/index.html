@@ -85,7 +85,7 @@ footer small { font-size: 11px; opacity: .8; }
   <span><kbd>[</kbd> <kbd>]</kbd> OCT</span>
   <span><kbd>↑</kbd> <kbd>↓</kbd> SELECT</span>
   <span><kbd>←</kbd> <kbd>→</kbd> ALGORITHM</span>
-  <span><kbd>Shift</kbd>-click holds a button</span>
+  <span>Double-click (or <kbd>Shift</kbd>-click) a button to hold it down, click it again to let go</span>
 </p>
 
 <p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span></p>
@@ -251,8 +251,10 @@ function syncKeys(redraw) {
 function bindButton(b) {
   b.hit.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    if (e.shiftKey || e.button === 2) { latched ^= 1 << b.bit; syncButtons(true); return; }
-    if (latched & (1 << b.bit)) { latched &= ~(1 << b.bit); syncButtons(true); return; }
+    const now = performance.now(), twice = now - (b.downAt || 0) < 350;   // a double click holds it too
+    b.downAt = now;
+    if (e.shiftKey || e.button === 2 || (twice && !(latched & (1 << b.bit)))) { latched ^= 1 << b.bit; b.downAt = 0; syncButtons(true); return; }
+    if (latched & (1 << b.bit)) { latched &= ~(1 << b.bit); b.downAt = 0; syncButtons(true); return; }
     b.hit.setPointerCapture(e.pointerId);
     btnBy.set("p" + e.pointerId, b.bit);
     syncButtons();
