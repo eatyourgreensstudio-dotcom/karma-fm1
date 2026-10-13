@@ -208,6 +208,108 @@ static int tone_cases(const char *name, const float (*C)[4], int nc, int model, 
     return fails;
 }
 
+/* ---- the chord: five oscillators at intervals, so not one periodic wave: 1.5 s of each against hers as spectra
+ * (the power in bands of 16 Hz, their difference against hers; the phases of the notes are not compared) */
+#define NC 65536
+static const float CHORD[][4] = {                   /* as tests/prism_ref/ref_chord.cc */
+    {0.004f, 0.0f, 0.0f, 0.2f}, {0.004f, 0.3f, 0.0f, 0.0f}, {0.004f, 0.94f, 0.3f, 0.3f}, {0.004f, 0.4f, 0.55f, 0.45f},
+    {0.004f, 0.4f, 0.5f, 0.7f}, {0.004f, 0.85f, 0.8f, 1.0f}, {0.002f, 0.5f, 0.2f, 0.56f}, {0.01f, 0.67f, 1.0f, 0.1f},
+    {0.006f, 0.76f, 0.13f, 0.85f}, {0.02f, 0.13f, 0.6f, 0.25f}};
+static void fft(double *re, double *im, int n)       /* in place, n a power of two */
+{
+    int i, j, k, m;
+    for (i = 1, j = 0; i < n; i++) {
+        for (k = n >> 1; j & k; k >>= 1)
+            j ^= k;
+        j ^= k;
+        if (i < j) {
+            double t = re[i]; re[i] = re[j]; re[j] = t;
+            t = im[i]; im[i] = im[j]; im[j] = t;
+        }
+    }
+    for (m = 2; m <= n; m <<= 1) {
+        double wr = cos(-6.283185307179586 / m), wi = sin(-6.283185307179586 / m);
+        for (i = 0; i < n; i += m) {
+            double cr = 1, ci = 0;
+            for (k = 0; k < m / 2; k++) {
+                double ur = re[i + k], ui = im[i + k], vr = re[i + k + m / 2] * cr - im[i + k + m / 2] * ci,
+                       vi = re[i + k + m / 2] * ci + im[i + k + m / 2] * cr, t = cr * wr - ci * wi;
+                re[i + k] = ur + vr; im[i + k] = ui + vi;
+                re[i + k + m / 2] = ur - vr; im[i + k + m / 2] = ui - vi;
+                ci = cr * wi + ci * wr;
+                cr = t;
+            }
+        }
+    }
+}
+static void bands(const float *x, double *b, int nb)   /* sqrt of the power in bands of 24 bins */
+{
+    static double re[NC], im[NC];
+    int i;
+    for (i = 0; i < NC; i++) {
+        re[i] = x[i] * (0.5 - 0.5 * cos(6.283185307179586 * i / NC));
+        im[i] = 0;
+    }
+    fft(re, im, NC);
+    for (i = 0; i < nb; i++) {
+        double e = 0;
+        int k;
+        for (k = 0; k < 24; k++)
+            e += re[i * 24 + k] * re[i * 24 + k] + im[i * 24 + k] * im[i * 24 + k];
+        b[i] = sqrt(e);
+    }
+}
+static int chord_cases(const char *ref, const char *wavdir)
+{
+    static float hers[NC], ours[NC];
+    static double bh[NC / 48], bo[NC / 48];
+    static int16_t o[32];
+    int c, i, fails = 0, nb = NC / 48;
+    for (c = 0; c < (int)(sizeof CHORD / sizeof CHORD[0]); c++) {
+        char path[512];
+        pr_chord_t s;
+        FILE *f;
+        double f0 = CHORD[c][0], es = 0, ed = 0, db;
+        uint32_t inc;
+        snprintf(path, sizeof path, "%s/chord-%d.f0", ref, c);
+        f = fopen(path, "r");
+        if (f) {
+            if (fscanf(f, "%lf", &f0) != 1) f0 = CHORD[c][0];
+            fclose(f);
+        }
+        inc = (uint32_t)(f0 * 4294967296.0);
+        snprintf(path, sizeof path, "%s/chord-%d.f32", ref, c);
+        f = fopen(path, "rb");
+        if (!f || fread(hers, sizeof(float), NC, f) != NC) {
+            printf("prism: no reference %s (tests/prism_ref/build.sh)\n", path);
+            return 1;
+        }
+        fclose(f);
+        pr_chord_init(&s);
+        for (i = -689 * 32; i < NC; i += 32) {
+            int k;
+            pr_chord_render(&s, inc, (int32_t)(CHORD[c][1] * 32767), (int32_t)(CHORD[c][2] * 32767), (int32_t)(CHORD[c][3] * 32767), o, 32, 1);
+            for (k = 0; k < 32 && i >= 0; k++)
+                ours[i + k] = o[k] / 32767.0f;
+        }
+        bands(hers, bh, nb);
+        bands(ours, bo, nb);
+        for (i = 0; i < nb; i++) {
+            es += bh[i] * bh[i];
+            ed += (bh[i] - bo[i]) * (bh[i] - bo[i]);
+        }
+        db = 10 * log10(ed / (es + 1e-12) + 1e-12);
+        printf("chord f0 %.4f  harm %.2f  timbre %.2f  morph %.2f   difference %6.1f dB  %s\n", CHORD[c][0], CHORD[c][1], CHORD[c][2],
+               CHORD[c][3], db, db < -25 ? "ok" : "FAIL");
+        fails += !(db < -25);
+        if (wavdir) {
+            snprintf(path, sizeof path, "%s/chord-%d.wav", wavdir, c);
+            wav(path, ours, hers);
+        }
+    }
+    return fails;
+}
+
 int main(int argc, char **argv)
 {
     const char *ref = argc > 1 ? argv[1] : "build/prism_ref", *wavdir = argc > 2 ? argv[2] : 0;
@@ -216,6 +318,7 @@ int main(int argc, char **argv)
     fails += tone_cases("wave", WAVE, (int)(sizeof WAVE / sizeof WAVE[0]), 1, ref, wavdir);
     fails += tone_cases("harm", HARM, (int)(sizeof HARM / sizeof HARM[0]), 2, ref, wavdir);
     fails += swarm_cases(ref, wavdir);
+    fails += chord_cases(ref, wavdir);
     printf(fails ? "prism: FAILED\n" : "prism: the fixed-point models match the originals\n");
     return fails != 0;
 }

@@ -8,21 +8,28 @@
  *          size (short: a cloud; long: glissandi)
  *   WAVE   192 waves in banks of 8 x 8: TIMB and MRPH move through a bank, HARM through the banks
  *   HARM   24 harmonics: TIMB the centre of the spectrum, MRPH how narrow it is, HARM how many bumps it has
- * SWARM's, WAVE's and HARM's state is in the part's engine arena (engines.c eng_arena_of), a slot a voice; they play
- * four voices a part at most (voice.c: prism_poly). */
+ *   CHORD  a chord from one key: HARM picks it (octave, fifth, sus4, m, m7, m9, m11, 6/9, M9, M7, M), TIMB its
+ *          inversion, MRPH the sound (a string machine, then organ and string waves)
+ * The state of all but FOLD is in the part's engine arena (engines.c eng_arena_of), a slot a voice; they play four
+ * voices a part at most, CHORD (five oscillators a key) two (voice.c: prism_poly). */
 #include "prism_tables.h"
 #include "prism_dsp.c"
 
-static const char *const N_PRISM_MODEL[] = {"FOLD", "SWARM", "WAVE", "HARM"};
-enum { PRM_FOLD, PRM_SWARM, PRM_WAVE, PRM_HARM, PRM_COUNT };
+static const char *const N_PRISM_MODEL[] = {"FOLD", "SWARM", "WAVE", "HARM", "CHORD"};
+enum { PRM_FOLD, PRM_SWARM, PRM_WAVE, PRM_HARM, PRM_CHORD, PRM_COUNT };
 typedef union {
     pr_swarm_t swarm;
     pr_wave_t wave;
     pr_harm_t harm;
+    pr_chord_t chord;
 } prism_slot_t;
 static void *eng_arena_of(const track_t *t, uint32_t eng);
 static uint32_t prism_model(const track_t *t) { return (uint32_t)clamp(t->p[P_E0], 0, PRM_COUNT - 1); }
-static uint32_t prism_poly(const track_t *t) { return prism_model(t) == PRM_FOLD ? 0u : 4u; }   /* (0: NVOICE) */
+static uint32_t prism_poly(const track_t *t)             /* (0: NVOICE) */
+{
+    uint32_t m = prism_model(t);
+    return m == PRM_FOLD ? 0u : m == PRM_CHORD ? 2u : 4u;
+}
 static prism_slot_t *prism_slot(track_t *t, voice_t *v)   /* the voice's slot (0 on the drum track: none) */
 {
     prism_slot_t *a = (prism_slot_t *)eng_arena_of(t, ENGI_PRISM);
@@ -39,6 +46,8 @@ static void prism_slot_init(track_t *t, voice_t *v)      /* the slot set for the
         pr_wave_init(&sl->wave);
     if (sl && model == PRM_HARM)
         pr_harm_init(&sl->harm);
+    if (sl && model == PRM_CHORD)
+        pr_chord_init(&sl->chord);
 }
 
 static void prism_note_on(track_t *t, voice_t *v)
@@ -79,6 +88,8 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
             pr_wave_render(&sl->wave, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         else if (sl && model == PRM_HARM)
             pr_harm_render(&sl->harm, m->inc, p[P_E1] * 258, timb, mrph, b, k);
+        else if (sl && model == PRM_CHORD)
+            pr_chord_render(&sl->chord, m->inc, p[P_E1] * 258, timb, mrph, b, k, 0);
         else
             pr_fold_render(&s, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         for (i = 0; i < k; i++) {
@@ -125,7 +136,23 @@ static const preset_t PRISM_PRESETS[] = {
     {"OVERTONES", {3, 0, 20, 96, 100, 0, 0, 0}, {30, 96, 60, 80}, 0, 0, FX(0, 0, 26, 50)},
     {"SPECTRAL PD", {3, 70, 50, 60, 0, 0, 0, 0}, {70, 90, 120, 90}, 0, 0, FX(0, 36, 20, 56), XP(P_LRATE + 1, 18, P_LD_FLT + 1, 36)},
     {"ADD BELL", {3, 96, 70, 80, 60, 0, 0, 0}, {0, 88, 0, 76}, 0, 0, FX(0, 0, 24, 44)},
+    /* CHORD (HARM: 6 OCT, 17 5TH, 28 SUS4, 40 M, 51 M7, 62 M9, 74 M11, 85 6/9, 96 MAJ9, 108 MAJ7, 119 MAJ; ENV at 0:
+     * TIMB is the inversion) */
+    {"STRING MCH", {4, 108, 30, 30, 0, 0, 0, 0}, {40, 90, 118, 70}, 0, 0, FX(0, 50, 10, 40)},
+    {"SOLINA MIN", {4, 51, 40, 20, 0, 0, 0, 0}, {50, 90, 118, 76}, 0, 0, FX(0, 60, 14, 46)},
+    {"ORGAN CHRD", {4, 119, 20, 90, 0, 0, 0, 0}, {2, 80, 120, 30}, 0, 0, FX(0, 20, 0, 24)},
+    {"HOUSE STAB", {4, 62, 45, 10, 0, 0, 0, 0}, {0, 62, 0, 40}, 0, 0, FX(0, 10, 26, 26)},
+    {"RAVE 5TH", {4, 17, 30, 0, 0, 0, 0, 0}, {0, 66, 30, 30}, 0, 0, FX(20, 0, 22, 20)},
+    {"DREAM 69", {4, 85, 60, 110, 0, 0, 0, 0}, {70, 90, 120, 90}, 0, 0, FX(0, 30, 24, 56), XP(P_LRATE + 1, 14, P_LD_FLT + 1, 24)},
 };
+
+/* CHORD: its three controls by what they do there */
+static const param_desc_t *prism_desc(const track_t *t, uint32_t k)
+{
+    static const param_desc_t D[3] = {{"CHORD", F_PCT, 0, 127, 64, 0, 0}, {"INVRT", F_PCT, 0, 127, 40, 0, 0},
+                                      {"SOUND", F_PCT, 0, 127, 64, 0, 0}};
+    return prism_model(t) == PRM_CHORD && k >= 1u && k <= 3u ? &D[k - 1u] : 0;
+}
 
 static const engine_t ENG_PRISM = {
     "PRISM", {"TONE", "MOD"},
@@ -141,4 +168,5 @@ static const engine_t ENG_PRISM = {
     },
     PRISM_PRESETS, sizeof(PRISM_PRESETS) / sizeof(PRISM_PRESETS[0]), 0, prism_note_on, prism_render,
     0xA2FF, {P_E1, P_E2, P_E3, P_REL},
+    .desc = prism_desc,
 };

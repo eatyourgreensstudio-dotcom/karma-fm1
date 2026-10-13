@@ -46,6 +46,12 @@
  *           the harmonics by recurrence (sin, -cos, -sin, cos ...); here each is read from the sine table at
  *           k times the phase, a quarter turn back for each harmonic: the same wave.
  *
+ *   chord   ChordEngine: a chord of four notes on five oscillators. HARMONICS picks the chord (octave, fifth, sus4, m,
+ *           m7, m9, m11, 6/9, M9, M7, M), TIMBRE its inversion and how high it sits (a note at a time moves up an
+ *           octave, the fifth oscillator fading it in), MORPH the sound: first a string machine, saws and squares
+ *           at four octaves in eight registrations, then (past the middle) fifteen organ and string waves.
+ *           Her two outputs added (as her main output is).
+ *
  * No 64-bit division anywhere (the target's library has none: the link fails; the host does not notice), 64-bit
  * products only where a block or a sample needs one.
  * Number formats: phases 32 bit (a cycle = 2^32), increments cycles per sample Q32; the slope Q16 (1.0 =
@@ -510,4 +516,206 @@ static void pr_harm_render(pr_harm_t *s, uint32_t inc, int32_t harmonics, int32_
     s->phase = phase + inc * n;
     for (k = 0; k < n; k++)
         out[k] = (int16_t)(acc[k] > 32767 ? 32767 : acc[k] < -32767 ? -32767 : acc[k]);
+}
+
+/* ------------------------------------------------------- chord (ChordEngine) --- */
+#define PR_CHORD_V 5
+typedef struct {
+    uint32_t dphase;             /* StringSynthOscillator: 8 segments a cycle (the top 3 bits) */
+    int32_t dnext, dg[4];        /* .. the next sample's share (Q16), the four sawtooths' gains as the last block ended (Q15) */
+    uint32_t wphase;             /* WavetableOscillator */
+    int32_t wgain, wwave;        /* .. its gain and its place among the waves as the last block ended */
+    int32_t wdprev, wdlp, wlp;   /* .. the differentiator and the low-pass after it (Q8 of the waves' units) */
+} pr_chord_note_t;
+typedef struct {
+    pr_chord_note_t n[PR_CHORD_V];
+    int32_t morph_lp, timbre_lp; /* Q15 */
+    int32_t chord;               /* the chord picked (her quantizer keeps it until HARMONICS is well into the next) */
+    uint8_t on;
+} pr_chord_t;
+
+static void pr_chord_init(pr_chord_t *s)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof *s; i++)
+        ((uint8_t *)s)[i] = 0;
+}
+
+/* n samples (Q15) into out, n <= 32. inc: the note; harmonics, timbre, morph: 0..32767.
+ * glide: 1 = as hers (TIMBRE and MORPH come in from 0 at the start); 0 = they start where they are */
+static void pr_chord_render(pr_chord_t *s, uint32_t inc, int32_t harmonics, int32_t timbre, int32_t morph, int16_t *out, uint32_t n,
+                            int glide)
+{
+    /* the chords in cents (her 0.01 and 11.99: two notes a cent apart, to beat) */
+    static const int16_t CHORDS[11][4] = {{0, 1, 1199, 1200}, {0, 700, 701, 1200}, {0, 500, 700, 1200}, {0, 300, 700, 1200},
+                                          {0, 300, 700, 1000}, {0, 300, 1000, 1400}, {0, 300, 1000, 1700}, {0, 200, 900, 1600},
+                                          {0, 400, 1100, 1400}, {0, 400, 700, 1100}, {0, 400, 700, 1200}};
+    /* the string machine's registrations: saw 8', square 8', saw 4', square 4', saw 2', square 2' (Q15) */
+    static const int16_t REG[8][6] = {{0, 32767, 0, 0, 0, 0}, {32767, 0, 0, 0, 0, 0}, {16384, 0, 16384, 0, 0, 0},
+                                      {10813, 0, 10813, 0, 10813, 0}, {10813, 0, 0, 10813, 0, 10813}, {16384, 0, 0, 0, 0, 16384},
+                                      {0, 16384, 0, 0, 0, 16384}, {0, 3277, 3277, 0, 6554, 19661}};
+    static const int16_t FADE[PR_CHORD_V] = {18022, 15401, 16056, 16712, 17367};   /* 0.55 0.47 0.49 0.51 0.53 */
+    /* her wavetable: (bank, row, column) of the fifteen waves */
+    static const uint8_t WT[15] = {2 * 64 + 6 * 8 + 1, 2 * 64 + 6 * 8 + 6, 2 * 64 + 6 * 8 + 4, 6 * 8, 6 * 8 + 1, 6 * 8 + 2, 6 * 8 + 7,
+                                   2 * 64 + 4 * 8 + 7, 2 * 64 + 4 * 8 + 6, 2 * 64 + 4 * 8 + 5, 2 * 64 + 4 * 8 + 4, 2 * 64 + 4 * 8 + 3,
+                                   2 * 64 + 4 * 8 + 2, 2 * 64 + 4 * 8 + 1, 2 * 64 + 4 * 8};
+    int32_t acc[32], reg[7], amp[PR_CHORD_V], v, q, r, ri, rf, inv, ii, fr, rot, nrot, wave, i, k;
+    uint32_t ratio[PR_CHORD_V], f0;
+    if (!s->on && !glide) {
+        s->morph_lp = morph;
+        s->timbre_lp = timbre;
+    }
+    s->on = 1;
+    s->morph_lp += ((morph - s->morph_lp) * 3277) >> 15;                           /* x 0.1 */
+    s->timbre_lp += ((timbre - s->timbre_lp) * 3277) >> 15;
+    /* HysteresisQuantizer2(11 steps, 0.075): harmonics 1.02 x 11 - 0.5, rounded, kept a little past the edges */
+    v = (int32_t)(((int64_t)harmonics * 735347) >> 15) - 32768;                    /* Q16 */
+    q = (v + (v > s->chord * 65536 ? -4915 : 4915) + 32768) >> 16;
+    s->chord = q < 0 ? 0 : q > 10 ? 10 : q;
+    /* ComputeRegistration */
+    r = 32768 - (int32_t)(((int64_t)s->morph_lp * 70451) >> 15);                    /* 1 - morph 2.15, Q15 */
+    r = r < 0 ? 0 : r;
+    r = (int32_t)(((int64_t)r * 458686) >> 16);                                     /* x 6.999, Q15 of 0..7 */
+    ri = r >> 15;
+    ri = ri > 6 ? 6 : ri;
+    rf = r - (ri << 15);
+    for (k = 0; k < 6; k++)
+        reg[k] = REG[ri][k] + (((REG[ri + 1][k] - REG[ri][k]) * rf) >> 15);
+    reg[6] = 0;
+    /* ComputeChordInversion: where the chord's four notes go on the five oscillators */
+    inv = s->timbre_lp * 20;                                                        /* Q15 of 0..20 */
+    ii = inv >> 15;
+    ii = ii > 19 ? 19 : ii;
+    fr = inv - (ii << 15);
+    fr = fr > 32767 ? 32767 : fr;
+    nrot = ii / 4;
+    rot = ii % 4;
+    for (k = 0; k < PR_CHORD_V; k++) {
+        ratio[k] = 65536;
+        amp[k] = 0;
+    }
+    for (k = 0; k < 4; k++) {
+        uint32_t base = (pr_ratio(CHORDS[s->chord][k] * 256 / 100) << ((3 + ii - k) / 4)) >> 2;   /* x 0.25 2^.. */
+        int32_t tv = (k - nrot + PR_CHORD_V) % PR_CHORD_V, pv = (tv + PR_CHORD_V - 1) % PR_CHORD_V;
+        if (k == rot) {
+            ratio[tv] = base;
+            ratio[pv] = base * 2u;
+            amp[pv] = (8192 * fr) >> 15;
+            amp[tv] = (8192 * (32768 - fr)) >> 15;
+        } else if (k < rot) {
+            ratio[pv] = base;
+            amp[pv] = 8192;
+        } else {
+            ratio[tv] = base;
+            amp[tv] = 8192;
+        }
+    }
+    f0 = (uint32_t)(((uint64_t)inc * 65405u) >> 16);                                /* x 0.998 */
+    wave = s->morph_lp - 17531;                                                     /* (morph - 0.535) 2.15 */
+    wave = wave < 0 ? 0 : (int32_t)(((int64_t)wave * 70451) >> 15);
+    wave = (int32_t)(((int64_t)wave * 917498) >> 16);                               /* x 13.9999: Q15 of 0..14 */
+    for (i = 0; i < (int32_t)n; i++)
+        acc[i] = 0;
+    for (k = 0; k < PR_CHORD_V; k++) {
+        pr_chord_note_t *c = &s->n[k];
+        uint32_t nf = (uint32_t)(((uint64_t)f0 * ratio[k]) >> 16);
+        int32_t wt = 50 * (s->morph_lp - FADE[k]), dd, ddg;
+        wt = wt < 0 ? 0 : wt > 32768 ? 32768 : wt;
+        dd = 32768 - wt;
+        ddg = (4 << 16) - (int32_t)((nf >> 16) > 8192u ? 8192u : nf >> 16) * 32;    /* 4 - f 32, Q16 */
+        ddg = ddg < 0 ? 0 : ddg > 65536 ? 65536 : ddg;
+        dd = (int32_t)(((int64_t)dd * ddg) >> 16);
+        if (wt) {                                                                  /* WavetableOscillator */
+            uint32_t wi = (uint32_t)(((uint64_t)nf * 65799u) >> 16), ph = c->wphase;   /* x 1.004 */
+            int32_t fq, cutoff, g1, g, dg, w, dw;
+            wi = wi > 0x40000000u ? 0x40000000u : wi < 65536u ? 65536u : wi;
+            fq = (int32_t)(wi >> 16);
+            cutoff = fq * 64 > 32767 ? 32767 : fq * 64;                             /* min(128 f, 1), Q15 */
+            /* amplitude (1 - 2 f) / (f 131072) for waves of 16 bits and Q15 out: Q16 */
+            g1 = (int32_t)(((int64_t)(((65536 - 2 * fq) << 14) / fq) * ((amp[k] * wt) >> 15)) >> 15);
+            g = c->wgain;
+            dg = (g1 - g) / (int32_t)n;
+            w = c->wwave;
+            dw = (wave - w) / (int32_t)n;
+            for (i = 0; i < (int32_t)n; i++) {
+                int32_t pi, pf, wn, wf, a, b, mix;
+                const int16_t *t0, *t1;
+                g += dg;
+                w += dw;
+                ph += wi;
+                pi = (int32_t)(ph >> 25);
+                pf = (int32_t)((ph >> 10) & 32767);
+                wn = w >> 15;
+                wn = wn < 0 ? 0 : wn > 13 ? 13 : wn;
+                wf = w - (wn << 15);
+                t0 = PR_WAVES + WT[wn] * (PR_WAVE_LEN + 4);
+                t1 = PR_WAVES + WT[wn + 1] * (PR_WAVE_LEN + 4);
+                a = t0[pi] + (((t0[pi + 1] - t0[pi]) * pf) >> 15);
+                b = t1[pi] + (((t1[pi + 1] - t1[pi]) * pf) >> 15);
+                mix = (a << 8) + (((b - a) * wf) >> 7);
+                c->wdlp += (int32_t)(((int64_t)((mix - c->wdprev) - c->wdlp) * cutoff) >> 15);
+                c->wdprev = mix;
+                c->wlp += (int32_t)(((int64_t)(c->wdlp - c->wlp) * cutoff) >> 15);
+                acc[i] += (int32_t)(((int64_t)c->wlp * g) >> 24);
+            }
+            c->wphase = ph;
+            c->wgain = g1;
+            c->wwave = wave;
+        }
+        if (dd) {                                                                  /* StringSynthOscillator */
+            uint32_t di = nf, ph = c->dphase, shift = 0;
+            int32_t sreg[7], g1[4], g[4], dgn[4], gain = (amp[k] * dd) >> 15, next = c->dnext, j;
+            while (di > 0x10000000u) {                                              /* too high: an octave down, the */
+                shift += 2;                                                         /* registration an octave up */
+                di >>= 1;
+            }
+            if (shift >= 8)
+                continue;
+            di = di < 65536u ? 65536u : di;
+            for (j = 0; j < 7; j++)
+                sreg[j] = j < (int32_t)shift ? 0 : reg[j - (int32_t)shift];
+            g1[0] = ((sreg[0] + 2 * sreg[1]) * gain) >> 15;                         /* the squares from sawtooths: */
+            g1[1] = ((sreg[2] - sreg[1] + 2 * sreg[3]) * gain) >> 15;               /* square 16' = 2 saw 16' - saw 8' */
+            g1[2] = ((sreg[4] - sreg[3] + 2 * sreg[5]) * gain) >> 15;
+            g1[3] = ((sreg[6] - sreg[5]) * gain) >> 15;
+            for (j = 0; j < 4; j++) {
+                g[j] = c->dg[j];
+                dgn[j] = (g1[j] - g[j]) / (int32_t)n;
+            }
+            for (i = 0; i < (int32_t)n; i++) {
+                int32_t this_s = next, seg, pq;
+                uint32_t old = ph >> 29;
+                next = 0;
+                for (j = 0; j < 4; j++)
+                    g[j] += dgn[j];
+                ph += di;
+                seg = (int32_t)(ph >> 29);
+                if ((uint32_t)seg != old) {                                         /* a step of one or more sawtooths */
+                    int32_t disc = -g[3];
+                    uint32_t t = (ph & 0x1FFFFFFFu) / (di >> 16);
+                    if (seg == 0)
+                        disc -= g[0];
+                    if ((seg & 3) == 0)
+                        disc -= g[1];
+                    if ((seg & 1) == 0)
+                        disc -= g[2];
+                    t = t > 65535u ? 65535u : t;
+                    this_s += (int32_t)(((int64_t)((t * t) >> 17) * disc) >> 15);   /* ThisBlepSample */
+                    next -= (int32_t)(((int64_t)(((65536u - t) * (65536u - t)) >> 17) * disc) >> 15);   /* Next.. */
+                }
+                pq = (int32_t)(ph >> 13);                                           /* the phase, 0..8, Q16 */
+                next += (((pq - (4 << 16)) >> 3) * g[0]) >> 15;
+                next += (((pq - ((seg & 4) << 16) - (2 << 16)) >> 2) * g[1]) >> 15;
+                next += (((pq - ((seg & 6) << 16) - (1 << 16)) >> 1) * g[2]) >> 15;
+                next += ((pq - ((seg & 7) << 16) - 32768) * g[3]) >> 15;
+                acc[i] += this_s;                                                   /* 2 this, Q16 -> Q15 */
+            }
+            c->dphase = ph;
+            c->dnext = next;
+            for (j = 0; j < 4; j++)
+                c->dg[j] = g1[j];
+        }
+    }
+    for (i = 0; i < (int32_t)n; i++)
+        out[i] = (int16_t)(acc[i] > 32767 ? 32767 : acc[i] < -32767 ? -32767 : acc[i]);
 }

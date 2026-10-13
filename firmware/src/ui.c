@@ -514,6 +514,8 @@ static const struct { uint8_t kind, e; const char *name; } BANK[] = {
     {BK_PAD, ENGI_PRISM, "VOX TABLE"}, {BK_LEAD, ENGI_PRISM, "TABLE LEAD"},
     {BK_ORGAN, ENGI_PRISM, "GLASS ORGAN"}, {BK_PAD, ENGI_PRISM, "OVERTONES"}, {BK_PAD, ENGI_PRISM, "SPECTRAL PD"},
     {BK_PLUCK, ENGI_PRISM, "ADD BELL"},
+    {BK_PAD, ENGI_PRISM, "STRING MCH"}, {BK_PAD, ENGI_PRISM, "SOLINA MIN"}, {BK_ORGAN, ENGI_PRISM, "ORGAN CHRD"},
+    {BK_STAB, ENGI_PRISM, "HOUSE STAB"}, {BK_STAB, ENGI_PRISM, "RAVE 5TH"}, {BK_PAD, ENGI_PRISM, "DREAM 69"},
 };
 #define NBANK (sizeof BANK / sizeof BANK[0])
 static uint8_t bank_pi[NBANK];                       /* the preset index of each entry in its engine */

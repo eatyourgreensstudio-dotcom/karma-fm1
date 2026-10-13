@@ -19,4 +19,8 @@ build/prism_ref/ref_wave build/prism_ref
 c++ -O2 -w -std=c++11 -DTEST -I"$EURORACK" -o build/prism_ref/ref_harm tests/prism_ref/ref_harm.cc \
     "$EURORACK/plaits/dsp/engine/additive_engine.cc" "$EURORACK/plaits/resources.cc" "$EURORACK/stmlib/dsp/units.cc"
 build/prism_ref/ref_harm build/prism_ref
+c++ -O2 -w -std=c++11 -DTEST -I"$EURORACK" -o build/prism_ref/ref_chord tests/prism_ref/ref_chord.cc \
+    "$EURORACK/plaits/dsp/engine/chord_engine.cc" "$EURORACK/plaits/dsp/chords/chord_bank.cc" "$EURORACK/plaits/resources.cc" \
+    "$EURORACK/stmlib/dsp/units.cc"
+build/prism_ref/ref_chord build/prism_ref
 ls build/prism_ref | head -3
