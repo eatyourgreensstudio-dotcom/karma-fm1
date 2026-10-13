@@ -30,6 +30,86 @@ static void wav(const char *path, const float *a, const float *b)   /* stereo: l
     fclose(f);
 }
 
+/* ---- the swarm: random, so the two are compared as textures over 4 s: the level, the brightness (the RMS of the
+ * difference between samples against the signal's), the movement of the level (the spread of its RMS over 20 ms
+ * windows) and of the brightness */
+#define NS (4 * 44096)
+static const float SWARM[][4] = {                   /* f0, harmonics, timbre, morph: as tests/prism_ref/ref_swarm.cc */
+    {0.004f, 0.0f, 0.5f, 1.0f}, {0.004f, 0.3f, 0.5f, 0.9f}, {0.004f, 0.6f, 0.6f, 0.7f}, {0.004f, 0.6f, 0.7f, 0.2f},
+    {0.002f, 0.9f, 0.4f, 0.5f}, {0.01f, 0.4f, 0.9f, 0.0f}, {0.004f, 0.2f, 0.2f, 0.6f}, {0.02f, 0.5f, 0.5f, 0.5f}};
+static void texture(const float *x, int n, double *rms_db, double *bright, double *move)
+{
+    double e = 0, d = 0, m = 0, m2 = 0;
+    int i, w = 882, nw = 0;
+    for (i = 1; i < n; i++) {
+        e += (double)x[i] * x[i];
+        d += (double)(x[i] - x[i - 1]) * (x[i] - x[i - 1]);
+    }
+    for (i = 0; i + w <= n; i += w, nw++) {
+        double we = 0;
+        int k;
+        for (k = 0; k < w; k++)
+            we += (double)x[i + k] * x[i + k];
+        we = sqrt(we / w);
+        m += we;
+        m2 += we * we;
+    }
+    m /= nw;
+    *rms_db = 10 * log10(e / n + 1e-12);
+    *bright = sqrt(d / (e + 1e-12));
+    *move = sqrt(m2 / nw - m * m > 0 ? m2 / nw - m * m : 0) / (m + 1e-9);
+}
+static int swarm_cases(const char *ref, const char *wavdir)
+{
+    static float hers[NS], ours[NS];
+    static int16_t o[32];
+    int c, i, fails = 0;
+    for (c = 0; c < (int)(sizeof SWARM / sizeof SWARM[0]); c++) {
+        char path[512];
+        pr_swarm_t s;
+        FILE *f;
+        double f0 = SWARM[c][0], r1, b1, m1, r2, b2, m2;
+        uint32_t inc;
+        int ok;
+        snprintf(path, sizeof path, "%s/swarm-%d.f0", ref, c);
+        f = fopen(path, "r");
+        if (f) {
+            if (fscanf(f, "%lf", &f0) != 1) f0 = SWARM[c][0];
+            fclose(f);
+        }
+        inc = (uint32_t)(f0 * 4294967296.0);
+        snprintf(path, sizeof path, "%s/swarm-%d.f32", ref, c);
+        f = fopen(path, "rb");
+        if (!f || fread(hers, sizeof(float), NS, f) != NS) {
+            printf("prism: no reference %s (tests/prism_ref/build.sh)\n", path);
+            return 1;
+        }
+        fclose(f);
+        pr_swarm_init(&s);
+        for (i = 0; i < NS; i += 32) {
+            int k;
+            pr_swarm_render(&s, inc, (int32_t)(SWARM[c][1] * 32767), (int32_t)(SWARM[c][2] * 32767), (int32_t)(SWARM[c][3] * 32767), o, 32);
+            for (k = 0; k < 32; k++)
+                ours[i + k] = o[k] / 32767.0f;
+        }
+        texture(ours + 8192, NS - 8192, &r1, &b1, &m1);
+        texture(hers + 8192, NS - 8192, &r2, &b2, &m2);
+        /* (the movement: both still or both moving, within a factor: it is random, 4 s of it) */
+        ok = fabs(r1 - r2) < 1.5 && fabs(b1 / b2 - 1) < 0.15 && (m1 < 0.02 && m2 < 0.02 ? 1 : m1 / m2 > 0.6 && m1 / m2 < 1.6);
+        printf("swarm f0 %.4f  harm %.2f  timbre %.2f  morph %.2f   level %+5.1f dB (hers %+5.1f)  bright %.3f (%.3f)  moves %.2f (%.2f)  %s\n",
+               SWARM[c][0], SWARM[c][1], SWARM[c][2], SWARM[c][3], r1, r2, b1, b2, m1, m2, ok ? "ok" : "FAIL");
+        fails += !ok;
+        if (wavdir) {
+            static float a2[N], b2w[N];
+            int k;
+            for (k = 0; k < N; k++) { a2[k] = ours[NS - N + k]; b2w[k] = hers[NS - N + k]; }
+            snprintf(path, sizeof path, "%s/swarm-%d.wav", wavdir, c);
+            wav(path, a2, b2w);
+        }
+    }
+    return fails;
+}
+
 int main(int argc, char **argv)
 {
     const char *ref = argc > 1 ? argv[1] : "build/prism_ref";
@@ -105,6 +185,7 @@ int main(int argc, char **argv)
             wav(path, ours, hers);
         }
     }
+    fails += swarm_cases(ref, argc > 2 ? argv[2] : 0);
     printf(fails ? "prism: FAILED\n" : "prism: the fixed-point models match the originals\n");
     return fails != 0;
 }

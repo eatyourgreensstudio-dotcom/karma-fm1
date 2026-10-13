@@ -28,6 +28,12 @@
  *           waveshapers (HARMONICS morphs through them) and a wavefolder (TIMBRE its gain), both tamed as the
  *           note rises. The main output (her AUX, the folder's other table against a sine, is not made).
  *
+ *   swarm   SwarmEngine: eight sawtooth oscillators around the note, each on a grain of its own: a new random pitch
+ *           offset at each grain, as wide as HARMONICS; TIMBRE the grains' rate; MORPH their size, from short
+ *           windowed grains (a cloud) to long overlapping ones, where the pitch slides from one offset to the
+ *           next (a swarm of glissandi). The sawtooth output (her AUX: the same with sines, is not made); the
+ *           grains run freely (her trigger input, that starts bursts, is unpatched).
+ *
  * Number formats: phases 32 bit (a cycle = 2^32), increments cycles per sample Q32; the slope Q16 (1.0 =
  * 65536); the parameters 0..32767 (Q15); the output Q15.
  * Departures from the float code: the frequency and the pulse width are held over a block (hers glide over it;
@@ -167,4 +173,135 @@ static void pr_fold_render(pr_fold_t *s, uint32_t inc, int32_t harmonics, int32_
     s->high = (uint8_t)high;
     s->shape = shape1;
     s->gain = gain1;
+}
+
+/* ------------------------------------------------------- ratios, random --- */
+/* 2^(semitones / 12), Q16, for semitones Q8 in -96 .. +127 (linear between semitones: within 0.3 cent) */
+static uint32_t pr_ratio(int32_t semis_q8)
+{
+    static const uint32_t ST[13] = {65536, 69433, 73562, 77936, 82570, 87480, 92682, 98193, 104032, 110218, 116772, 123715, 131072};
+    int32_t x = semis_q8 + (96 << 8), oct, st;
+    uint32_t r;
+    x = x < 0 ? 0 : x > (223 << 8) ? (223 << 8) : x;
+    oct = (x >> 8) / 12;
+    st = (x >> 8) - oct * 12;
+    r = ST[st] + (((ST[st + 1] - ST[st]) * (uint32_t)(x & 255)) >> 8);
+    return oct >= 8 ? r << (oct - 8) : r >> (8 - oct);
+}
+static uint32_t pr_rng = 0x21;                      /* stmlib Random: the same generator */
+static inline uint32_t pr_rand16(void)              /* 0 .. 65535 */
+{
+    pr_rng = pr_rng * 1664525u + 1013904223u;
+    return pr_rng >> 16;
+}
+
+/* ------------------------------------------------------ swarm (SwarmEngine) --- */
+#define PR_SWARM_N 8
+typedef struct {
+    int32_t from, interval;      /* GrainEnvelope: the pitch offset the grain starts at and the way to the next, Q16 */
+    uint32_t gphase;             /* its phase, Q16 (1.0 = 65536) */
+    int32_t fm;                  /* its rate against the others', Q12 (0.5 .. 2) */
+    int32_t amp, coef;           /* its amplitude and the smoothing after a change of regime, Q15 */
+    uint32_t phase, inc;         /* AdditiveSawOscillator: phase, the increment the last block ended at */
+    int32_t next, gain;          /* .. the next sample's share (Q16), the gain the last block ended at (Q15) */
+    uint8_t big;                 /* the grains were long (size ratio >= 1) at the last block */
+} pr_swarm_voice_t;
+typedef struct { pr_swarm_voice_t v[PR_SWARM_N]; } pr_swarm_t;
+
+static void pr_swarm_init(pr_swarm_t *s)
+{
+    uint32_t i;
+    for (i = 0; i < PR_SWARM_N; i++) {
+        pr_swarm_voice_t *v = &s->v[i];
+        v->from = 0;
+        v->interval = 65536;
+        v->gphase = 65536;
+        v->fm = 0;
+        v->amp = 16384;
+        v->coef = 0;
+        v->phase = 0;
+        v->inc = 0;                                  /* (hers glides from 0.01; here: from the note) */
+        v->next = 0;
+        v->gain = 0;
+        v->big = 0;
+    }
+}
+
+/* n samples (Q15) into out, n <= 32. inc: the note; harmonics, timbre, morph: 0..32767 */
+static void pr_swarm_render(pr_swarm_t *s, uint32_t inc, int32_t harmonics, int32_t timbre, int32_t morph, int16_t *out, uint32_t n)
+{
+    /* rank (rank + 0.01) of the eight voices, Q16; rank = (i - 3) / 3 (hers: the middle of 0..7 taken as 3) */
+    static const int32_t RR[PR_SWARM_N] = {64881, 28690, 7063, 0, 7500, 29564, 66191, 117383};
+    int32_t acc[32], spread, size_ratio;
+    uint32_t i, k, rate;
+    spread = (((harmonics * harmonics) >> 15) * harmonics) >> 15;                 /* h^3, Q15 */
+    /* the grains' rate, their phase a block: her NoteToFrequency(timbre 120) 0.025 n, Q16
+     * (NoteToFrequency(0) 0.025 = 4.2695e-6 = 18337 / 2^32) */
+    rate = (uint32_t)(((uint64_t)18337u * n * pr_ratio((timbre * 120) >> 7)) >> 32);
+    size_ratio = (int32_t)(pr_ratio(((32767 - morph) * 84) >> 7) >> 2);            /* 0.25 2^((1 - morph) 7), Q16 */
+    for (k = 0; k < n; k++)
+        acc[k] = 0;
+    for (i = 0; i < PR_SWARM_N; i++) {
+        pr_swarm_voice_t *v = &s->v[i];
+        int32_t target = 32767, expo, es, lin, gain1, gain, dgain, next = v->next, dinc;
+        uint32_t f, phase = v->phase, vinc;
+        /* GrainEnvelope::Step: a new grain when the phase passes 1 */
+        v->gphase += (rate * (uint32_t)v->fm) >> 12;
+        if (v->gphase >= 65536u) {
+            v->gphase &= 65535u;
+            v->from += v->interval;
+            v->interval = (int32_t)pr_rand16() - v->from;
+            v->fm = 2048 + (int32_t)((pr_rand16() * 6144u) >> 16);                /* 0.5 + 1.5 random */
+        }
+        /* its amplitude: long grains under a raised cosine; smoothed, more just after the regime changed */
+        if (size_ratio >= 65536) {
+            int32_t ph = (int32_t)(((int64_t)((int32_t)v->gphase - 32768) * size_ratio) >> 16), a;
+            ph = ph < -65536 ? -65536 : ph > 65536 ? 65536 : ph;
+            a = ph < 0 ? -ph : ph;                                                /* 0 .. 1, Q16 */
+            target = PR_HANN[a >> 8] + (((PR_HANN[(a >> 8) + (a < 65536)] - PR_HANN[a >> 8]) * (a & 255)) >> 8);
+        }
+        if ((size_ratio >= 65536) != v->big)
+            v->coef = 16384;
+        v->coef = (v->coef * 31130) >> 15;                                        /* x 0.95 */
+        v->big = size_ratio >= 65536;
+        v->amp += ((target - v->amp) * (16384 - v->coef)) >> 15;
+        /* its pitch: short grains slide from one offset to the next, long ones hold theirs */
+        expo = size_ratio < 65536 ? 2 * (v->from + (int32_t)(((int64_t)v->interval * (int32_t)v->gphase) >> 16)) - 65536 : v->from;
+        es = (int32_t)(((int64_t)expo * spread) >> 15);                           /* Q16 */
+        f = (uint32_t)(((uint64_t)inc * pr_ratio((es * 16 * ((int32_t)i - 3)) >> 8)) >> 16);   /* 48 semitones x rank */
+        lin = (int32_t)(((int64_t)RR[i] * spread) >> 17);                         /* rank (rank + 0.01) spread / 4, Q16 */
+        f += (uint32_t)(((uint64_t)f * (uint32_t)lin) >> 16);
+        f = f > 0x40000000u ? 0x40000000u : f < 65536u ? 65536u : f;
+        gain1 = v->amp >> 3;                                                      /* / 8 voices */
+        if (!v->inc)
+            v->inc = f;
+        /* AdditiveSawOscillator: a band-limited sawtooth, its frequency and gain gliding over the block */
+        vinc = v->inc;
+        dinc = ((int32_t)(f >> 4) - (int32_t)(vinc >> 4)) / (int32_t)n * 16;
+        gain = v->gain;
+        dgain = (gain1 - gain) / (int32_t)n;
+        for (k = 0; k < n; k++) {
+            int32_t this_s = next;
+            next = 0;
+            vinc += (uint32_t)dinc;
+            gain += dgain;
+            phase += vinc;
+            if (phase < vinc) {                                                   /* a new cycle: the step, smoothed */
+                uint32_t t = phase / (vinc >> 16);
+                t = t > 65535u ? 65535u : t;
+                this_s -= (int32_t)((t * t) >> 17);                               /* ThisBlepSample: t^2 / 2 */
+                next += (int32_t)(((65536u - t) * (65536u - t)) >> 17);           /* - NextBlepSample: (1 - t)^2 / 2 */
+            }
+            next += (int32_t)(phase >> 16);
+            acc[k] += ((2 * this_s - 65536) * gain) >> 15;
+        }
+        v->phase = phase;
+        v->next = next;
+        v->inc = f;
+        v->gain = gain1;
+    }
+    for (k = 0; k < n; k++) {
+        int32_t y = acc[k] >> 1;
+        out[k] = (int16_t)(y > 32767 ? 32767 : y < -32767 ? -32767 : y);
+    }
 }

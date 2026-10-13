@@ -37,6 +37,14 @@ def main():
             L.append("    " + ", ".join(str(x) for x in v[i:i + 16]) + ",")
         L.append("};")
     L.append("static const int16_t *const PR_WS[5] = {PR_WS_0, PR_WS_1, PR_WS_2, PR_WS_3, PR_WS_4};")
+    # ours: half a raised cosine, (cos(pi x) + 1) / 2 for x = 0..1 (the swarm's grain window), Q15
+    import math
+    L.append("static const int16_t PR_HANN[257] = {   /* (cos(pi x) + 1) / 2, x = 0 .. 1 */")
+    v = [round(32767 * (math.cos(math.pi * i / 256) + 1) / 2) for i in range(257)]
+    for i in range(0, 257, 16):
+        L.append("    " + ", ".join(str(x) for x in v[i:i + 16]) + ",")
+    L.append("};")
+    total += 514
     (SRC / "firmware" / "src" / "prism_tables.h").write_text("\n".join(L) + "\n")
     print(f"prism tables: {len(TABLES)}, {total} B")
 
