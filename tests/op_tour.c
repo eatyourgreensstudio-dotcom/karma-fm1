@@ -4,7 +4,7 @@
  * its audio (16 bit stereo, 44.1 kHz) go to files, ffmpeg makes the video (tools/op_tour.sh).
  *   op_tour OUTDIR   ->  OUTDIR/tour.{rgb,pcm}
  * The take: the mixer with only the kick; track 2 comes in (its scene, its envelope); the bass (scene, envelope);
- * PLAITS (scene, envelope); the drums (the grid, the pads); the FX wizard, the CLOUD; the mixer; HOME. */
+ * PLAITS (scene, envelope); the drums (the grid, the pads); the FX wizard (a reverb); the mixer; HOME. */
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"
 #include "op_tour_pattern.h"
@@ -126,7 +126,7 @@ int main(int argc, char **argv)
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = TOUR_G[i];
     if (trk[2].p[P_LEVEL] < 40)
-        trk[2].p[P_LEVEL] = 64;                     /* (PLAITS stood at 8 of 127 in his mixer: up, to be heard) */
+        trk[2].p[P_LEVEL] = 96;                     /* (PLAITS stood at 8 of 127 in his mixer: up, to be heard) */
     for (i = 0; i < NPART; i++)
         trk[i].p[P_MUTE] = 1;
     song.batt_raw = 620;
@@ -171,20 +171,18 @@ int main(int argc, char **argv)
     part(1, 0, 0, 5, 0);                            /* the pads; the kick's own reverb, up and back */
 
     go_home(); song.sel = 2; open_family(FAM_FX);
-    part(1, 0, 14, 18, 20);                         /* the wizard: chorus, delay, reverb */
-    page_on(6); page_on(1);                         /* .. on to CLOUD */
-    for (i = 0; i < 80u && song.g[G_CLSEND] < 104; i++) {   /* SEND up (and it stays): the grains */
-        if (i % 2u == 0u)
-            encs[panel.enc[EN_K1]] += 1;
+    for (i = 0; i < 150u && trk[2].p[P_REV] < 76; i++) {   /* the wizard: PLAITS' reverb comes up, and stays */
+        if (i % 3u == 0u)
+            encs[panel.enc[EN_K4]] += 1;
         vframe();
     }
-    part(2, 0, 16, 0, 5);                           /* .. POS, PITCH */
+    part(2, 0, 0, 0, 0);
 
     hold(B_GLO);
     part(1, 0, 0, 0, 0);                            /* the band, all of it */
     let_go(B_GLO);
     song.sel = 0; go_home();
-    part(2, 0, 0, 0, 0);                            /* HOME */
+    part(3, 0, 0, 0, 0);                            /* HOME, to the end */
     fclose(fv); fclose(fa);
     printf("%u frames, %.2f s\n", (unsigned)nframe, nframe * 22.0 * CTL / FS);
     return 0;
