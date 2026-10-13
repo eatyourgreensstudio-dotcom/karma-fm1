@@ -248,9 +248,10 @@ static void cloud_ui_sync(void)
     static uint16_t was = 0xFFFF;
     uint16_t now = (uint16_t)(song.sel == TRK_DRUM ? 0x100u | (drum_lane % DRUM_LANES) : song.sel % NPART);
     uint8_t *v = now & 0x100u ? &drum_cloud[now & 0xFFu] : &cloud_send[now];
-    if (now != was) {
+    if (now != was || cloud_resync) {
         song.g[G_CLSEND] = *v;
         was = now;
+        cloud_resync = 0;
     } else {
         *v = (uint8_t)clamp(song.g[G_CLSEND], 0, 127);
     }

@@ -131,8 +131,8 @@ int main(void)
                  P_CHORD + 1 == P_TFLT && P_TFLT + 1 == P_STRUM && P_STRUM + 1 == P_VLEAD && P_VLEAD + 1 == P_ITYPE &&
                  P_LPOL + 1 == P_E0 && P_E0 == 63 && P_COUNT == PROJ_NP_V5 + 10u && PROJ_NP_V5 == PROJ_NP_V4 + 3u &&
                  PROJ_NP_V4 == PROJ_NP_V3 + 1u && P_SLDEPTH + 1 == P_CHORD);
-    bad += check("format 6 fits one flash object (3816 of 3840 bytes); 4 slots fit .noinit (with panel, settings, dbg, bootguard)",
-                 sizeof(project_t) <= 3840u && 4u * sizeof(project_t) <= 0x3D50u - 256u && sizeof(project_t) == 3816u);
+    bad += check("format 7 fills one flash object (3840 bytes); 4 slots fit .noinit (with panel, settings, dbg, bootguard)",
+                 sizeof(project_t) <= 3840u && 4u * sizeof(project_t) <= 0x3D50u - 256u && sizeof(project_t) == 3840u);
     {   /* every 2.6 parameter's range fits its byte */
         uint32_t k, fits = 1;
         for (k = P_ITYPE; k < P_E0; k++) fits &= TP[k].min >= 0 && TP[k].max <= 255;
@@ -314,6 +314,21 @@ int main(void)
                  pt_get(&q2.t[1], P_ITYPE) == 4 && pt_get(&q2.t[1], P_IMIX) == 90 && pt_get(&q2.t[TRK_DRUM], P_ITYPE) == 2 &&
                  pt_get(&q2.t[0], P_LSYNC) == 5 && pt_get(&q2.t[0], P_ESYNC) == 1 && pt_get(&q2.t[0], P_FTYPE) == 2);
 
+    {   /* a FUN6 image (SLOOP 2.6, as stored: format 7 without the CLOUD's bytes) -> FUN7: as it was, the cloud unset */
+        static project_v6_t v6;
+        memcpy(&v6, &q, __builtin_offsetof(project_v6_t, sum));
+        v6.magic = PROJ_MAGIC_V6;
+        v6.size = sizeof v6;
+        v6.sum = proj_hash(&v6, sizeof v6 - 4u);
+        memcpy(&buf, &v6, sizeof v6);
+        ok = proj_import(&q2, &buf, (int)sizeof v6) && proj_ok(&q2) && q2.magic == PROJ_MAGIC && q2.t[1].engine == 8 &&
+             !memcmp(q2.t, q.t, sizeof q.t) && !memcmp(q2.g, q.g, sizeof q.g) && q2.sel == q.sel && !(q2.cloud[6] & 0x80u);
+        bad += check("FUN6 -> FUN7: every track and global as stored, the CLOUD's bytes unset", ok);
+        v6.t[2].mf[5] ^= 1;
+        memcpy(&buf, &v6, sizeof v6);
+        bad += check("FUN6 with a bad checksum: refused", !proj_import(&q2, &buf, (int)sizeof v6));
+    }
+
     /* damaged / wrong size */
     v2.t[1].p[3]++;
     memcpy(&buf, &v2, sizeof v2);
@@ -366,10 +381,31 @@ int main(void)
     step_fill_set(TDRUM, 63, FC_FILL);
     trk[2].p[P_ITYPE] = 7, trk[2].p[P_IA] = 11, trk[2].p[P_IMIX] = 77, TDRUM->p[P_ITYPE] = 4;   /* 2.6 */
     trk[0].p[P_LSYNC] = 6, trk[0].p[P_LTRIG] = 1, trk[0].p[P_LPOL] = 1, trk[0].p[P_ESYNC] = 1, trk[0].p[P_FTYPE] = 1;
+    song.g[G_CLPOS] = 99, song.g[G_CLSIZE] = 3, song.g[G_CLPIT] = -17, song.g[G_CLDENS] = 127, song.g[G_CLTEX] = 1,   /* the CLOUD */
+    song.g[G_CLFB] = 64, song.g[G_CLFRZ] = 1, cloud_send[0] = 127, cloud_send[1] = 0, cloud_send[2] = 45;
+    for (i = 0; i < DRUM_LANES; i++) drum_cloud[i] = (uint8_t)((i * 37u + 5u) & 127u);
     proj_capture(&q);
     host_tracks_init();
     song.g[G_DRDLY] = 0;
+    song.g[G_CLPOS] = song.g[G_CLSIZE] = song.g[G_CLPIT] = song.g[G_CLDENS] = song.g[G_CLTEX] = song.g[G_CLFB] = song.g[G_CLFRZ] = 0;
+    memset(cloud_send, 9, sizeof cloud_send);
+    memset(drum_cloud, 9, sizeof drum_cloud);
     proj_apply(&q, 1);
+    {
+        int okc = song.g[G_CLPOS] == 99 && song.g[G_CLSIZE] == 3 && song.g[G_CLPIT] == -17 && song.g[G_CLDENS] == 127 &&
+                  song.g[G_CLTEX] == 1 && song.g[G_CLFB] == 64 && song.g[G_CLFRZ] == 1 && cloud_send[0] == 127 &&
+                  cloud_send[1] == 0 && cloud_send[2] == 45 && cloud_resync;
+        for (i = 0; i < DRUM_LANES; i++) okc = okc && drum_cloud[i] == ((i * 37u + 5u) & 127u);
+        bad += check("capture / apply: the CLOUD's settings, the tracks' sends and each drum sound's come back", okc);
+        memset(q2.cloud, 0, sizeof q2.cloud);          /* an older project's: none */
+        memcpy(&q2, &q, __builtin_offsetof(project_t, cloud));
+        q2.sum = proj_sum(&q2);
+        proj_apply(&q2, 1);
+        okc = song.g[G_CLPOS] == GP[G_CLPOS].def && song.g[G_CLDENS] == GP[G_CLDENS].def && song.g[G_CLPIT] == 0 &&
+              !song.g[G_CLFRZ] && !cloud_send[0] && !cloud_send[2] && !drum_cloud[3] && !drum_cloud[15];
+        bad += check("a project without the CLOUD's bytes: the cloud at its defaults, nothing sent", okc);
+        proj_apply(&q, 1);
+    }
     ok = q.drdly == 77 && song.g[G_DRDLY] == 77 && trk[2].p[P_SLEN] == 7 && trk[1].step[2].n == 2 && trk[1].step[2].lvl == 0x0D && song.g[G_DUST] == 33 &&
          dstep_has(&TDRUM->dstep[9], 4) && dstep_lvl(&TDRUM->dstep[9], 4) == LV_SOFT && dstep_rat(&TDRUM->dstep[9], 4) == 1u &&
          trk[1].micro[2] == -20 && TDRUM->micro[9] == 12 && trk[1].micro[3] == 0 &&

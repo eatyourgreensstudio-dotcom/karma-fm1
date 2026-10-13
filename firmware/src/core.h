@@ -99,7 +99,7 @@ enum {                          /* global parameters */
     G_CLSEND,                   /* FX > CLOUD (cloud.c): SEND shows and sets the selected track's send (the drum track: the
                                  * selected sound's): ui_studio.c cloud_ui_sync keeps it and cloud_send / drum_cloud together */
     G_CLPOS, G_CLSIZE, G_CLPIT, /* .. the grains: where in the recording, how long, at what pitch */
-    G_CLDENS, G_CLTEX, G_CLFB, G_CLFRZ,   /* .. how many, their window, the feedback, FREEZE. Not in a project (yet) */
+    G_CLDENS, G_CLTEX, G_CLFB, G_CLFRZ,   /* .. how many, their window, the feedback, FREEZE. In a project (project.c) */
     G_COUNT
 };
 

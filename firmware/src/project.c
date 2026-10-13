@@ -6,7 +6,9 @@
  * the transport is stopped and nothing sounds) and comes back at power-on: SLOOP starts where you
  * left it.
  *
- * Formats: 6 ("FUN6", written, SLOOP 2.6): format 5 with the ten parameters of 2.6 (P_ITYPE .. P_LPOL, just
+ * Formats: 7 ("FUN7", written): format 6 and the CLOUD (cloud.c) in the 24 bytes it left of a flash object: the
+ * cloud's seven settings, the three synth tracks' sends and each drum sound's own (7 bits each); 3840 bytes.
+ * Read and converted: 6 ("FUN6", SLOOP 2.6: the cloud at its defaults, nothing sent to it): format 5 with the ten parameters of 2.6 (P_ITYPE .. P_LPOL, just
  * before P_E0: the INSERT, the ANALOG filter TYPE, ENV SYNC, LFO 2) in a byte each, and each step's nudge (6 bits)
  * and fill condition (2 bits) in one byte: format 5 was full (3840 bytes, one flash object), this is 3816.
  * Read and converted: 5 ("FUN5", SLOOP 2.4 .. 2.5: format 4 plus, per track, the nudge of each step (micro), NLOCK
@@ -21,7 +23,8 @@
  *
  * Built on the host too (tests/project_test.c, -DPROJ_HOST): the part above the #ifndef
  * PROJ_HOST needs core.h, params.c (TP), drums.c (the lanes), the engines and trk_def_engine (ui.c). */
-#define PROJ_MAGIC 0x46554E36u                 /* "FUN6": format 5 + the 2.6 parameters, nudge and condition in a byte */
+#define PROJ_MAGIC 0x46554E37u                 /* "FUN7": format 6 + the CLOUD */
+#define PROJ_MAGIC_V6 0x46554E36u              /* "FUN6": format 5 + the 2.6 parameters, nudge and condition in a byte; read only */
 #define PROJ_MAGIC_V5 0x46554E35u              /* "FUN5": format 4 + per-step nudge, parameter locks, fill conditions (SLOOP 2.4) */
 #define PROJ_MAGIC_V4 0x46554E34u              /* "FUN4": four tracks, P_COUNT parameters each, 10-byte steps; read only */
 #define PROJ_MAGIC_V3 0x46554E33u              /* "FUN3": SLOOP 1.x; read only */
@@ -58,8 +61,19 @@ typedef struct {
     int16_t g[PROJ_NG];
     uint8_t sel, drdly, rsv[2];                /* the selected track; 2.5: G_DRDLY */
     proj_trk_t t[NTRK];
+    uint8_t cloud[24];                         /* format 7: the CLOUD (proj_cl_put) */
     uint32_t sum;
 } project_t;
+typedef struct {                               /* format 6 (SLOOP 2.6), read only: format 7 without the CLOUD */
+    uint32_t magic, size;
+    int16_t g[PROJ_NG];
+    uint8_t sel, drdly, rsv[2];
+    proj_trk_t t[NTRK];
+    uint32_t sum;
+} project_v6_t;
+_Static_assert(sizeof(project_v6_t) == 3816u && sizeof(project_t) == 3840u &&
+               __builtin_offsetof(project_t, cloud) == __builtin_offsetof(project_v6_t, sum),
+               "format 7: format 6, then the CLOUD's 24 bytes, then the sum");
 static int16_t pt_get(const proj_trk_t *t, uint32_t id)   /* p[id] of a stored track */
 {
     return id < PROJ_NC6 ? t->p[id] : id < P_E0 ? (int16_t)t->x[id - PROJ_NC6] : t->e[(id - P_E0) & 7u];
@@ -145,7 +159,7 @@ typedef struct {                               /* format 1 (until 0.5 beta), rea
 } project_v1_t;
 _Static_assert(sizeof(project_v2_t) == 2552u && sizeof(project_v1_t) == 688u && sizeof(project_v3_t) == 2584u &&
                sizeof(project_v4_t) == 3112u && sizeof(project_v5_t) == 3840u, "formats 1 / 2 / 3 / 4 / 5 as they were stored");
-_Static_assert(sizeof(project_t) <= 3840u, "format 6 fits one flash object (storage.c ST_PAYLOAD_MAX)");
+_Static_assert(sizeof(project_t) <= 3840u, "format 7 fits one flash object (storage.c ST_PAYLOAD_MAX)");
 project_t proj_slot[4] __attribute__((section(".noinit")));
 
 static uint32_t proj_hash(const void *p, uint32_t n)   /* FNV-1a over n bytes */
@@ -303,6 +317,20 @@ static int proj_from_v5(project_t *q, const project_v5_t *v5, int n)
     return 1;
 }
 
+/* a format 6 project -> slot q as format 7: as it is, the CLOUD's bytes 0 (its defaults, nothing sent: proj_cl_get) */
+static int proj_from_v6(project_t *q, const project_v6_t *v6, int n)
+{
+    if (n != (int)sizeof *v6 || v6->magic != PROJ_MAGIC_V6 || v6->size != sizeof *v6 ||
+        v6->sum != proj_hash(v6, sizeof *v6 - 4u))
+        return 0;
+    memset(q, 0, sizeof *q);
+    memcpy(q, v6, __builtin_offsetof(project_v6_t, sum));
+    q->magic = PROJ_MAGIC;
+    q->size = sizeof *q;
+    q->sum = proj_sum(q);
+    return 1;
+}
+
 /* a format 3 project -> slot q as format 6 */
 static void proj_from_v3_ok(project_t *q, const project_v3_t *v3)
 {
@@ -379,7 +407,8 @@ static int proj_import(project_t *q, const void *b, int n)
         memcpy(q, b, sizeof *q);
         return 1;
     }
-    return proj_from_v5(q, (const project_v5_t *)b, n) || proj_from_v4(q, (const project_v4_t *)b, n) ||
+    return proj_from_v6(q, (const project_v6_t *)b, n) ||
+           proj_from_v5(q, (const project_v5_t *)b, n) || proj_from_v4(q, (const project_v4_t *)b, n) ||
            proj_from_v3(q, (const project_v3_t *)b, n) ||
            proj_from_v2(q, (const project_v2_t *)b, n) || proj_from_v1(q, (const project_v1_t *)b, n);
 }
@@ -443,6 +472,42 @@ static void proj_ds_get(const project_t *p)
     }
 }
 
+/* the CLOUD (cloud.c) in a project's 24 bytes: [0..6] POS SIZE PITCH + 24 DENS TEXT FDBK, 0x80 (they are there) |
+ * FRZ; [7..9] the synth tracks' sends; [10..23] the 16 drum sounds' own, 7 bits each. Without the 0x80 (an older
+ * project): the cloud at its defaults, nothing sent */
+static void proj_cl_put(project_t *p)
+{
+    static const uint8_t ID[6] = {G_CLPOS, G_CLSIZE, G_CLPIT, G_CLDENS, G_CLTEX, G_CLFB};
+    uint32_t i, b;
+    memset(p->cloud, 0, sizeof p->cloud);
+    for (i = 0; i < 6u; i++)
+        p->cloud[i] = (uint8_t)(song.g[ID[i]] - GP[ID[i]].min);
+    p->cloud[6] = (uint8_t)(0x80u | (song.g[G_CLFRZ] ? 1u : 0u));
+    for (i = 0; i < NPART; i++)
+        p->cloud[7u + i] = cloud_send[i] & 127u;
+    for (i = 0; i < DRUM_LANES; i++)
+        for (b = 0; b < 7u; b++)
+            if ((drum_cloud[i] >> b) & 1u)
+                p->cloud[10u + (i * 7u + b) / 8u] |= (uint8_t)(1u << ((i * 7u + b) % 8u));
+}
+static void proj_cl_get(const project_t *p)
+{
+    static const uint8_t ID[6] = {G_CLPOS, G_CLSIZE, G_CLPIT, G_CLDENS, G_CLTEX, G_CLFB};
+    uint32_t i, b, there = p->cloud[6] & 0x80u;
+    for (i = 0; i < 6u; i++)
+        song.g[ID[i]] = there ? (int16_t)clamp(p->cloud[i] + GP[ID[i]].min, GP[ID[i]].min, GP[ID[i]].max) : GP[ID[i]].def;
+    song.g[G_CLFRZ] = (int16_t)(there && (p->cloud[6] & 1u));
+    for (i = 0; i < NPART; i++)
+        cloud_send[i] = (uint8_t)(there ? p->cloud[7u + i] & 127u : 0u);
+    for (i = 0; i < DRUM_LANES; i++) {
+        uint32_t v = 0;
+        for (b = 0; b < 7u && there; b++)
+            v |= (((uint32_t)p->cloud[10u + (i * 7u + b) / 8u] >> ((i * 7u + b) % 8u)) & 1u) << b;
+        drum_cloud[i] = (uint8_t)v;
+    }
+    cloud_resync = 1;                                   /* (the page's SEND: ui_studio.c cloud_ui_sync) */
+}
+
 static void proj_capture(project_t *p)        /* what is playing now, as a project */
 {
     uint32_t i;
@@ -466,6 +531,7 @@ static void proj_capture(project_t *p)        /* what is playing now, as a proje
         memcpy(p->t[i].lock, trk[i].lock, sizeof trk[i].lock);
     }
     proj_ds_put(p);
+    proj_cl_put(p);
     p->sum = proj_sum(p);
 }
 
@@ -484,6 +550,7 @@ static void proj_apply(const project_t *p, int all)
     song.g[G_DRDLY] = (int16_t)clamp(p->drdly, GP[G_DRDLY].min, GP[G_DRDLY].max);   /* (a load and a section, as REV) */
     proj_tx_get(p);                                     /* GLO > TEXTURE (2.6): a load and a section */
     proj_ds_get(p);                                     /* each drum sound's own sends: a load and a section */
+    proj_cl_get(p);                                     /* the CLOUD and what is sent to it: a load and a section */
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];
         const proj_trk_t *s = &p->t[k];

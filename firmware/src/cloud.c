@@ -17,7 +17,7 @@
  *   FDBK   the cloud back into its own recording
  *   FRZ    the recording stands still: the grains go on playing what it holds
  * Not here: her diffuser, her reverb and stereo recording, the pitch-shifter, the looping-delay and spectral modes.
- * The settings are the FM-1's while it is on: a project does not keep them yet.
+ * A project keeps the cloud's settings and every send (project.c proj_cl_put).
  * Runs in the audio ISR (mix_block, fx.c); silent and free while nothing is sent and the grains have ended. */
 #define CL_NG 16
 #define CL_RING_T int16_t

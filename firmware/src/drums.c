@@ -34,6 +34,7 @@ static uint8_t drum_send[DRUM_LANES][2];
  * send and each drum sound's own (0..127; the FX > CLOUD page's SEND) */
 static int32_t cloud_bus[CTL];
 static uint8_t cloud_send[NPART], drum_cloud[DRUM_LANES];
+static uint8_t cloud_resync;              /* they were set from elsewhere (a project): the page's SEND takes its value again */
 #define DRUM_SEND_REV 15
 #define DRUM_SEND_DLY 7
 

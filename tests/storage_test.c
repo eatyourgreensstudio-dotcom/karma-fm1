@@ -125,7 +125,7 @@ int main(void)
     }
     {   /* 2.6: SAVE > PROJECT > ERASE (project.c project_erase), as the editor's restore of an empty slot: an object
          * of no bytes; a load reads 0 bytes (proj_fetch: no project), the next save works as ever */
-        static uint8_t a2[3816], got3[3816];
+        static uint8_t a2[3840], got3[3840];
         memset(a2, 'P', sizeof a2);
         bad += check("2.6 erase: a project saved", st_save(OBJ_PROJECT0 + 2u, a2, sizeof a2) == 0);
         bad += check("2.6 erase: the empty object written", st_save(OBJ_PROJECT0 + 2u, a2, 0) == 0);
