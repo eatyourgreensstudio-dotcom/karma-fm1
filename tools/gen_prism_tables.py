@@ -11,7 +11,8 @@ SRC = Path(__file__).resolve().parents[1]
 EURORACK = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "fm1-firmware" / "ref" / "eurorack"
 # (their name, ours, how): "i16" as it is, "q15" a float table scaled by 32767 and clamped
 TABLES = [("lut_ws_inverse_tan", "PR_WS_0", "i16"), ("lut_ws_inverse_sin", "PR_WS_1", "i16"), ("lut_ws_linear", "PR_WS_2", "i16"),
-          ("lut_ws_bump", "PR_WS_3", "i16"), ("lut_ws_double_bump", "PR_WS_4", "i16"), ("lut_fold", "PR_FOLD", "q15")]
+          ("lut_ws_bump", "PR_WS_3", "i16"), ("lut_ws_double_bump", "PR_WS_4", "i16"), ("lut_fold", "PR_FOLD", "q15"),
+          ("wav_integrated_waves", "PR_WAVES", "i16")]     # 192 waves of 128 + 4 samples, integrated
 
 
 def table(text, name):

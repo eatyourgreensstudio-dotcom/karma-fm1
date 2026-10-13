@@ -34,7 +34,7 @@ typedef union {
     gr_part_t grain;
     fm6_note_t fm6[FM6_POLY];
     uint32_t phys[PHYS_ARENA / 4u];      /* eng_phys.c: two SYMP slots or three small ones */
-    pr_swarm_t prism[NVOICE];            /* eng_prism.c: the swarm's oscillators, a slot a voice */
+    prism_slot_t prism[NVOICE];          /* eng_prism.c: the state of SWARM and WAVE, a slot a voice */
 } eng_arena_t;
 static eng_arena_t eng_arena[NPART] __attribute__((section(".pool")));
 static uint8_t eng_arena_own[NPART];            /* the engine + 1 whose state is in it, 0 = none */

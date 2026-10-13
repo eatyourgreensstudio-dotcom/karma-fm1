@@ -34,6 +34,12 @@
  *           next (a swarm of glissandi). The sawtooth output (her AUX: the same with sines, is not made); the
  *           grains run freely (her trigger input, that starts bursts, is unpatched).
  *
+ *   wave    WavetableEngine: 192 single-cycle waves in three banks of 8 x 8 (and a fourth, the same waves in
+ *           another order), read between eight neighbours: TIMBRE along a bank's rows, MORPH along its columns,
+ *           HARMONICS through the banks (there and back: 1 2 3 4 4 3 2 1; in the second half the positions snap
+ *           to the waves). The waves are stored integrated and differentiated after the read, which keeps the
+ *           interpolation from aliasing. The main output (her AUX, the same in 5 bits, is not made).
+ *
  * Number formats: phases 32 bit (a cycle = 2^32), increments cycles per sample Q32; the slope Q16 (1.0 =
  * 65536); the parameters 0..32767 (Q15); the output Q15.
  * Departures from the float code: the frequency and the pulse width are held over a block (hers glide over it;
@@ -304,4 +310,113 @@ static void pr_swarm_render(pr_swarm_t *s, uint32_t inc, int32_t harmonics, int3
         int32_t y = acc[k] >> 1;
         out[k] = (int16_t)(y > 32767 ? 32767 : y < -32767 ? -32767 : y);
     }
+}
+
+/* ---------------------------------------------------- wave (WavetableEngine) --- */
+#define PR_WAVE_LEN 128                              /* samples a wave (+ 4: one before, three after) */
+typedef struct {
+    uint32_t phase;
+    int32_t pre[3];              /* x y z after the block's smoothing, Q16 of 0..7 */
+    int32_t prev[3];             /* where the last block's glide ended */
+    int32_t lp[3];               /* the per-sample smoothing */
+    int32_t dprev, dlp;          /* the differentiator: the last mix, its low-passed difference (Q8 of the waves' units) */
+} pr_wave_t;
+
+static void pr_wave_init(pr_wave_t *s)
+{
+    uint32_t i;
+    s->phase = 0;
+    for (i = 0; i < 3u; i++)
+        s->pre[i] = s->prev[i] = s->lp[i] = -1;      /* (set at the first block: no sweep from the corner) */
+    s->dprev = s->dlp = 0;
+}
+
+/* her wave_map_: wave (x, y) of bank z (0..3); the fourth bank: the waves in the order w 101 mod 192 */
+static inline const int16_t *pr_wave_at(int32_t x, int32_t y, int32_t z)
+{
+    int32_t w = x + y * 8 + z * 64;
+    if (z == 3)
+        w = (w * 101) % 192;
+    return PR_WAVES + w * (PR_WAVE_LEN + 4);
+}
+static inline int32_t pr_wave_read(const int16_t *t, int32_t pi, int32_t pf)   /* InterpolateWaveHermite; pf Q15 */
+{
+    int32_t xm1 = t[pi], x0 = t[pi + 1], x1 = t[pi + 2], x2 = t[pi + 3];
+    int32_t c = (x1 - xm1) >> 1, v = x0 - x1, w = c + v, a = w + v + ((x2 - x0) >> 1), bn = w + a;
+    return ((((((a * pf) >> 15) - bn) * pf) >> 15) + c) * pf / 32768 + x0;
+}
+
+/* n samples (Q15) into out, n <= 32. inc: the note; harmonics, timbre, morph: 0..32767 */
+static void pr_wave_render(pr_wave_t *s, uint32_t inc, int32_t harmonics, int32_t timbre, int32_t morph, int16_t *out, uint32_t n)
+{
+    int32_t target[3], cur[3], d[3], quant, lpc, cutoff, f0, k, i;
+    uint32_t phase = s->phase;
+    int64_t gain;
+    inc = inc > 0x40000000u ? 0x40000000u : inc < 65536u ? 65536u : inc;
+    f0 = (int32_t)(inc >> 16);                                                    /* Q16 */
+    target[0] = (int32_t)(((int64_t)timbre * 458746) >> 15);                       /* x 6.9999, Q16 */
+    target[1] = (int32_t)(((int64_t)morph * 458746) >> 15);
+    target[2] = (int32_t)(((int64_t)harmonics * 458746) >> 15);
+    if (s->pre[0] < 0)
+        for (k = 0; k < 3; k++)
+            s->pre[k] = s->prev[k] = s->lp[k] = target[k];
+    s->pre[0] += ((target[0] - s->pre[0]) * 13) >> 6;                             /* x 0.2 */
+    s->pre[1] += ((target[1] - s->pre[1]) * 13) >> 6;
+    s->pre[2] += ((target[2] - s->pre[2]) * 13) >> 8;                             /* x 0.05 */
+    quant = s->pre[2] - (3 << 16);                                                /* past the third bank: snap to the waves */
+    quant = quant < 0 ? 0 : quant > 65536 ? 65536 : quant;
+    lpc = (int32_t)((2 * (int64_t)f0 * ((4 << 16) - 3 * quant)) >> 17);           /* 2 f0 (4 - 3 q), Q15 */
+    lpc = lpc < 328 ? 328 : lpc > 3277 ? 3277 : lpc;                              /* 0.01 .. 0.1 */
+    for (k = 0; k < 3; k++) {
+        int32_t ip = s->pre[k] >> 16, fr = s->pre[k] & 65535, cl;
+        cl = (fr - 32768) * 16;                                                   /* Clamp(fr, 16) */
+        cl = (cl < -32768 ? -32768 : cl > 32768 ? 32768 : cl) + 32768;
+        fr += (int32_t)(((int64_t)quant * (cl - fr)) >> 16);
+        cur[k] = s->prev[k];
+        s->prev[k] = (ip << 16) + fr;
+        d[k] = (s->prev[k] - cur[k]) / (int32_t)n;
+    }
+    cutoff = f0 * 64;                                                             /* min(128 f0, 1), Q15 */
+    cutoff = cutoff > 32767 ? 32767 : cutoff;
+    /* (0.95 - f0) / (f0 131072) for waves of 16 bits and Q15 out: (0.95 - f0) / (4 f0), Q16 */
+    gain = ((int64_t)(62259 - f0) << 14) / f0;
+    for (i = 0; i < (int32_t)n; i++) {
+        int32_t x, y, z, xi, yi, zi, xf, yf, zf, z0, z1, pi, pf, a, b, c0, c1, m0, m1, mix, y15;
+        for (k = 0; k < 3; k++) {
+            cur[k] += d[k];
+            s->lp[k] += (int32_t)(((int64_t)(cur[k] - s->lp[k]) * lpc) >> 15);
+        }
+        x = s->lp[0]; y = s->lp[1]; z = s->lp[2];
+        x = x < 0 ? 0 : x > 458751 ? 458751 : x;
+        y = y < 0 ? 0 : y > 458751 ? 458751 : y;
+        z = z < 0 ? 0 : z > 458751 ? 458751 : z;
+        xi = x >> 16; xf = (x & 65535) >> 1;
+        yi = y >> 16; yf = (y & 65535) >> 1;
+        zi = z >> 16; zf = (z & 65535) >> 1;
+        phase += inc;
+        pi = (int32_t)(phase >> 25);
+        pf = (int32_t)((phase >> 10) & 32767);
+        z0 = zi >= 4 ? 7 - zi : zi;
+        z1 = zi + 1 >= 4 ? 7 - (zi + 1) : zi + 1;
+        a = pr_wave_read(pr_wave_at(xi, yi, z0), pi, pf);
+        b = pr_wave_read(pr_wave_at(xi + 1, yi, z0), pi, pf);
+        c0 = a + (((b - a) * xf) >> 15);
+        a = pr_wave_read(pr_wave_at(xi, yi + 1, z0), pi, pf);
+        b = pr_wave_read(pr_wave_at(xi + 1, yi + 1, z0), pi, pf);
+        c1 = a + (((b - a) * xf) >> 15);
+        m0 = c0 + (((c1 - c0) * yf) >> 15);
+        a = pr_wave_read(pr_wave_at(xi, yi, z1), pi, pf);
+        b = pr_wave_read(pr_wave_at(xi + 1, yi, z1), pi, pf);
+        c0 = a + (((b - a) * xf) >> 15);
+        a = pr_wave_read(pr_wave_at(xi, yi + 1, z1), pi, pf);
+        b = pr_wave_read(pr_wave_at(xi + 1, yi + 1, z1), pi, pf);
+        c1 = a + (((b - a) * xf) >> 15);
+        m1 = c0 + (((c1 - c0) * yf) >> 15);
+        mix = (m0 << 8) + ((m1 - m0) * zf >> 7);                                  /* Q8 */
+        s->dlp += (int32_t)(((int64_t)((mix - s->dprev) - s->dlp) * cutoff) >> 15);
+        s->dprev = mix;
+        y15 = (int32_t)(((int64_t)s->dlp * gain) >> 24);
+        out[i] = (int16_t)(y15 > 32767 ? 32767 : y15 < -32767 ? -32767 : y15);
+    }
+    s->phase = phase;
 }

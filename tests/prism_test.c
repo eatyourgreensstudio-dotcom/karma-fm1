@@ -110,38 +110,47 @@ static int swarm_cases(const char *ref, const char *wavdir)
     return fails;
 }
 
-int main(int argc, char **argv)
+static const float WAVE[][4] = {                    /* as tests/prism_ref/ref_wave.cc */
+    {0.002f, 0.0f, 0.0f, 0.0f}, {0.002f, 0.1f, 0.5f, 0.5f}, {0.005f, 0.3f, 0.2f, 0.8f}, {0.005f, 0.45f, 0.9f, 0.1f},
+    {0.005f, 0.6f, 0.37f, 0.63f}, {0.01f, 0.8f, 0.5f, 0.5f}, {0.02f, 0.2f, 0.7f, 0.3f}, {0.0005f, 1.0f, 1.0f, 1.0f},
+    {0.05f, 0.35f, 0.4f, 0.6f}, {0.001f, 0.52f, 0.33f, 0.71f}};
+/* the models that play a steady tone (model 0 fold, 1 wave): a second of each case against hers */
+static int tone_cases(const char *name, const float (*C)[4], int nc, int model, const char *ref, const char *wavdir)
 {
-    const char *ref = argc > 1 ? argv[1] : "build/prism_ref";
     static float hers[N], ours[N];
     static int16_t o[32];
     int c, i, fails = 0;
-    for (c = 0; c < (int)(sizeof CASES / sizeof CASES[0]); c++) {
+    for (c = 0; c < nc; c++) {
         char path[512];
         pr_fold_t s;
+        pr_wave_t w;
         FILE *f;
         double es = 0, ed = 0, db;
-        double f0 = CASES[c][0];
+        double f0 = C[c][0];
         uint32_t inc;
-        snprintf(path, sizeof path, "%s/fold-%d.f0", ref, c);       /* (the frequency she plays for the note) */
+        snprintf(path, sizeof path, "%s/%s-%d.f0", ref, name, c);       /* (the frequency she plays for the note) */
         f = fopen(path, "r");
         if (f) {
-            if (fscanf(f, "%lf", &f0) != 1) f0 = CASES[c][0];
+            if (fscanf(f, "%lf", &f0) != 1) f0 = C[c][0];
             fclose(f);
         }
         inc = (uint32_t)(f0 * 4294967296.0);
         f0 = inc / 4294967296.0;
-        snprintf(path, sizeof path, "%s/fold-%d.f32", ref, c);
+        snprintf(path, sizeof path, "%s/%s-%d.f32", ref, name, c);
         f = fopen(path, "rb");
         if (!f || fread(hers, sizeof(float), N, f) != N) {
             printf("prism: no reference %s (tests/prism_ref/build.sh)\n", path);
-            return 2;
+            return 1;
         }
         fclose(f);
         pr_fold_init(&s);
+        pr_wave_init(&w);
         for (i = 0; i < N; i += 32) {
             int k;
-            pr_fold_render(&s, inc, (int32_t)(CASES[c][1] * 32767), (int32_t)(CASES[c][2] * 32767), (int32_t)(CASES[c][3] * 32767), o, 32);
+            if (model)
+                pr_wave_render(&w, inc, (int32_t)(C[c][1] * 32767), (int32_t)(C[c][2] * 32767), (int32_t)(C[c][3] * 32767), o, 32);
+            else
+                pr_fold_render(&s, inc, (int32_t)(C[c][1] * 32767), (int32_t)(C[c][2] * 32767), (int32_t)(C[c][3] * 32767), o, 32);
             for (k = 0; k < 32; k++)
                 ours[i + k] = o[k] / 32767.0f;
         }
@@ -177,15 +186,24 @@ int main(int argc, char **argv)
             ed = best;
         }
         db = 10 * log10(ed / (es + 1e-12) + 1e-12);
-        printf("fold  f0 %.4f  harm %.2f  timbre %.2f  morph %.2f   difference %6.1f dB  %s\n", CASES[c][0], CASES[c][1],
-               CASES[c][2], CASES[c][3], db, db < -30 ? "ok" : "FAIL");
+        printf("%-5s f0 %.4f  harm %.2f  timbre %.2f  morph %.2f   difference %6.1f dB  %s\n", name, C[c][0], C[c][1],
+               C[c][2], C[c][3], db, db < -30 ? "ok" : "FAIL");
         fails += !(db < -30);
-        if (argc > 2) {
-            snprintf(path, sizeof path, "%s/fold-%d.wav", argv[2], c);
+        if (wavdir) {
+            snprintf(path, sizeof path, "%s/%s-%d.wav", wavdir, name, c);
             wav(path, ours, hers);
         }
     }
-    fails += swarm_cases(ref, argc > 2 ? argv[2] : 0);
+    return fails;
+}
+
+int main(int argc, char **argv)
+{
+    const char *ref = argc > 1 ? argv[1] : "build/prism_ref", *wavdir = argc > 2 ? argv[2] : 0;
+    int fails = 0;
+    fails += tone_cases("fold", CASES, (int)(sizeof CASES / sizeof CASES[0]), 0, ref, wavdir);
+    fails += tone_cases("wave", WAVE, (int)(sizeof WAVE / sizeof WAVE[0]), 1, ref, wavdir);
+    fails += swarm_cases(ref, wavdir);
     printf(fails ? "prism: FAILED\n" : "prism: the fixed-point models match the originals\n");
     return fails != 0;
 }
