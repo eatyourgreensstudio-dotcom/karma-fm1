@@ -114,7 +114,12 @@ static const float WAVE[][4] = {                    /* as tests/prism_ref/ref_wa
     {0.002f, 0.0f, 0.0f, 0.0f}, {0.002f, 0.1f, 0.5f, 0.5f}, {0.005f, 0.3f, 0.2f, 0.8f}, {0.005f, 0.45f, 0.9f, 0.1f},
     {0.005f, 0.6f, 0.37f, 0.63f}, {0.01f, 0.8f, 0.5f, 0.5f}, {0.02f, 0.2f, 0.7f, 0.3f}, {0.0005f, 1.0f, 1.0f, 1.0f},
     {0.05f, 0.35f, 0.4f, 0.6f}, {0.001f, 0.52f, 0.33f, 0.71f}};
-/* the models that play a steady tone (model 0 fold, 1 wave): a second of each case against hers */
+static const float HARM[][4] = {                    /* as tests/prism_ref/ref_harm.cc */
+    {0.002f, 0.0f, 0.0f, 0.5f}, {0.002f, 0.0f, 0.3f, 0.6f}, {0.005f, 0.0f, 0.7f, 0.9f}, {0.005f, 0.3f, 0.5f, 0.5f},
+    {0.005f, 0.6f, 0.2f, 0.7f}, {0.01f, 1.0f, 0.5f, 0.5f}, {0.02f, 0.2f, 0.9f, 0.3f}, {0.0005f, 0.5f, 1.0f, 1.0f},
+    {0.03f, 0.4f, 0.4f, 0.2f}, {0.001f, 0.8f, 0.6f, 0.8f}};
+/* the models that play a steady tone (model 0 fold, 1 wave, 2 harm: after 2 s, as hers): a second of each case
+ * against hers */
 static int tone_cases(const char *name, const float (*C)[4], int nc, int model, const char *ref, const char *wavdir)
 {
     static float hers[N], ours[N];
@@ -124,6 +129,7 @@ static int tone_cases(const char *name, const float (*C)[4], int nc, int model, 
         char path[512];
         pr_fold_t s;
         pr_wave_t w;
+        pr_harm_t h;
         FILE *f;
         double es = 0, ed = 0, db;
         double f0 = C[c][0];
@@ -145,9 +151,14 @@ static int tone_cases(const char *name, const float (*C)[4], int nc, int model, 
         fclose(f);
         pr_fold_init(&s);
         pr_wave_init(&w);
+        pr_harm_init(&h);
+        for (i = 0; model == 2 && i < 2756; i++)
+            pr_harm_render(&h, inc, (int32_t)(C[c][1] * 32767), (int32_t)(C[c][2] * 32767), (int32_t)(C[c][3] * 32767), o, 32);
         for (i = 0; i < N; i += 32) {
             int k;
-            if (model)
+            if (model == 2)
+                pr_harm_render(&h, inc, (int32_t)(C[c][1] * 32767), (int32_t)(C[c][2] * 32767), (int32_t)(C[c][3] * 32767), o, 32);
+            else if (model)
                 pr_wave_render(&w, inc, (int32_t)(C[c][1] * 32767), (int32_t)(C[c][2] * 32767), (int32_t)(C[c][3] * 32767), o, 32);
             else
                 pr_fold_render(&s, inc, (int32_t)(C[c][1] * 32767), (int32_t)(C[c][2] * 32767), (int32_t)(C[c][3] * 32767), o, 32);
@@ -203,6 +214,7 @@ int main(int argc, char **argv)
     int fails = 0;
     fails += tone_cases("fold", CASES, (int)(sizeof CASES / sizeof CASES[0]), 0, ref, wavdir);
     fails += tone_cases("wave", WAVE, (int)(sizeof WAVE / sizeof WAVE[0]), 1, ref, wavdir);
+    fails += tone_cases("harm", HARM, (int)(sizeof HARM / sizeof HARM[0]), 2, ref, wavdir);
     fails += swarm_cases(ref, wavdir);
     printf(fails ? "prism: FAILED\n" : "prism: the fixed-point models match the originals\n");
     return fails != 0;

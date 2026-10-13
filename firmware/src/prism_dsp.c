@@ -40,6 +40,12 @@
  *           to the waves). The waves are stored integrated and differentiated after the read, which keeps the
  *           interpolation from aliasing. The main output (her AUX, the same in 5 bits, is not made).
  *
+ *   harm    AdditiveEngine: 24 harmonics, their levels drawn by three controls: TIMBRE the centre of the spectrum,
+ *           MORPH how narrow it is around it, HARMONICS how many bumps it has (from one peak to a comb). The main
+ *           output (her AUX: eight harmonics picked as an organ's drawbars, is not made). Her oscillators make
+ *           the harmonics by recurrence (sin, -cos, -sin, cos ...); here each is read from the sine table at
+ *           k times the phase, a quarter turn back for each harmonic: the same wave.
+ *
  * No 64-bit division anywhere (the target's library has none: the link fails; the host does not notice), 64-bit
  * products only where a block or a sample needs one.
  * Number formats: phases 32 bit (a cycle = 2^32), increments cycles per sample Q32; the slope Q16 (1.0 =
@@ -423,4 +429,85 @@ static void pr_wave_render(pr_wave_t *s, uint32_t inc, int32_t harmonics, int32_
         out[i] = (int16_t)(y15 > 32767 ? 32767 : y15 < -32767 ? -32767 : y15);
     }
     s->phase = phase;
+}
+
+/* ----------------------------------------------------- harm (AdditiveEngine) --- */
+#define PR_HARM_N 24
+typedef struct {
+    uint32_t phase;
+    int32_t amp[PR_HARM_N];      /* the spectrum, summing to 1: Q16 */
+    int32_t cur[PR_HARM_N];      /* each harmonic's level as the last block ended (its roll-off near Nyquist in), Q16 */
+} pr_harm_t;
+
+static void pr_harm_init(pr_harm_t *s)
+{
+    uint32_t i;
+    s->phase = 0;
+    for (i = 0; i < PR_HARM_N; i++)
+        s->amp[i] = s->cur[i] = 0;
+}
+static inline int32_t pr_sin(uint32_t ph)            /* Q15 */
+{
+    uint32_t i = ph >> 22, f = (ph >> 7) & 32767u;
+    return PR_SINE[i] + (((PR_SINE[i + 1] - PR_SINE[i]) * (int32_t)f) >> 15);
+}
+
+/* n samples (Q15) into out, n <= 32. inc: the note; harmonics, timbre, morph: 0..32767 */
+static void pr_harm_render(pr_harm_t *s, uint32_t inc, int32_t harmonics, int32_t timbre, int32_t morph, int16_t *out, uint32_t n)
+{
+    int32_t raw, slope, bumps, inv, margin, center, sum = 66, d[PR_HARM_N], acc[32];
+    uint32_t i, k, sh, phase = s->phase;
+    inc = inc > 0x7FFFFFFFu ? 0x7FFFFFFFu : inc;
+    /* UpdateAmplitudes: the spectrum from the three controls */
+    raw = ((32768 - ((harmonics * 19661) >> 15)) * morph) >> 15;                  /* (1 - 0.6 h) morph, Q15 */
+    slope = 655 + (int32_t)(((int64_t)((((raw * raw) >> 15) * raw) >> 15) * 130417) >> 15);   /* 0.01 + 1.99 raw^3, Q16 */
+    bumps = (harmonics * harmonics) >> 10;                                        /* 16 h^2, Q16 */
+    inv = (int32_t)(0xFFFFFFFFu / (uint32_t)slope);                               /* 1 / slope, Q16 (up to 100) */
+    margin = ((inv - 65536) << 6) / ((65536 + bumps) >> 10);                      /* (1 / slope - 1) / (1 + bumps), Q16 */
+    center = (int32_t)(((int64_t)timbre * ((PR_HARM_N - 1) * 65536 + margin)) >> 15) - margin / 2;
+    for (i = 0; i < PR_HARM_N; i++) {
+        int32_t dist = (int32_t)(i << 16) - center, order, g, bf;
+        uint32_t gg;
+        dist = dist < 0 ? -dist : dist;
+        order = (int32_t)(((int64_t)dist * slope) >> 16);                         /* Q16 */
+        g = order < 65536 ? 2 * (65536 - order) : 0;                              /* gain + |gain| */
+        gg = (uint32_t)(((uint64_t)(uint32_t)g * (uint32_t)g) >> 16);             /* squared: up to 4 */
+        bf = 32768 + pr_sin(0x40000000u + (uint32_t)(((int64_t)order * bumps) & 0xFFFFFFFFu));   /* 1 + cos(2 pi order bumps), Q15 */
+        gg = (uint32_t)(((uint64_t)gg * (uint32_t)bf) >> 15);                     /* up to 8 */
+        gg = (uint32_t)(((uint64_t)gg * gg) >> 16);                               /* up to 64 */
+        gg = (uint32_t)(((uint64_t)gg * gg) >> 16);                               /* up to 4096 */
+        /* her one pole towards the gain, the spectrum then brought back to a sum of 1 ("not a proper LP filter
+         * because of the normalization. But ... absolutely essential") */
+        s->amp[i] += (int32_t)((((int64_t)gg - s->amp[i]) * 66) >> 16);           /* x 0.001 */
+        sum += s->amp[i];
+    }
+    for (sh = 0; (sum >> sh) > 65535; sh++)
+        ;
+    for (i = 0; i < PR_HARM_N; i++) {
+        int32_t f, a;
+        s->amp[i] = (int32_t)((((uint32_t)s->amp[i] >> sh) << 16) / (uint32_t)((sum >> sh) ? (sum >> sh) : 1));
+        /* HarmonicOscillator: each harmonic fades out towards Nyquist; its level glides over the block */
+        f = (int32_t)((((uint64_t)inc * (i + 1u)) >> 15) > 65536u ? 65536u : ((uint64_t)inc * (i + 1u)) >> 15);   /* 2 f, Q16 */
+        a = (int32_t)(((int64_t)s->amp[i] * (65536 - f)) >> 16);
+        d[i] = (a - s->cur[i]) / (int32_t)n;
+        if (!d[i] && a != s->cur[i])
+            s->cur[i] = a;                                                        /* (a step too small to glide) */
+    }
+    for (k = 0; k < n; k++)
+        acc[k] = 0;
+    for (i = 0; i < PR_HARM_N; i++) {
+        int32_t cur = s->cur[i];
+        uint32_t ph = phase * (i + 1u), hinc = inc * (i + 1u), quarter = i * 0x40000000u;
+        if (!cur && !d[i])
+            continue;                                                             /* (a silent harmonic costs nothing) */
+        for (k = 0; k < n; k++) {
+            ph += hinc;
+            cur += d[i];
+            acc[k] += (pr_sin(ph - quarter) * (cur >> 1)) >> 15;                  /* Q15 */
+        }
+        s->cur[i] = cur;
+    }
+    s->phase = phase + inc * n;
+    for (k = 0; k < n; k++)
+        out[k] = (int16_t)(acc[k] > 32767 ? 32767 : acc[k] < -32767 ? -32767 : acc[k]);
 }

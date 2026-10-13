@@ -7,16 +7,18 @@
  *   SWARM  eight sawtooths on grains of their own: HARM how far they spread, TIMB the grains' rate, MRPH their
  *          size (short: a cloud; long: glissandi)
  *   WAVE   192 waves in banks of 8 x 8: TIMB and MRPH move through a bank, HARM through the banks
- * SWARM's and WAVE's state is in the part's engine arena (engines.c eng_arena_of), a slot a voice; they play
+ *   HARM   24 harmonics: TIMB the centre of the spectrum, MRPH how narrow it is, HARM how many bumps it has
+ * SWARM's, WAVE's and HARM's state is in the part's engine arena (engines.c eng_arena_of), a slot a voice; they play
  * four voices a part at most (voice.c: prism_poly). */
 #include "prism_tables.h"
 #include "prism_dsp.c"
 
-static const char *const N_PRISM_MODEL[] = {"FOLD", "SWARM", "WAVE"};
-enum { PRM_FOLD, PRM_SWARM, PRM_WAVE, PRM_COUNT };
+static const char *const N_PRISM_MODEL[] = {"FOLD", "SWARM", "WAVE", "HARM"};
+enum { PRM_FOLD, PRM_SWARM, PRM_WAVE, PRM_HARM, PRM_COUNT };
 typedef union {
     pr_swarm_t swarm;
     pr_wave_t wave;
+    pr_harm_t harm;
 } prism_slot_t;
 static void *eng_arena_of(const track_t *t, uint32_t eng);
 static uint32_t prism_model(const track_t *t) { return (uint32_t)clamp(t->p[P_E0], 0, PRM_COUNT - 1); }
@@ -35,6 +37,8 @@ static void prism_slot_init(track_t *t, voice_t *v)      /* the slot set for the
         pr_swarm_init(&sl->swarm);
     if (sl && model == PRM_WAVE)
         pr_wave_init(&sl->wave);
+    if (sl && model == PRM_HARM)
+        pr_harm_init(&sl->harm);
 }
 
 static void prism_note_on(track_t *t, voice_t *v)
@@ -73,6 +77,8 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
             pr_swarm_render(&sl->swarm, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         else if (sl && model == PRM_WAVE)
             pr_wave_render(&sl->wave, m->inc, p[P_E1] * 258, timb, mrph, b, k);
+        else if (sl && model == PRM_HARM)
+            pr_harm_render(&sl->harm, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         else
             pr_fold_render(&s, m->inc, p[P_E1] * 258, timb, mrph, b, k);
         for (i = 0; i < k; i++) {
@@ -114,6 +120,11 @@ static const preset_t PRISM_PRESETS[] = {
     {"DIGI KEYS", {2, 50, 60, 30, 60, 0, 0, 0}, {0, 78, 30, 50}, 0, 0, FX(0, 20, 16, 30)},
     {"VOX TABLE", {2, 90, 50, 80, 20, 0, 0, 0}, {60, 90, 118, 84}, 0, 0, FX(0, 40, 16, 52)},
     {"TABLE LEAD", {2, 64, 80, 50, 40, 0, 0, 0}, {0, 70, 100, 30}, 0, 1, FX(0, 10, 22, 20), XP(P_GLIDE + 1, 28)},
+    /* HARM */
+    {"GLASS ORGAN", {3, 30, 30, 70, 20, 0, 0, 0}, {4, 80, 120, 40}, 0, 0, FX(0, 30, 10, 36)},
+    {"OVERTONES", {3, 0, 20, 96, 100, 0, 0, 0}, {30, 96, 60, 80}, 0, 0, FX(0, 0, 26, 50)},
+    {"SPECTRAL PD", {3, 70, 50, 60, 0, 0, 0, 0}, {70, 90, 120, 90}, 0, 0, FX(0, 36, 20, 56), XP(P_LRATE + 1, 18, P_LD_FLT + 1, 36)},
+    {"ADD BELL", {3, 96, 70, 80, 60, 0, 0, 0}, {0, 88, 0, 76}, 0, 0, FX(0, 0, 24, 44)},
 };
 
 static const engine_t ENG_PRISM = {
