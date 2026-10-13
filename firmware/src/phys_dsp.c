@@ -20,6 +20,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+#include "strike_dsp.c"          /* Elements' strike exciters (MIT, Emilie Gillet): BOUNCE, PICK on the modal bank */
 /* Physical models of DaisySP (Source/PhysicalModeling, Filters, Noise, Utility; MIT) in fixed
  * point for a CPU without an FPU. The PHYS engine (eng_phys.c) plays them.
  *
@@ -217,7 +218,16 @@ typedef struct {
     uint32_t rng;
     int32_t benv;                                        /* MEMB: the pitch bend after a strike, Q16 (1 at it) */
     uint8_t trig;
+    /* Elements' strike exciters (strike_dsp.c) on the bank, the engine sets them before the block: */
+    uint8_t gen;                                         /* 0 the strike above (or Dust), PX_GEN_BOUNCE, PX_GEN_PICK */
+    uint8_t gate;                                        /* the key is down (BOUNCE hits while it is) */
+    int32_t par;                                         /* her parameter, Q16: how long the bounces last / the pick's bend */
+    el_bounce_t bn;
+    el_pick_t pk;
 } px_modal_t;
+enum { PX_GEN_STRIKE, PX_GEN_BOUNCE, PX_GEN_PICK };
+#define PX_BOUNCE_SPAN (44100u * 15u / 100u)             /* her 0.15 s, in samples */
+#define PX_PICK_SCALE 90317u                             /* samples here for one of her 32 kHz, Q16 */
 
 typedef struct { int32_t g, rpg, gh, a; } px_mode_t;    /* px_svf_t + the mode's gain (Q28) */
 typedef struct {                                         /* per block */
@@ -225,6 +235,7 @@ typedef struct {                                         /* per block */
     uint32_t n;                                          /* modes below 0.499 */
     px_svf_t ex;                                         /* exciter low-pass */
     int32_t strike;                                      /* strike impulse, Q16 (0 = sustained) */
+    int32_t pulse;                                       /* a hit of BOUNCE / PICK at level 1, Q16 */
     uint32_t dust_thr;                                   /* Dust: hit when rand < thr (Q32) */
     uint32_t dust_inv;                                   /* 2^47 / thr: a hit u / thr = u inv >> 32, Q15 */
     int32_t dust_gain;                                   /* (4 - 3 dust_f) accent bow, Q16 */
@@ -259,6 +270,7 @@ static __attribute__((noinline)) void px_modal_exciter(px_modal_blk_t *B, px_mod
     cut = fr > 2143260078u ? 2143260078u : fr < 65536u ? 65536u : (uint32_t)fr;
     px_svf_coef(&B->ex, cut, bow ? 179u : 384u);         /* q 0.7 / 1.5 */
     B->strike = 0;
+    B->pulse = 0;
     B->dust_thr = 0;
     if (bow) {                                           /* Dust: density 0.3 (5e-5 + (1 - 5e-5) b^4) */
         int32_t dn = px_m(brightness, brightness, 16), df;
@@ -268,12 +280,18 @@ static __attribute__((noinline)) void px_modal_exciter(px_modal_blk_t *B, px_mod
         B->dust_inv = (uint32_t)(((uint64_t)1 << 47) / B->dust_thr);
         B->dust_gain = px_m(px_m(px_m(262144 - 3 * df, accent, 16), bow, 16), (int32_t)px_exp2(-px_m(d, 217579, 16)), 16);
         B->dust_dc = (int32_t)(((uint64_t)B->dust_thr * (uint32_t)B->dust_gain) >> 29);
-    } else if (M->trig) {                                /* the strike: amplitude 2^(2 cut^2) / cut */
+    } else if (M->trig || M->gen) {                      /* the strike: amplitude 2^(2 cut^2) / cut */
         int32_t amp = px_m(7864 + px_m(5243, accent, 16), 65536 - (d >> 1), 16);   /* (0.12 + 0.08 a)(1 - d / 2) */
         uint32_t c2 = (uint32_t)(((uint64_t)cut * cut) >> 32);
         uint64_t v = ((uint64_t)(uint32_t)amp * px_exp2((int32_t)(c2 >> 15))) << 16;   /* Q48 */
         v /= cut;                                        /* Q16 */
-        B->strike = v > 0x7FFFFFFFu ? 0x7FFFFFFF : (int32_t)v;
+        B->pulse = v > 0x7FFFFFFFu ? 0x7FFFFFFF : (int32_t)v;
+        if (M->trig && M->gen == PX_GEN_BOUNCE)          /* the key: the bouncing starts (strike_dsp.c) */
+            el_bounce_start(&M->bn);
+        else if (M->trig && M->gen == PX_GEN_PICK)       /* .. the plectrum catches (it catches harder with the accent) */
+            el_pick_start(&M->pk, M->par, accent >> 1, PX_PICK_SCALE);
+        else if (M->trig)
+            B->strike = B->pulse;
         M->trig = 0;
     }
 }
@@ -407,7 +425,7 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
         n = 32u;
     for (i = 0; i < n; i++)                              /* (no else below: a cold block after the function, */
         aux[i] = x[i] = 0;                               /* jumping back, reads as a loop to the budget) */
-    if (B->dust_thr || B->strike || M->e1 || M->e2) {
+    if (B->dust_thr || B->strike || M->e1 || M->e2 || M->gen) {
         int32_t e1 = M->e1, e2 = M->e2, t, bp, big = 0;
         uint32_t rs = M->rng;
         const px_svf_t ex = B->ex;
@@ -417,6 +435,14 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
                 uint32_t u = px_rand(&rs);
                 if (u < B->dust_thr)
                     in = (int64_t)(((((uint64_t)u * B->dust_inv) >> 32) * (uint32_t)B->dust_gain) >> 7);   /* Q24 */
+            } else if (M->gen == PX_GEN_BOUNCE) {        /* Elements' strikes: a hit now and then */
+                int32_t h = M->gate ? el_bounce_tick(&M->bn, M->par, PX_BOUNCE_SPAN) : 0;
+                if (h)
+                    in = (((int64_t)B->pulse * h) >> 16) << 8;
+            } else if (M->gen == PX_GEN_PICK) {
+                int32_t h = el_pick_tick(&M->pk);
+                if (h)
+                    in = (((int64_t)B->pulse * h) >> 16) * 256;
             } else if (!i && B->strike) {
                 in = (int64_t)B->strike << 8;
             }

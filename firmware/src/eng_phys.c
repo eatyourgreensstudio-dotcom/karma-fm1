@@ -23,6 +23,11 @@
  *           harp's): CHRD tunes them (OCT 5TH 4TH MAJ MIN SUS 7TH above the note, ROOT: the track's
  *           scale root, its fifth and octave around C3), SYMP how much they take from the string, BUZZ
  *           the curved bridge; BRIT, DAMP as STRNG
+ *   BOUNC   the modal bank (STRC BRIT DAMP POS as MODAL) hit again and again while the key is held, as by
+ *           something bouncing or rattling on it: Elements' "particles" strike (strike_dsp.c, MIT, Emilie
+ *           Gillet). LAST is how long the bounces keep going
+ *   PICK    the bank plucked by Elements' plectrum: a soft catch, then the pluck as it lets go, the body muted
+ *           a little while it touches. GAP is the time between the two
  * ACC is the accent at full velocity (brighter, longer, louder strike; velocity scales it), EXC
  * mixes the exciter itself into the output (the mallet / pick). The track's ENV / LFO -> FLT move BRIT.
  *
@@ -34,11 +39,11 @@
 #include "phys_dsp.c"
 #include "phys_symp.c"
 
-enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_COUNT };
+enum { PM_MODAL, PM_STRING, PM_MEMB, PM_SYMP, PM_BOUNCE, PM_PICK, PM_COUNT };
 #define PHYS_POLY 3
 /* output: model 1.0 -> this (VOICE_FS scale), then a soft knee; per model (a strike of all the modes in
  * phase peaks high but is short) */
-static const int32_t PHYS_GAIN[PM_COUNT] = {56000, 48000, 135000, 36000};   /* (SLOOP 2.5: x2, x4, x1.5, x3: the
+static const int32_t PHYS_GAIN[PM_COUNT] = {56000, 48000, 135000, 36000, 56000, 56000};   /* (SLOOP 2.5: x2, x4, x1.5, x3: the
                                                                                * level of SLOOP's other engines) */
 
 typedef struct {
@@ -51,7 +56,7 @@ typedef struct {
 } phys_slot_t;
 
 
-static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP"};
+static const char *const N_PHYS_MODEL[] = {"MODAL", "STRNG", "MEMB", "SYMP", "BOUNC", "PICK"};
 static const char *const N_PHYS_CHORD[] = {"OCT", "5TH", "4TH", "MAJ", "MIN", "SUS", "7TH", "ROOT", 0};
 /* per model: STRC .. EXC under their own names (phys_desc; range and default as edit[], 0 = edit[]) */
 static const param_desc_t PHYS_D_HARM = {"HARM", F_PCT, 0, 127, 64, 0, 0};
@@ -59,9 +64,13 @@ static const param_desc_t PHYS_D_BEND = {"BEND", F_PCT, 0, 127, 0, 0, 0};
 static const param_desc_t PHYS_D_CHRD = {"CHRD", F_INT, 0, 127, 64, N_PHYS_CHORD, 0};
 static const param_desc_t PHYS_D_SYMP = {"SYMP", F_PCT, 0, 127, 20, 0, 0};
 static const param_desc_t PHYS_D_BUZZ = {"BUZZ", F_PCT, 0, 127, 0, 0, 0};
+static const param_desc_t PHYS_D_LAST = {"LAST", F_PCT, 0, 127, 0, 0, 0};
+static const param_desc_t PHYS_D_GAP = {"GAP", F_PCT, 0, 127, 0, 0, 0};
 static const param_desc_t *const PHYS_DESC[PM_COUNT][8] = {
     [PM_MEMB] = {0, &PHYS_D_HARM, 0, 0, 0, 0, &PHYS_D_BEND, 0},
     [PM_SYMP] = {0, &PHYS_D_CHRD, 0, 0, &PHYS_D_SYMP, 0, &PHYS_D_BUZZ, 0},
+    [PM_BOUNCE] = {0, 0, 0, 0, 0, 0, &PHYS_D_LAST, 0},
+    [PM_PICK] = {0, 0, 0, 0, 0, 0, &PHYS_D_GAP, 0},
 };
 
 static const param_desc_t *phys_desc(const track_t *t, uint32_t k)
@@ -127,6 +136,7 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
         break;
     default:
         S->u.m.rng = seed;
+        S->u.m.bn.rng = seed;                            /* (BOUNC: its own generator, as hers) */
         break;
     }
 }
@@ -142,6 +152,8 @@ static void phys_note_on(track_t *t, voice_t *v)
     switch (md) {
     case PM_MODAL:
     case PM_MEMB:
+    case PM_BOUNCE:
+    case PM_PICK:
         S->u.m.trig = 1;                                 /* a retrigger strikes the ringing body again */
         break;
     default:                                             /* STRNG, SYMP */
@@ -184,6 +196,17 @@ static void phys_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         px_modal_blk_t B;
         px_modal_block(&B, &S->u.m, f0, strc, brit, damp, acc, pos * 129, bow);   /* pos 0..1/4 */
         px_modal_run(&B, &S->u.m, y, ax, n);
+        break;
+    }
+    case PM_BOUNCE:
+    case PM_PICK: {                                      /* the modal bank under Elements' strikes; LAST / GAP */
+        px_modal_blk_t B;
+        px_modal_t *M = &S->u.m;
+        M->gen = md == PM_BOUNCE ? PX_GEN_BOUNCE : PX_GEN_PICK;
+        M->gate = v->gate;
+        M->par = p[P_E6] * 516;
+        px_modal_block(&B, M, f0, strc, brit, clamp(damp - (md == PM_PICK ? M->pk.damp >> 3 : 0), 0, 65536), acc, pos * 129, 0);
+        px_modal_run(&B, M, y, ax, n);
         break;
     }
     case PM_MEMB: {
@@ -258,6 +281,12 @@ static const preset_t PHYS_PRESETS[] = {
     {"TABLA", {PM_MEMB, 120, 70, 70, 50, 110, 20, 30}, {0, 100, 127, 50}, 0, 0, FX(0, 0, 10, 25)},
     {"CONGA", {PM_MEMB, 90, 60, 50, 40, 100, 8, 40}, {0, 100, 127, 40}, 0, 0, FX(0, 0, 10, 25)},
     {"TIMPANI", {PM_MEMB, 10, 50, 100, 20, 110, 6, 10}, {0, 100, 127, 90}, 0, 0, FX(0, 0, 0, 50), XP(P_TRANS + 1, -12)},
+    /* BOUNC: {MODEL, STRC, BRIT, DAMP, POS, ACC, LAST, EXC}; PICK: {.., GAP, EXC} (Elements' strikes) */
+    {"BOUNCE BAR", {PM_BOUNCE, 116, 60, 70, 24, 100, 70, 20}, {0, 100, 127, 60}, 0, 0, FX(0, 0, 14, 34)},
+    {"MARBLES", {PM_BOUNCE, 98, 100, 50, 10, 110, 40, 40}, {0, 100, 127, 40}, 0, 0, FX(0, 0, 20, 30)},
+    {"RATTLE BELL", {PM_BOUNCE, 70, 90, 110, 12, 90, 110, 6}, {0, 100, 127, 96}, 0, 0, FX(0, 10, 24, 56)},
+    {"PICKED BAR", {PM_PICK, 116, 70, 80, 24, 100, 50, 20}, {0, 100, 127, 56}, 0, 0, FX(0, 0, 16, 32)},
+    {"PICK CHIME", {PM_PICK, 70, 104, 112, 10, 100, 90, 10}, {0, 100, 127, 96}, 0, 0, FX(0, 12, 26, 60)},
 };
 
 static const engine_t ENG_PHYS = {
