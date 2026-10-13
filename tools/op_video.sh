@@ -15,6 +15,13 @@ for n in home drums bass all; do
         -vf "scale=960:960:flags=neighbor,pad=1080:1080:60:60:color=0x0c0c0e,fps=60" \
         -af "afade=t=in:d=0.005,afade=t=out:st=$END:d=0.05" \
         -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -c:a aac -b:a 256k -movflags +faststart -shortest "$OUT/fm1-$n.mp4"
+    if [ "$n" = all ]; then                 # the same take upright for reels: 1080 x 1920, the screen in the middle
+        ffmpeg -loglevel error -y -f rawvideo -pix_fmt rgb24 -s 240x240 -framerate 44100/704 -i "build/video/$n.rgb" \
+            -f s16le -ar 44100 -ac 2 -i "build/video/$n.pcm" \
+            -vf "scale=960:960:flags=neighbor,pad=1080:1920:60:480:color=0x0c0c0e,fps=60" \
+            -af "afade=t=in:d=0.005,afade=t=out:st=$END:d=0.05" \
+            -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -c:a aac -b:a 256k -movflags +faststart -shortest "$OUT/fm1-all-reel.mp4"
+    fi
     rm -f "build/video/$n.rgb" "build/video/$n.pcm"
 done
 ls -la "$OUT"

@@ -46,6 +46,9 @@ TR = 22050                                   # stored sample rate
 # The other slots are user sets loaded from the web editor.
 CC0_SETS = [("PIANO", "piano"), ("BASS", "oneshot"), ("VIBES", "oneshot"), ("HORNS", "oneshot"),
             ("STRGS", "oneshot"), ("FLUTE", "sus"), ("SCRCH", "oneshot"), ("KIT", "kit")]
+# the instrument sets built in: none (this firmware keeps the flash for its synthesis engines; SLOOP: all seven,
+# 300 KB). The SAMPLE engine plays the drum kit and the user's own sets. The key of the cache holds it.
+INSTRUMENT_SETS = ()
 MEASURED_TUNING = ()                         # sets recorded off A440 (measured near the named note)
 
 # the preset of each set: name, {SET (filled in), TUNE, BITS, LOOP (filled in), CUT, -, DRV, -}, env, mono,
@@ -459,7 +462,7 @@ def main(out):
     b = Builder()
     if have_cc0:
         for name, kind in CC0_SETS:
-            if kind != "kit":                       # the CC0 KIT feeds the GM kit
+            if kind != "kit" and name in INSTRUMENT_SETS:   # the CC0 KIT feeds the GM kit
                 b.cc0_set(name, kind)
     b.gm_kit(have_cc0)
     if os.environ.get("FELUCCA_SLICE") == "1":       # SLICE's BREAK: only when that engine is built
