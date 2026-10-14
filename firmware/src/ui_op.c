@@ -783,6 +783,119 @@ static void op_band_member(uint32_t i, int32_t cx, int32_t fy, int up, int hl, i
     }
 }
 
+/* ---------------------------------------------------------------- ARP --- */
+/* the ARP page: the arp as stepping stones, one a note in the order it plays them (the keys held, else C E G to
+ * show the shape), high for a high note; the track's character hops to the stone of each note it plays. KNOB 1
+ * (MODE, blue) the stones' order: up, down, up and down, shuffled, as played; KNOB 2 (RATE, green) the grid under
+ * them; KNOB 3 (OCT, white) the octaves, a dashed line between them; KNOB 4 (GATE, orange) how much of each stone
+ * is lit */
+static uint8_t op_arp_hop;                             /* frames of the hop still to go (graph_signature) */
+static void op_arp_scene(const track_t *t)
+{
+    static uint8_t pos, prev, last;
+    static const uint8_t TICKS[6] = {4, 8, 16, 32, 6, 12};
+    uint8_t base[16], seq[32];
+    uint32_t mode = (uint32_t)clamp(t->p[P_AMODE], 0, 5), oct = (uint32_t)clamp(t->p[P_AOCT], 1, 4), nb = 0, n = 0, i, j, k;
+    int32_t gate = clamp(t->p[P_AGATE], 1, 127), lo = 127, hi = 0, sp, x0, cx, fy, live = t->nheld && mode;
+    uint32_t ti = (uint32_t)(t - trk) & 3u;
+    for (i = 0; i < t->nheld && nb < 16u; i++)
+        base[nb++] = t->held[i];
+    if (!nb) {                                      /* nothing held: the shape on a C major chord */
+        base[0] = 60, base[1] = 64, base[2] = 67;
+        nb = 3;
+    }
+    if (mode != 5u)                                 /* (ORD: as pressed; the others from the lowest) */
+        for (i = 1; i < nb; i++)
+            for (j = i; j > 0 && base[j - 1] > base[j]; j--) {
+                uint8_t s = base[j];
+                base[j] = base[j - 1];
+                base[j - 1] = s;
+            }
+    for (k = 0; k < oct; k++)
+        for (i = 0; i < nb && n < 24u; i++)
+            seq[n++] = (uint8_t)clamp(base[i] + 12 * (int32_t)k, 0, 127);
+    if (mode == 2u)                                 /* DN */
+        for (i = 0; i < n / 2u; i++) {
+            uint8_t s = seq[i];
+            seq[i] = seq[n - 1u - i];
+            seq[n - 1u - i] = s;
+        }
+    else if (mode == 3u && n > 2u)                  /* UPDN: up, then down without the ends twice */
+        for (i = n - 2u; i > 0 && n < 32u; i--)
+            seq[n++] = seq[i];
+    else if (mode == 4u) {                          /* RND: a shuffle (a new one each round would flicker: one) */
+        uint32_t r = 0x9E3779B9u * (n + 7u);
+        for (i = n - 1u; i > 0; i--) {
+            uint8_t s;
+            r = r * 1664525u + 1013904223u;
+            j = (r >> 8) % (i + 1u);
+            s = seq[i];
+            seq[i] = seq[j];
+            seq[j] = s;
+        }
+    }
+    if (n > 16u)
+        n = 16u;                                    /* (as many stones as fit) */
+    for (i = 0; i < n; i++) {
+        lo = seq[i] < lo ? seq[i] : lo;
+        hi = seq[i] > hi ? seq[i] : hi;
+    }
+    if (hi - lo < 12)
+        hi = lo + 12;
+#define AY(nt) (108 - ((int32_t)(nt) - lo) * 46 / (hi - lo))
+    sp = 216 / (int32_t)n;
+    x0 = 12 + (216 - sp * (int32_t)n) / 2;
+    for (k = 1; k * 12u <= (uint32_t)(hi - lo); k++)      /* KNOB 3: the octaves */
+        for (i = 8; i < 232u; i += 6u)
+            cv_pset((int32_t)i, AY(lo + 12 * (int32_t)k) + 3, TE_COL[2]);
+    for (i = 0; i < TICKS[(uint32_t)t->p[P_ARATE] % 6u]; i++)   /* KNOB 2: the grid */
+        cv_rect(12 + (int32_t)i * 216 / TICKS[(uint32_t)t->p[P_ARATE] % 6u], 120, 2, 2, TE_COL[1]);
+    if (live && t->arp_note && t->arp_note != last) {   /* a new note: to its stone (the next one with it) */
+        for (k = 1; k <= n; k++)
+            if (seq[(pos + k) % n] == t->arp_note)
+                break;
+        if (k <= n) {
+            prev = pos;
+            pos = (uint8_t)((pos + k) % n);
+            op_arp_hop = 6;
+        }
+    }
+    last = live ? t->arp_note : 0;
+    if (!live)
+        pos = prev = 0;
+    if (pos >= n)
+        pos = prev = 0;
+    for (i = 0; i < n; i++) {                       /* KNOB 1: the stones; KNOB 4: how much of each is lit */
+        int32_t x = x0 + (int32_t)i * sp + 1, y = AY(seq[i]), w = sp - 3, lit = w * gate / 127;
+        uint16_t c = !mode ? OP_PUR_D : TE_COL[0];
+        if (i == pos && live && op_arp_hop > 3u)
+            cv_rect(x, y, w, 4, C_WHITE);
+        else {
+            op_box(x, y, w, 4, c);
+            if (mode)
+                cv_rect(x + 1, y + 1, lit > 2 ? lit - 2 : 1, 2, i == pos && live ? C_WHITE : TE_COL[3]);
+        }
+    }
+    {                                               /* the character: on its stone, or on the way there */
+        int32_t xa = x0 + (int32_t)prev * sp + sp / 2, ya = AY(seq[prev]) - 1;
+        int32_t xb = x0 + (int32_t)pos * sp + sp / 2, yb = AY(seq[pos]) - 1, u = 6 - (int32_t)op_arp_hop;
+        cx = op_arp_hop ? xa + (xb - xa) * u / 6 : xb;
+        fy = op_arp_hop ? ya + (yb - ya) * u / 6 - (SINE[u * 512 / 6] * 12 >> 15) : yb;
+        op_k = 2;
+        op_ink = live ? OP_PUR : OP_PUR_D;
+        op_band_member(ti, cx, fy, 0, 0, 0, live ? TE_COL[ti] : TE_DIM[ti]);
+        op_ink = OP_PUR;
+        op_k = 3;
+    }
+    if (op_arp_hop)
+        op_arp_hop--;
+    if (!mode)
+        cv_text(170, 24, &FONT_S, "ARP OFF", TE_G3);
+    else if (!t->nheld)
+        cv_text(150, 24, &FONT_S, "HOLD KEYS", TE_G3);
+#undef AY
+}
+
 /* ------------------------------------------------------------------- FX --- */
 /* the FX pages (the sends, and those without a graph: FILTER, INSERT, DLY, REV/CHO): a wizard, a spell a
  * knob from the tip of its wand, each in the knob's colour and as strong as the knob is turned: KNOB 1 a
