@@ -8,7 +8,6 @@
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
 #define NDRUM 6
 #include "drum_synth.c"       /* synthesised kits (DS_KITS) */
-#include "hex_drums.c"        /* HEX kits (the first five) */
 /* P_E0 was unused on the drum track: it holds the kit. 0..4: the HEX kits (hex_drums.c; they took the places of the
  * GM sample kit and its four treatments, gone with the samples), 5..: the synthesised kits, then (2.4) USR1..USR4:
  * a user sample slot as a kit (the web editor's DRUM KIT: a sound per lane, zone lo..hi = the lane's note),
@@ -20,10 +19,10 @@
 #define DRUM_KITS (DRUM_SYN + DSU_N)
 static const char *const DRUM_KIT_NAMES[] = {"HEX BOOM", "HEX ACID", "HEX METAL", "HEX GLITCH", "HEX ROOM", DS_KIT_NAME_LIST,
                                              "USR1", "USR2", "USR3", "USR4", "USR3+4",
-                                             "SYN1", "SYN2", "SYN3", "SYN4"};
+                                             "MY HEX 1", "MY HEX 2", "MY HEX 3", "MY HEX 4"};
 static const char *const DRUM_KIT_STYLES[] = {"ELECTRO", "TECHNO", "INDUSTRIAL", "GLITCH", "SOFT", DS_KIT_STYLE_LIST,
                                               "YOUR KIT", "YOUR KIT", "YOUR KIT", "YOUR KIT", "BIG KIT",
-                                              "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
+                                              "YOUR HEX", "YOUR HEX", "YOUR HEX", "YOUR HEX"};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
 static uint32_t drum_kit(void) { return (uint32_t)clamp(TDRUM->p[P_E0], 0, DRUM_KITS - 1); }
 #define DRUM_DEFAULT_KIT DRUM_SAMPLED   /* power-on: 808 */
@@ -194,9 +193,9 @@ static void click_render(int32_t *ml, int32_t *mr, uint32_t n)
 }
 
 /* a synthesised voice: note on the 16 sounds snd (a factory kit, SYN1..4), the oldest voice stolen */
-static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel, uint32_t kit, const dsnd_t *snd, uint32_t crush)
+static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel, uint32_t kit, const dsnd_t *snd, uint32_t crush,
+                                                    const hex_snd_t *hex)   /* (a HEX kit: hex, snd unused) */
 {
-    const hex_snd_t *hex = kit < DRUM_SAMPLED ? HEX_KITS[kit].s : 0;   /* (a HEX kit: snd unused) */
     voice_t *v = &drums.v[0];
     uint32_t i;
     if (note == 42u || note == 44u)                 /* hi-hat choke */
@@ -239,7 +238,7 @@ static void drum_audition_poll(void)
     dsu_aud_vel = 0;
     {
         const dsu_kit_t *u = dsu_kit(dsu_aud_k);
-        drum_synth_on(DS_LANE_NOTE[dsu_aud_lane % DS_LANES], vel, DRUM_SYN + dsu_aud_k % DSU_N, u->s, u->crush);
+        drum_synth_on(DS_LANE_NOTE[dsu_aud_lane % DS_LANES], vel, DRUM_SYN + dsu_aud_k % DSU_N, 0, 0, u->s);
     }
 }
 
@@ -256,7 +255,7 @@ static void drum_on(uint32_t note, uint32_t vel)
         drums.kick = 1;                             /* (DUCK) */
     if (kit >= DRUM_SYN) {                          /* SYN1..SYN4: your synthesised kit */
         const dsu_kit_t *u = dsu_kit(kit - DRUM_SYN);
-        drum_synth_on(note, vel, kit, u->s, u->crush);
+        drum_synth_on(note, vel, kit, 0, 0, u->s);
         return;
     }
     if (kit >= DRUM_USR) {                          /* a user kit: the lane's sound, as its note (the hat choke) */
@@ -273,10 +272,10 @@ static void drum_on(uint32_t note, uint32_t vel)
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
     } else if (kit < DRUM_SAMPLED) {                /* a HEX kit */
-        drum_synth_on(note, vel, kit, 0, 0);
+        drum_synth_on(note, vel, kit, 0, 0, HEX_KITS[kit].s);
         return;
     } else {                                        /* synthesised kit */
-        drum_synth_on(note, vel, kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush);
+        drum_synth_on(note, vel, kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush, 0);
         return;
     }
     if (zid < 0) {                                  /* the GM sample kit */

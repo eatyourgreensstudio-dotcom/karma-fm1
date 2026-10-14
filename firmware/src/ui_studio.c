@@ -258,6 +258,74 @@ static void cloud_ui_sync(void)
         *v = (uint8_t)clamp(song.g[G_CLSEND], 0, 127);
     }
 }
+/* the drum track's EDIT pages (HEX OSC .. HEX NOISE): G_HXMODEL.. show the selected sound (drum_lane) of the
+ * drum track's kit, if it is a HEX kit, and what the knobs set goes into it. A factory kit (HEX BOOM ..) is not
+ * changed: the first turn copies it into the first MY HEX kit not edited yet and the drum track takes that one
+ * (all four edited: a message, nothing changed). An edit is stored with the settings when all is quiet
+ * (project.c). On these pages a key played picks its sound, as on KIT. Once a frame */
+static uint8_t hex_resync;
+static uint32_t hex_gen;                                /* (the preview, ui_op.c: redrawn when it moves) */
+static void hex_ui_sync(void)
+{
+    static uint16_t was_sel = 0xFFFF;
+    static int16_t was[22];
+    uint32_t kit = drum_kit(), lane, i, k, on_page = cur_page()->graph == GR_HEX && !ui.home && song.sel == TRK_DRUM;
+    int changed = 0;
+    const hex_snd_t *src;
+    hex_snd_t *dst;
+    if (on_page)
+        for (k = 0; k < 27u; k++)
+            if ((fm1_in.notes >> k) & 1u) {
+                drum_lane = (uint8_t)lane_of_key(k);
+                break;
+            }
+    {                                                   /* the track's lane -> the kit's sound (PEDAL: the HAT's) */
+        int32_t semi;
+        lane = ds_lane(LANE_NOTE[drum_lane % DRUM_LANES], &semi) % DS_LANES;
+    }
+    if (kit >= DRUM_SAMPLED && kit < DRUM_SYN)
+        return;                                         /* not a HEX kit: nothing to show */
+    src = kit < DRUM_SAMPLED ? &HEX_KITS[kit].s[lane] : &dsu_kit(kit - DRUM_SYN)->s[lane];
+    if ((uint16_t)(kit << 4 | lane) != was_sel || hex_resync) {
+        for (i = 0; i < 22u; i++)
+            song.g[G_HXMODEL + i] = was[i] = i == 3u ? (int16_t)(int8_t)((const uint8_t *)src)[i] : ((const uint8_t *)src)[i];
+        was_sel = (uint16_t)(kit << 4 | lane);
+        hex_resync = 0;
+        hex_gen++;
+        return;
+    }
+    for (i = 0; i < 22u; i++)
+        changed |= song.g[G_HXMODEL + i] != was[i];
+    if (!changed)
+        return;
+    if (kit < DRUM_SAMPLED) {                           /* a factory kit: into a MY HEX kit */
+        char m[20] = "MY HEX ";
+        for (k = 0; k < DSU_N && dsu_kit(k)->rsv[0]; k++)
+            ;
+        if (k == DSU_N) {
+            ui_message("4 MY HEX USED");
+            hex_resync = 1;
+            return;
+        }
+        dsu_from_factory(k, kit);
+        dsu.k[k].rsv[0] = 1;
+        TDRUM->p[P_E0] = (int16_t)(DRUM_SYN + k);
+        kit = DRUM_SYN + k;
+        m[7] = (char)('1' + k);
+        m[8] = 0;
+        ui_message(m);
+    }
+    dst = &dsu.k[kit - DRUM_SYN].s[lane];
+    for (i = 0; i < 22u; i++)
+        ((uint8_t *)dst)[i] = (uint8_t)song.g[G_HXMODEL + i];
+    dsu_fix_sound(dst);
+    dsu.k[kit - DRUM_SYN].rsv[0] = 1;
+    dsu_dirty = 1;
+    for (i = 0; i < 22u; i++)
+        was[i] = song.g[G_HXMODEL + i];
+    was_sel = (uint16_t)(kit << 4 | lane);
+    hex_gen++;
+}
 static void pads_tick(void)                             /* once a frame: the hits since the last one */
 {
     uint32_t i, hits, n[NPART][4], k, w;
@@ -272,6 +340,7 @@ static void pads_tick(void)                             /* once a frame: the hit
     fm1_irq_on();
     cloud_ui_sync();
     acid_gen_sync();
+    hex_ui_sync();
     for (i = 0; i < DRUM_LANES; i++) {
         if ((hits >> i) & 1u) pad_lit[i] = 6;
         else if (pad_lit[i]) pad_lit[i]--;

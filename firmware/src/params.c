@@ -56,6 +56,10 @@ static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", 
 static const char *const N_DASH[] = {"--"};
 static const char *const N_SYNC[] = {"INT", "USB", "TRS"};   /* G_SYNC: the tempo and PLAY / STOP from (seq.c mclk) */
 static const char *const N_GO[] = {"--", "GO"};
+static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};   /* HEX (hex_drums.c) */
+static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
+static const char *const N_HXCLICK[] = {"OFF", "TICK", "NOIS", "POP", "BLIP", "ZAP"};
+static const char *const N_HXFILT[] = {"OFF", "LP", "HP", "BP", "NOTCH"};
 static const char *const N_AGSCALE[] = {"MIN", "PHRY", "HARM", "MPEN", "DOR", "MAJ"};   /* ACID GEN: TB-3PO's scales */
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
@@ -213,6 +217,28 @@ static const param_desc_t GP[G_COUNT] = {
     [G_AGOCT] = PD("OCT", F_INT, 1, 3, 2),
     [G_AGROOT] = PD("ROOT", F_NOTE, 0, 11, 9),
     [G_AGMUT] = PE("VARY", N_GO, 0),
+    [G_HXMODEL] = PE("MODEL", N_HXMODEL, 0),     /* EDIT on the drum track: the HEX sound (ui_studio.c hex_ui_sync) */
+    [G_HXWAVE] = PE("WAVE", N_HXWAVE, 0),
+    [G_HXTUNE] = PD("TUNE", F_INT, 0, 127, 36),
+    [G_HXFINE] = PD("FINE", F_INT, -64, 63, 0),
+    [G_HXATK] = PD("ATK", F_PCT, 0, 127, 0),
+    [G_HXDEC] = PD("DEC", F_PCT, 0, 127, 80),
+    [G_HXSLOPE] = PD("SLOPE", F_PCT, 0, 127, 40),
+    [G_HXLVL] = PD("LEVEL", F_PCT, 0, 127, 100),
+    [G_HXPAMT] = PD("P.AMT", F_PCT, 0, 127, 0),
+    [G_HXPDEC] = PD("P.DEC", F_PCT, 0, 127, 40),
+    [G_HXRATIO] = PD("RATIO", F_PCT, 0, 127, 64),
+    [G_HXFM] = PD("FM", F_PCT, 0, 127, 0),
+    [G_HXCLICK] = PE("CLICK", N_HXCLICK, 0),
+    [G_HXCLVL] = PD("C.LVL", F_PCT, 0, 127, 60),
+    [G_HXCTONE] = PD("TONE", F_PCT, 0, 127, 80),
+    [G_HXFTYPE] = PE("FILT", N_HXFILT, 0),
+    [G_HXCUT] = PD("CUT", F_PCT, 0, 127, 100),
+    [G_HXRES] = PD("RES", F_PCT, 0, 127, 0),
+    [G_HXDRIVE] = PD("DRIVE", F_PCT, 0, 127, 0),
+    [G_HXAUX1] = PD("AUX A", F_PCT, 0, 127, 0),
+    [G_HXAUX2] = PD("AUX B", F_PCT, 0, 127, 0),
+    [G_HXCRUSH] = PD("CRUSH", F_PCT, 0, 127, 0),
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -395,7 +421,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
        FAM_COUNT };
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK, SC_SONG, SC_DRUM };
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
-       GR_SLCR, GR_INS };
+       GR_SLCR, GR_INS, GR_HEX };
 
 typedef struct {
     const char *title;
@@ -421,6 +447,12 @@ static const page_t PAGES[] = {
     {"CLOUD 2", FAM_FX, SC_GLOBAL, GR_NONE, {G_CLDENS, G_CLTEX, G_CLFB, G_CLFRZ}},   /* track's send, then the cloud's own */
     {"SEL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_CHORD}},
     {"SEL 2", FAM_SCL, SC_TRACK, GR_SCALE, {P_TRANS, P_STRUM, P_VLEAD, 0xFF}},   /* (2.4: the chords played) */
+    {"HEX OSC", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXMODEL, G_HXWAVE, G_HXTUNE, G_HXFINE}},   /* the drum track's EDIT: */
+    {"HEX AEG", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXATK, G_HXDEC, G_HXSLOPE, G_HXLVL}},       /* the selected sound of */
+    {"HEX MOD", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXPAMT, G_HXPDEC, G_HXRATIO, G_HXFM}},      /* its HEX kit (page_shown: */
+    {"HEX CLICK", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXCLICK, G_HXCLVL, G_HXCTONE, G_HXCRUSH}}, /* the drum track only) */
+    {"HEX FILT", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXFTYPE, G_HXCUT, G_HXRES, G_HXDRIVE}},
+    {"HEX NOISE", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXAUX1, G_HXAUX2, 0xFF, 0xFF}},
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
     {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E4, P_E5, P_E7}},   /* ANALOG only (2.6, Felucca 1.5): TYPE CUT
@@ -468,6 +500,10 @@ static int page_for_drum(const page_t *pg)
 /* a page the buttons and SELECT reach on the selected track: EDIT > FILTER (TYPE) on ANALOG only */
 static int page_shown(const page_t *pg)
 {
+    if (pg->graph == GR_HEX)                         /* the HEX sound pages: the drum track's EDIT, and only its */
+        return is_drum(TSEL);
+    if (pg->fam == FAM_EDIT && is_drum(TSEL))
+        return 0;
     return pg->id[0] != P_FTYPE || (!is_drum(TSEL) && TSEL->eng_req % NENGINES == 0u);
 }
 

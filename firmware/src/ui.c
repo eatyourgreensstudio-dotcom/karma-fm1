@@ -95,9 +95,12 @@ static void layer_screen_draw(void);                            /* ui_layers.c *
 static void hold_screen_draw(void);
 static uint8_t layer_shown;
 
-static uint32_t page_first(uint32_t fam)
+static uint32_t page_first(uint32_t fam)            /* the family's first page the selected track has */
 {
     uint32_t i;
+    for (i = 0; i < NPAGES; i++)
+        if (PAGES[i].fam == fam && page_shown(&PAGES[i]))
+            return i;
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == fam)
             return i;

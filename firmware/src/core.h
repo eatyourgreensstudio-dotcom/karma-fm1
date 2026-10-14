@@ -103,6 +103,10 @@ enum {                          /* global parameters */
     G_CLDENS, G_CLTEX, G_CLFB, G_CLFRZ,   /* .. how many, their window, the feedback, FREEZE. In a project (project.c) */
     G_AGDENS, G_AGACC, G_AGSLD, G_AGSEED,   /* SEQ > ACID GEN (acid_gen.c): TB-3PO's lines on a synth track; settings of */
     G_AGSCALE, G_AGOCT, G_AGROOT, G_AGMUT,  /* the FM-1, not in a project (the line is: the track's steps). In this order */
+    G_HXMODEL, G_HXWAVE, G_HXTUNE, G_HXFINE, G_HXATK, G_HXDEC, G_HXSLOPE, G_HXLVL,   /* the drum track's EDIT pages: */
+    G_HXPAMT, G_HXPDEC, G_HXRATIO, G_HXFM, G_HXCLICK, G_HXCLVL, G_HXCTONE,         /* the selected sound of a HEX */
+    G_HXFTYPE, G_HXCUT, G_HXRES, G_HXDRIVE, G_HXAUX1, G_HXAUX2, G_HXCRUSH,          /* kit (hex_drums.c hex_snd_t, in its
+                                                                                * order; ui_studio.c hex_ui_sync) */
     G_COUNT
 };
 

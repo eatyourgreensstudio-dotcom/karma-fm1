@@ -39,7 +39,7 @@
 #define PROJ_NG 32u                            /* the globals of formats 4 and 5 (G_COUNT until 2.4). SLOOP 2.5's
                                                 * G_DRDLY rides in the byte after sel (0 in older projects: off),
                                                 * so the format and its size do not change */
-_Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 17u,
+_Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 39u,
                "the globals a project holds, then G_DRDLY (then 2.6's GLO > MIDI: settings of the FM-1)");
 #define PROJ_NC6 ((uint32_t)P_ITYPE)           /* format 6: the parameters kept in 16 bits, P_LEVEL .. P_VLEAD (as 5), */
 #define PROJ_NX6 ((uint32_t)(P_E0 - P_ITYPE))  /* the 2.6 ones in a byte (0..127), then P_E0 .. P_E7 */
@@ -1002,7 +1002,7 @@ static void settings_save(void)
     {
         uint8_t mp[MIDI_PART];
         midi_part_fill(mp);
-        if (!memcmp(&p, &persist_saved, sizeof p) && !memcmp(mp, midi_saved, sizeof mp))
+        if (!memcmp(&p, &persist_saved, sizeof p) && !memcmp(mp, midi_saved, sizeof mp) && !dsu_dirty)
             return;                                /* unchanged: no erase cycle */
     }
     if (settings_write(&p) == 0)
@@ -1190,6 +1190,8 @@ static void sections_flush(void)                        /* main loop */
                 settings_later = 1;
             }
     }
+    if (dsu_dirty)                                      /* a HEX kit edited (ui_studio.c hex_ui_sync): kept when quiet */
+        settings_later = 1;
     if (settings_later) {                               /* the menu closed while playing */
         settings_later = 0;
         song_dirty = 1;                                 /* (settings_save when quiet, with the song) */

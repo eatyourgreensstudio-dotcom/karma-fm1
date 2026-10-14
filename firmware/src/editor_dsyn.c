@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* Editor protocol v10 (SLOOP 2.5): the DRUM SYNTH page, your synthesised kits SYN1..SYN4 (drum_synth.c dsu).
- * A sound travels as its 22 dsnd_t bytes (pack7), in the struct's order. The editor changes the kits in RAM
+/* Editor protocol v10 (SLOOP 2.5): the DRUM SYNTH page, your kits (drum_synth.c dsu: since 2026-10-14 your HEX kits,
+ * MY HEX 1..4; the web page still shows them as the old synthesised sounds: to be redone). A sound travels as its 22 bytes (pack7), in the struct's order. The editor changes the kits in RAM
  * (heard at once), STORE writes them to flash with the settings (only while the song is stopped: rc 3).
  *   72 DSYN_LIST  -> factory count, user count, stored (0: an edit not stored yet), the factory names,
  *                    then per user kit: its name, the factory kit it started from
@@ -39,31 +39,31 @@ static uint32_t ed_dsyn_store(void)
 
 static int ed_dsyn_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
 {
-    uint8_t b[2u + DS_LANES * sizeof(dsnd_t)];
+    uint8_t b[2u + DS_LANES * sizeof(hex_snd_t)];
     uint32_t i, rc;
     (void)dsu_kit(0);                                      /* (set up) */
     switch (cmd) {
     case ED_DSYN_LIST:
         if (n)
             return 0;
-        ed_b(DS_NKITS); ed_b(DSU_N); ed_b(!dsu_dirty);
-        for (i = 0; i < DS_NKITS; i++)
-            ed_str(DS_KITS[i].name, 8);
+        ed_b(DSU_NSRC); ed_b(DSU_N); ed_b(!dsu_dirty);
+        for (i = 0; i < DSU_NSRC; i++)
+            ed_str(HEX_KITS[i].name, 8);
         for (i = 0; i < DSU_N; i++) {
             ed_dsyn_name(dsu.k[i].name);
             ed_b(dsu.k[i].src);
         }
         return 1;
     case ED_DSYN_GET: {
-        const dsnd_t *s = 0;
+        const hex_snd_t *s = 0;
         uint32_t w = n == 1u ? a[0] : 127u, crush = 0, src = 0;
         char nm[8] = {0};
-        if (w < DS_NKITS) {
-            s = DS_KITS[w].s;
-            crush = DS_KITS[w].crush;
+        if (w < DSU_NSRC) {
+            s = HEX_KITS[w].s;
+            crush = 0;
             src = w;
-            for (i = 0; i < 8u && DS_KITS[w].name[i]; i++)
-                nm[i] = DS_KITS[w].name[i];
+            for (i = 0; i < 8u && HEX_KITS[w].name[i]; i++)
+                nm[i] = HEX_KITS[w].name[i];
         } else if (w >= ED_DSYN_USER && w < ED_DSYN_USER + DSU_N) {
             const dsu_kit_t *u = &dsu.k[w - ED_DSYN_USER];
             s = u->s;
@@ -76,7 +76,7 @@ static int ed_dsyn_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             ed_dsyn_name(nm);
             b[0] = (uint8_t)crush;                         /* (one pack7 stream: crush, src, the sounds) */
             b[1] = (uint8_t)src;
-            memcpy(b + 2, s, DS_LANES * sizeof(dsnd_t));
+            memcpy(b + 2, s, DS_LANES * sizeof(hex_snd_t));
             ed_pack7(b, sizeof b);
         }
         return 1;
@@ -87,8 +87,8 @@ static int ed_dsyn_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
         if (k < DSU_N && n > 2u) {
             m = ed_unpack7(a + 2, n - 2u, b, sizeof b);
             dsu_kit_t *u = &dsu.k[k];
-            if (part < DS_LANES && m == sizeof(dsnd_t)) {
-                dsnd_t d;
+            if (part < DS_LANES && m == sizeof(hex_snd_t)) {
+                hex_snd_t d;
                 memcpy(&d, b, sizeof d);
                 dsu_fix_sound(&d);
                 memcpy(&u->s[part], &d, sizeof d);         /* (the voices read it from the next block) */
@@ -96,12 +96,12 @@ static int ed_dsyn_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
             } else if (part == DS_LANES && m == 10u) {
                 memcpy(u->name, b, 8);
                 u->crush = b[8];
-                u->src = (uint8_t)(b[9] % DS_NKITS);
+                u->src = (uint8_t)(b[9] % DSU_NSRC);
                 for (i = 0; i < 8u; i++)
                     if (u->name[i] && (u->name[i] < 32 || u->name[i] > 126))
                         u->name[i] = ' ';
                 rc = 0;
-            } else if (part == DS_LANES + 1u && m == 1u && b[0] < DS_NKITS) {
+            } else if (part == DS_LANES + 1u && m == 1u && b[0] < DSU_NSRC) {
                 dsu_from_factory(k, b[0]);
                 rc = 0;
             }

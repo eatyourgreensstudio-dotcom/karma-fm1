@@ -341,6 +341,8 @@ static uint32_t graph_signature(void)
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u;
+    if (pg->graph == GR_HEX)                         /* the drum sound's picture: as it is edited, the lane */
+        h ^= (hex_gen * 977u + drum_lane * 31u + (uint32_t)TDRUM->p[P_E0] * 7u) * 40503u;
     if (pg->graph == GR_ARP && !is_drum(t))          /* ARP: the stones as the keys change, the hops */
         h ^= (t->nheld * 31u + t->arp_note * 977u + (op_arp_hop ? ui.frame + 1u : 0u)) * 40503u;
     if (pg->graph == GR_ADSR && !is_drum(t) && op_env_voice(t))   /* ENV: the character follows the voice */
@@ -674,6 +676,10 @@ static void draw_graph(void)
         case GR_ARP:
             cv_oy = 0;
             op_arp_scene(t);                         /* the stepping stones (ui_op.c) */
+            break;
+        case GR_HEX:
+            cv_oy = 0;
+            op_hex_scene();                          /* the drum sound, its picture (ui_op.c) */
             break;
         case GR_FX:
             cv_oy = 0;

@@ -911,6 +911,47 @@ static void op_arp_scene(const track_t *t)
 #undef AY
 }
 
+/* ---------------------------------------------------------------- HEX --- */
+/* the drum track's EDIT pages: the sound of the selected lane, played once into a picture (its first 0.75 s, the
+ * louder half of each column), redrawn when it changes; the drummer above, the sound's name and its kit */
+static void op_hex_scene(void)
+{
+    static int8_t col[200][2];
+    static uint32_t made = 0xFFFFFFFFu;
+    uint32_t kit = drum_kit(), i, k;
+    const hex_snd_t *kits;
+    if (kit >= DRUM_SAMPLED && kit < DRUM_SYN) {
+        cv_text(28, 50, &FONT_S, "A HEX KIT ONLY:", TE_G3);
+        cv_text(28, 68, &FONT_S, "PRESETS: KIT 1-5", TE_G3);
+        return;
+    }
+    kits = kit < DRUM_SAMPLED ? HEX_KITS[kit].s : dsu_kit(kit - DRUM_SYN)->s;
+    if (made != hex_gen * 64u + kit * 16u + drum_lane) {
+        static hex_v_t v;
+        static int32_t buf[166];
+        hex_on(&v, kits, LANE_NOTE[drum_lane % DRUM_LANES], 110);
+        for (i = 0; i < 200u; i++) {
+            int32_t lo = 0, hi = 0;
+            hex_render(&v, buf, 166);
+            for (k = 0; k < 166u; k++) {
+                lo = buf[k] < lo ? buf[k] : lo;
+                hi = buf[k] > hi ? buf[k] : hi;
+            }
+            col[i][0] = (int8_t)clamp(lo / 1300, -32, 0);
+            col[i][1] = (int8_t)clamp(hi / 1300, 0, 32);
+        }
+        made = hex_gen * 64u + kit * 16u + drum_lane;
+    }
+    for (i = 0; i < 200u; i += 4u)
+        cv_pset(20 + (int32_t)i, 70, OP_PUR_D);
+    for (i = 0; i < 200u; i++)
+        if (col[i][1] - col[i][0] > 0)
+            cv_line(20 + (int32_t)i, 70 - col[i][1], 20 + (int32_t)i, 70 - col[i][0], i < 6u ? C_WHITE : TE_DRUM);
+    cv_text(4, 2, &FONT_S, LANE_NAME[drum_lane % DRUM_LANES], C_WHITE);
+    cv_text(4 + text_w(&FONT_S, LANE_NAME[drum_lane % DRUM_LANES]) + 8, 2, &FONT_S, DRUM_KIT_NAMES[kit], TE_G3);
+    cv_text(4, 106, &FONT_S, "KEY: PICK SOUND", TE_G2);
+}
+
 /* ------------------------------------------------------------------- FX --- */
 /* the FX pages (the sends, and those without a graph: FILTER, INSERT, DLY, REV/CHO): a wizard, a spell a
  * knob from the tip of its wand, each in the knob's colour and as strong as the knob is turned: KNOB 1 a

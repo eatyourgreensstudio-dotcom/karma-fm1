@@ -306,40 +306,42 @@ static int ds_render(dsv_t *s, int32_t *out, uint32_t n)
     return ds_alive(s);
 }
 
-/* ---- SLOOP 2.5: your own synthesised kits, SYN1..SYN4 (drums.c DRUM_SYN..), edited in the web editor's DRUM
- * SYNTH page (editor_dsyn.c). Each is a kit as DS_KITS has them: 16 dsnd_t and the crush, with a name. They live
- * in RAM (the drum voices play them from there, so an edit is heard at once) and in flash after the settings
- * (project.c settings_write: one A/B object, so a cut-off write keeps the last copy). Never stored: copies of
- * 808, 909, TRAP and TECHNO. Every value from outside (the editor, a backup, flash) goes through dsu_fix, so the
- * voices only ever see values the factory kits could hold. */
+#include "hex_drums.c"            /* HEX (the first five kits), and below, your own */
+
+/* ---- your own HEX kits, MY HEX 1..4 (drums.c DRUM_SYN..; SLOOP 2.5 had its SYN kits of dsnd_t here, in the same
+ * bytes): each a kit as HEX_KITS has them, 16 hex_snd_t, with a name. Edited on the device (the drum track's EDIT
+ * pages, ui_studio.c hex_ui_sync; the web editor's DRUM SYNTH page still speaks the old sounds' bytes) and kept in
+ * flash after the settings (project.c settings_write: one A/B object). They live in RAM (the drum voices play them
+ * from there, so an edit is heard at once). A bank from before (another magic): the defaults. Every value from
+ * outside (flash, the editor) goes through dsu_fix, so the voices only ever see values they expect. */
 #define DSU_N 4u
-#define DSU_MAGIC 0x31555344u                     /* "DSU1" */
+#define DSU_MAGIC 0x31584548u                     /* "HEX1" */
 typedef struct {
     char name[8];                                 /* ASCII, 0-padded (not terminated when 8 long) */
-    uint8_t crush, src, rsv[2];                   /* the kit's crush; src: the factory kit it started from */
-    dsnd_t s[DS_LANES];
+    uint8_t crush, src, rsv[2];                   /* (crush: unused); src: the HEX kit it started from; rsv[0] 1: edited */
+    hex_snd_t s[DS_LANES];
 } dsu_kit_t;
 typedef struct {
     uint32_t magic;
     uint16_t ver, n;                              /* 1, DSU_N */
     dsu_kit_t k[DSU_N];
 } dsu_bank_t;
-_Static_assert(sizeof(dsnd_t) == 22u && sizeof(dsu_kit_t) == 364u && sizeof(dsu_bank_t) == 1464u, "drum synth bank layout");
+_Static_assert(sizeof(hex_snd_t) == 22u && sizeof(dsu_kit_t) == 364u && sizeof(dsu_bank_t) == 1464u, "your HEX kits' layout");
 static dsu_bank_t dsu;
 static volatile uint8_t dsu_dirty;                /* RAM differs from flash (an edit not stored yet) */
-static const uint8_t DSU_DEF[DSU_N] = {0, 1, 5, 12};   /* 808, 909, TRAP, TECHNO */
+static const uint8_t DSU_DEF[DSU_N] = {0, 1, 2, 3};   /* HEX BOOM, ACID, METAL, GLITCH */
+#define DSU_NSRC 5u                               /* the HEX kits one may start from */
 
 static void dsu_from_factory(uint32_t k, uint32_t src)
 {
+    static const char *const NM[DSU_N] = {"MY HEX 1", "MY HEX 2", "MY HEX 3", "MY HEX 4"};
     dsu_kit_t *u = &dsu.k[k % DSU_N];
-    const dkit_t *f = &DS_KITS[src % DS_NKITS];
     uint32_t i;
     memset(u, 0, sizeof *u);
-    for (i = 0; i < 8u && f->name[i]; i++)
-        u->name[i] = f->name[i];
-    u->crush = f->crush;
-    u->src = (uint8_t)(src % DS_NKITS);
-    memcpy(u->s, f->s, sizeof u->s);
+    for (i = 0; i < 8u && NM[k % DSU_N][i]; i++)
+        u->name[i] = NM[k % DSU_N][i];
+    u->src = (uint8_t)(src % DSU_NSRC);
+    memcpy(u->s, HEX_KITS[src % DSU_NSRC].s, sizeof u->s);
 }
 static void dsu_defaults(void)
 {
@@ -350,21 +352,15 @@ static void dsu_defaults(void)
     for (k = 0; k < DSU_N; k++)
         dsu_from_factory(k, DSU_DEF[k]);
 }
-/* a sound into the ranges the voices expect (ds_on / ds_render index tables with them) */
-static void dsu_fix_sound(dsnd_t *d)
+static void dsu_fix_sound(hex_snd_t *d)          /* a sound into the ranges the voices expect */
 {
-    if (d->wave > DW_BELL) d->wave = DW_SINE;
-    if ((d->src & 15u) > DN_CHIP || (d->src & ~(uint8_t)(15u | DN_CLAP))) d->src = DN_WHITE;
-    if (d->pitch > 127u) d->pitch = 127;
-    d->fine &= 15u;
-    if (d->bend > 96u) d->bend = 96;
-    d->btime &= 127u; d->decay &= 127u; d->ndec &= 127u;
-    if (d->tlev > 127u) d->tlev = 127;
-    if (d->t2lev > 127u) d->t2lev = 127;
-    if (d->click > 127u) d->click = 127;
-    if (d->nlev > 127u) d->nlev = 127;
-    d->fcut &= 127u; d->hpf &= 127u; d->chip &= 127u;
-    if (d->drive > 127u) d->drive = 127;
+    if (d->model >= HM_COUNT) d->model = HM_DRUM;
+    if (d->wave >= HW_COUNT) d->wave = HW_SINE;
+    if (d->click >= HC_COUNT) d->click = HC_OFF;
+    if (d->ftype >= HF_COUNT) d->ftype = HF_OFF;
+    d->coarse &= 127u; d->atk &= 127u; d->dec &= 127u; d->slope &= 127u; d->level &= 127u;
+    d->pamt &= 127u; d->pdec &= 127u; d->fmratio &= 127u; d->fmamt &= 127u; d->clvl &= 127u; d->ctone &= 127u;
+    d->cut &= 127u; d->res &= 127u; d->drive &= 127u; d->aux1 &= 127u; d->aux2 &= 127u; d->crush &= 127u;
 }
 static void dsu_fix_kit(dsu_kit_t *u)
 {
@@ -372,8 +368,9 @@ static void dsu_fix_kit(dsu_kit_t *u)
     for (i = 0; i < 8u; i++)
         if (u->name[i] && (u->name[i] < 32 || u->name[i] > 126))
             u->name[i] = ' ';
-    u->src %= DS_NKITS;
-    u->rsv[0] = u->rsv[1] = 0;
+    u->src %= DSU_NSRC;
+    u->rsv[0] &= 1u;
+    u->rsv[1] = 0;
     for (i = 0; i < DS_LANES; i++)
         dsu_fix_sound(&u->s[i]);
 }
