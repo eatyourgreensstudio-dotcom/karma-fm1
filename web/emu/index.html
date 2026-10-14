@@ -88,7 +88,7 @@ footer small { font-size: 11px; opacity: .8; }
   <span>Double-click (or <kbd>Shift</kbd>-click) a button to hold it down, click it again to let go</span>
 </p>
 
-<p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="cheatsheet.html" target="_blank" rel="noopener" style="color:inherit">Cheat sheet: where everything is</a></p>
+<p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="#" id="csopen" style="color:inherit">Cheat sheet: where everything is</a></p>
 
 <footer>
   A fork of <a href="https://github.com/isod89/sloop-fm1">SLOOP</a> by isod89, itself based on <a href="https://github.com/hugelton/Felucca">Felucca</a> by Leo Kuroshita, Hügelton Instruments · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · this page after Felucca's browser build and charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
@@ -492,6 +492,20 @@ async function switchOn() {
 document.getElementById("go").addEventListener("click", switchOn);
 document.getElementById("demo").addEventListener("click", () => send({ type: "demo" }));
 document.addEventListener("visibilitychange", () => send({ type: "visible", on: !document.hidden }));
+</script>
+<div id="csbox" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.75);padding:16px;box-sizing:border-box">
+<div style="position:relative;max-width:1220px;height:100%;margin:0 auto;background:#14121c;border-radius:10px;overflow:hidden">
+<button id="csclose" type="button" style="position:absolute;top:8px;right:8px;z-index:1;font:inherit;padding:6px 12px;border-radius:6px;border:1px solid #555;background:#222;color:#eee;cursor:pointer">Close ✕</button>
+<iframe id="csframe" title="Cheat sheet" style="width:100%;height:100%;border:0"></iframe>
+</div></div>
+<script>
+(function(){var b=document.getElementById('csbox'),f=document.getElementById('csframe');
+function show(e){e.preventDefault();if(!f.src)f.src='cheatsheet.html';b.style.display='block';}
+function hide(){b.style.display='none';}
+document.getElementById('csopen').addEventListener('click',show);
+document.getElementById('csclose').addEventListener('click',hide);
+b.addEventListener('click',function(e){if(e.target===b)hide();});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')hide();});})();
 </script>
 </body>
 </html>
