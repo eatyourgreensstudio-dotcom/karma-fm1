@@ -13,6 +13,6 @@ mkdir -p build/emu/fonts
 emcc -O2 -ffp-contract=off -std=gnu99 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -Itests \
     --no-entry -sSTANDALONE_WASM -sSTACK_SIZE=1048576 -sINITIAL_MEMORY=33554432 -sFILESYSTEM=0 \
     -o build/emu/sloop.wasm web/emu/sloop_web.c
-cp web/emu/index.html web/emu/worklet.js build/emu/
+cp web/emu/index.html web/emu/worklet.js web/emu/cheatsheet.html build/emu/
 cp web/emu/fonts/* build/emu/fonts/
 echo "emu: build/emu ($(wc -c < build/emu/sloop.wasm | tr -d ' ') B wasm)"
