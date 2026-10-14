@@ -56,6 +56,7 @@ static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", 
 static const char *const N_DASH[] = {"--"};
 static const char *const N_SYNC[] = {"INT", "USB", "TRS"};   /* G_SYNC: the tempo and PLAY / STOP from (seq.c mclk) */
 static const char *const N_GO[] = {"--", "GO"};
+static const char *const N_AGSCALE[] = {"MIN", "PHRY", "HARM", "MPEN", "DOR", "MAJ"};   /* ACID GEN: TB-3PO's scales */
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 static const char *const N_CHORD[] = {"OFF", "TRIAD", "7TH", "9TH", "SUS4", "POWER"};   /* seq.c CHORD_DEG */
@@ -65,7 +66,7 @@ static const char *const N_ENGNAME[] = {"ANALOG", "DIGITAL", "PHASE", "LOFI", "S
 #if FELUCCA_SLICE
                                              "SLICE",
 #endif
-                                        "PLAITS", "ELEMENTS",
+                                        "PLAITS", "ELEMENTS", "ACID",
 };
 _Static_assert(sizeof N_ENGNAME / sizeof N_ENGNAME[0] == NENGINES, "a name an engine");
 
@@ -204,6 +205,14 @@ static const param_desc_t GP[G_COUNT] = {
     [G_CLTEX] = PD("TEXT", F_PCT, 0, 127, 90),
     [G_CLFB] = PD("FDBK", F_PCT, 0, 127, 0),
     [G_CLFRZ] = PE("FRZ", N_ONOFF, 0),
+    [G_AGDENS] = PD("DENS", F_PCT, 0, 127, 89),   /* SEQ > ACID GEN (acid_gen.c): TB-3PO's 70 / 40 / 25 % */
+    [G_AGACC] = PD("ACC", F_PCT, 0, 127, 51),
+    [G_AGSLD] = PD("SLIDE", F_PCT, 0, 127, 32),
+    [G_AGSEED] = PD("SEED", F_INT, 0, 999, 0),
+    [G_AGSCALE] = PE("SCALE", N_AGSCALE, 0),
+    [G_AGOCT] = PD("OCT", F_INT, 1, 3, 2),
+    [G_AGROOT] = PD("ROOT", F_NOTE, 0, 11, 9),
+    [G_AGMUT] = PE("VARY", N_GO, 0),
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -436,6 +445,8 @@ static const page_t PAGES[] = {
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
+    {"ACID GEN", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGDENS, G_AGACC, G_AGSLD, G_AGSEED}},     /* TB-3PO's lines into the */
+    {"ACID GEN 2", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGSCALE, G_AGOCT, G_AGROOT, G_AGMUT}},  /* track (acid_gen.c) */
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},   /* REC button; TRACK LEVEL LEN PAN */
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},

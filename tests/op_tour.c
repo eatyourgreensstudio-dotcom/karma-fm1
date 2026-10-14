@@ -109,7 +109,7 @@ int main(int argc, char **argv)
     settings.palette = 4;
     palette_set(4);
     host_tracks_init();
-    _Static_assert(P_COUNT == TOUR_NP && G_COUNT == TOUR_NG && sizeof trk[0].step == 640 && sizeof trk[0].lock == 96 &&
+    _Static_assert(P_COUNT == TOUR_NP && G_COUNT >= TOUR_NG && sizeof trk[0].step == 640 && sizeof trk[0].lock == 96 &&
                    sizeof trk[0].fill == 16, "the pattern was read from this layout: read it again after a change");
     for (i = 0; i < NTRK; i++) {                    /* Ariel's pattern, as it stood in his simulator (op_tour_pattern.h) */
         if (i < NPART)
@@ -123,7 +123,7 @@ int main(int argc, char **argv)
         memcpy(trk[i].fill, &TOUR_FILL[i * 16u], 16);
         trk[i].seq_active = 1;
     }
-    for (i = 0; i < G_COUNT; i++)
+    for (i = 0; i < TOUR_NG; i++)                   /* (globals added since: their defaults) */
         song.g[i] = TOUR_G[i];
     if (trk[2].p[P_LEVEL] < 40)
         trk[2].p[P_LEVEL] = 96;                     /* (PLAITS stood at 8 of 127 in his mixer: up, to be heard) */

@@ -241,6 +241,8 @@ static uint16_t pad_lit[DRUM_LANES];                   /* pads and key LEDs: fra
 static uint8_t key_lit[27];                             /* menu NOTES, a synth track: frames its key stays lit */
 static uint8_t key_lit_trk = 0xFF;                      /* (the track key_lit is for) */
 static uint8_t op_note = 60, op_hit;                    /* the selected synth track: its last note, frames since (8 .. 0) */
+#include "acid_gen.c"             /* SEQ > ACID GEN: TB-3PO's acid lines */
+
 /* FX > CLOUD's SEND (G_CLSEND) is the selected track's send, on the drum track the selected sound's: the value on
  * the page follows the selection, and what the knob (or the editor) sets goes to that track / sound. Once a frame */
 static void cloud_ui_sync(void)
@@ -269,6 +271,7 @@ static void pads_tick(void)                             /* once a frame: the hit
         }
     fm1_irq_on();
     cloud_ui_sync();
+    acid_gen_sync();
     for (i = 0; i < DRUM_LANES; i++) {
         if ((hits >> i) & 1u) pad_lit[i] = 6;
         else if (pad_lit[i]) pad_lit[i]--;

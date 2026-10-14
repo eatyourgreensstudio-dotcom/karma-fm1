@@ -28,6 +28,7 @@ static inline int32_t soft_knee(int32_t y, int32_t k)   /* linear up to k, then 
 #include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0); SLOOP 2.4 */
 #include "eng_phys.c"           /* PHYS: physical models, from Felucca 1.0 (DaisySP, Rings: MIT); SLOOP 2.5 */
 #include "eng_elem.c"           /* ELEMENTS: Elements' exciters (Emilie Gillet, MIT) on PHYS's bank */
+#include "eng_acid.c"           /* ACID: X0X's TB-303 (Charles Vestal, GPL-3.0; Open303, MIT) */
 #include "eng_noise.c"          /* NOISE: from Felucca 1.0; SLOOP 2.5 */
 #include "eng_prism.c"          /* PRISM: models of Plaits (Emilie Gillet, MIT), fixed point: prism_dsp.c */
 
@@ -36,6 +37,7 @@ typedef union {
     fm6_note_t fm6[FM6_POLY];
     uint32_t phys[PHYS_ARENA / 4u];      /* eng_phys.c: two SYMP slots or three small ones; ELEMENTS: or one solo */
     prism_slot_t prism[NVOICE];          /* eng_prism.c: the state of SWARM and WAVE, a slot a voice */
+    acid_slot_t acid;                    /* eng_acid.c: the 303 */
 } eng_arena_t;
 static eng_arena_t eng_arena[NPART] __attribute__((section(".pool")));
 static uint8_t eng_arena_own[NPART];            /* the engine + 1 whose state is in it, 0 = none */
@@ -71,7 +73,7 @@ static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &EN
 #if FELUCCA_SLICE
                                                     &ENG_SLICE,
 #endif
-                                                    &ENG_PRISM, &ENG_ELEM,
+                                                    &ENG_PRISM, &ENG_ELEM, &ENG_ACID,
 };
 _Static_assert(ENGI_FM6 == 9u, "ENGINES[ENGI_FM6] is FM6");
 _Static_assert(ENGI_GRAIN == 8u && ENGI_PHYS == 10u && ENGI_NOISE == 11u && ENGI_SLICE == 12u, "ENGINES[] order");
