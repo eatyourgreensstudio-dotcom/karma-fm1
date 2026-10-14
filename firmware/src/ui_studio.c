@@ -525,7 +525,10 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
             if (ft_owns_press()) ;
             else if (!song.playing && arrangement_enabled && !arr_valid(&arrangement, arrangement_ready())) ui_message("EMPTY SECTION: REC");
             else transport_req = song.playing ? 2 : 1;
-        } else if (b == B_SEQ || b == B_EDIT) {
+        } else if (b == B_EDIT) {                       /* the sound's pages (HEX OSC ..) */
+            open_family(FAM_EDIT);
+            return;
+        } else if (b == B_SEQ) {
             drum_page = (uint8_t)((drum_page + 1u) % 2u);
             ui.msg_t = 0;
             ui.force = 1;

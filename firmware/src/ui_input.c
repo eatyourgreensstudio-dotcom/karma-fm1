@@ -656,9 +656,17 @@ static void layer_tap(uint32_t layer)
         break;
     case LY_ERASE:
     case LY_STEP:
-        if (on_drum_page()) {                             /* DRUMS: GRID <-> KIT */
+        if (on_drum_page() && layer == LY_ERASE) {        /* DRUMS: EDIT -> the sound's pages (HEX OSC ..) */
+            open_family(FAM_EDIT);
+            break;
+        }
+        if (on_drum_page()) {                             /* DRUMS: SEQ -> GRID <-> KIT */
             drum_page = (uint8_t)((drum_page + 1u) % 2u);
             ui.force = 1;
+            break;
+        }
+        if (layer == LY_STEP && !ui.home && cur_page()->graph == GR_HEX) {   /* the sound's pages: SEQ -> back */
+            studio_open(SC_DRUM);                         /* to the drums */
             break;
         }
         if (!ui.home && cur_page()->scope == SC_TRK && is_drum(TSEL)) {
