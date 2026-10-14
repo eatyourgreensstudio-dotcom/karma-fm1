@@ -784,6 +784,25 @@ static void op_band_member(uint32_t i, int32_t cx, int32_t fy, int up, int hl, i
 }
 
 /* ---------------------------------------------------------------- ARP --- */
+/* the track's character of the scenes, a little over half size, standing on (cx, fy) (nearest pixels) */
+static void op_sprite_scaled(uint32_t ti, int32_t cx, int32_t fy, uint16_t c)
+{
+    const uint16_t pal[16] = {0, OP_PUR, OP_PUR_D, C_WHITE, c, TE_COL[1], TE_COL[3], TE_COL[0], C_BLACK, OP_SKIN};
+    const uint8_t *d = ti == 0u ? OP_SPR_BUDDHA : ti == 1u ? OP_SPR_GORILLA : OP_SPR_SAUCER;
+    int32_t w = ti == 2u ? OP_SPR_SAUCER_W : OP_SPR_W, h = ti == 2u ? OP_SPR_SAUCER_H : OP_SPR_H;
+    int32_t k = ti == 2u ? 184 : 142, ow = w * k >> 8, oh = h * k >> 8, x, y;   /* of 256 */
+    if (ti == 2u)
+        fy -= 4;                                    /* (the saucer hovers) */
+    for (y = 0; y < oh; y++) {
+        const uint8_t *row = d + (uint32_t)((y << 8) / k) * (uint32_t)(w / 2);
+        for (x = 0; x < ow; x++) {
+            uint32_t sx = (uint32_t)((x << 8) / k), v = (row[sx >> 1] >> ((sx & 1u) * 4u)) & 15u;
+            if (v)
+                cv_pset(cx - ow / 2 + x, fy - oh + 1 + y, pal[v]);
+        }
+    }
+}
+
 /* the ARP page: the arp as stepping stones, one a note in the order it plays them (the keys held, else C E G to
  * show the shape), high for a high note; the track's character hops to the stone of each note it plays. KNOB 1
  * (MODE, blue) the stones' order: up, down, up and down, shuffled, as played; KNOB 2 (RATE, green) the grid under
@@ -842,7 +861,7 @@ static void op_arp_scene(const track_t *t)
     }
     if (hi - lo < 12)
         hi = lo + 12;
-#define AY(nt) (108 - ((int32_t)(nt) - lo) * 46 / (hi - lo))
+#define AY(nt) (112 - ((int32_t)(nt) - lo) * 34 / (hi - lo))
     sp = 216 / (int32_t)n;
     x0 = 12 + (216 - sp * (int32_t)n) / 2;
     for (k = 1; k * 12u <= (uint32_t)(hi - lo); k++)      /* KNOB 3: the octaves */
@@ -881,11 +900,7 @@ static void op_arp_scene(const track_t *t)
         int32_t xb = x0 + (int32_t)pos * sp + sp / 2, yb = AY(seq[pos]) - 1, u = 6 - (int32_t)op_arp_hop;
         cx = op_arp_hop ? xa + (xb - xa) * u / 6 : xb;
         fy = op_arp_hop ? ya + (yb - ya) * u / 6 - (SINE[u * 512 / 6] * 12 >> 15) : yb;
-        op_k = 2;
-        op_ink = live ? OP_PUR : OP_PUR_D;
-        op_band_member(ti, cx, fy, 0, 0, 0, live ? TE_COL[ti] : TE_DIM[ti]);
-        op_ink = OP_PUR;
-        op_k = 3;
+        op_sprite_scaled(ti, cx, fy, TE_COL[ti]);
     }
     if (op_arp_hop)
         op_arp_hop--;
