@@ -17,6 +17,10 @@ typedef struct {
     uint16_t z0, nz;
 } smp_set_t;
 #include "felucca_samples.h"
+/* a byte of sample data at off from SMP_DATA: the built-in sets', or (off rebased, smp_user_scan) a user slot's in
+ * flash, outside the array. Through an integer, so that no compiler takes the array's size for the reach of the
+ * read (with no built-in sets SMP_DATA is one byte long) */
+#define SMP_AT(off) (*(const uint8_t *)((uintptr_t)SMP_DATA + (uint32_t)(off)))
 
 static const int16_t IMA_STEP[89] = {
     7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
@@ -113,7 +117,7 @@ static inline const smp_zone_t *smp_zone(uint32_t zi)
  * index, s[2] previous sample, s[3] current sample, s[4] zone, s[5] step Q16 */
 static inline int32_t sample_next(const smp_zone_t *z, voice_t *v, int loop)
 {
-    uint32_t pos = v->ph[0], b = SMP_DATA[z->off + (pos >> 1)];
+    uint32_t pos = v->ph[0], b = SMP_AT(z->off + (pos >> 1));
     uint32_t code = (pos & 1u) ? (b >> 4) : (b & 15u);
     int32_t step = IMA_STEP[(uint32_t)v->s[1] <= 88u ? v->s[1] : 88], vd = step >> 3;
     if (code & 4u)

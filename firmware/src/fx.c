@@ -848,7 +848,7 @@ static void texture_reset(uint32_t src)
 /* USR k: the next sample of its first zone, looped (sample_next's decoder, its own state) */
 static inline int32_t tx_usr_next(const smp_zone_t *z)
 {
-    uint32_t pos = tx.upos, b = SMP_DATA[z->off + (pos >> 1)];
+    uint32_t pos = tx.upos, b = SMP_AT(z->off + (pos >> 1));
     uint32_t code = (pos & 1u) ? (b >> 4) : (b & 15u);
     int32_t step = IMA_STEP[(uint32_t)tx.ui <= 88u ? tx.ui : 88], vd = step >> 3;
     if (code & 4u) vd += step;

@@ -49,6 +49,9 @@ CC0_SETS = [("PIANO", "piano"), ("BASS", "oneshot"), ("VIBES", "oneshot"), ("HOR
 # the instrument sets built in: none (this firmware keeps the flash for its synthesis engines; SLOOP: all seven,
 # 300 KB). The SAMPLE engine plays the drum kit and the user's own sets. The key of the cache holds it.
 INSTRUMENT_SETS = ()
+# the sampled GM drum kit (the CC0 recordings, 86 KB): out, as the instruments; the drum track's kits 0..4 are
+# synthesised now (firmware/src/hex_drums.c)
+GM_KIT_SAMPLES = False
 MEASURED_TUNING = ()                         # sets recorded off A440 (measured near the named note)
 
 # the preset of each set: name, {SET (filled in), TUNE, BITS, LOOP (filled in), CUT, -, DRV, -}, env, mono,
@@ -378,11 +381,11 @@ class Builder:
         for name, z0, nz in sets:
             L.append(f'    {{"{name}", {z0}, {nz}}},')
         if not sets:
-            L.append('    {"NONE", 0, 1},')
+            L.append('    {"SAMPLER", 0, 1},')
         L.append("};")
         L.append(f"#define SMP_NSETS {max(1, len(sets))}")
         L.append("static const preset_t SMP_PRESET_TABLE[] = {")
-        named = sets or [("NONE", 0, 0)]
+        named = sets or [("SAMPLER", 0, 0)]
 
         def preset(i, k, pname, e, env, mono, fx, more):
             e = list(e)
@@ -464,7 +467,8 @@ def main(out):
         for name, kind in CC0_SETS:
             if kind != "kit" and name in INSTRUMENT_SETS:   # the CC0 KIT feeds the GM kit
                 b.cc0_set(name, kind)
-    b.gm_kit(have_cc0)
+    if GM_KIT_SAMPLES:                              # (2026-10-14: out; the drum track's first kits are HEX)
+        b.gm_kit(have_cc0)
     if os.environ.get("FELUCCA_SLICE") == "1":       # SLICE's BREAK: only when that engine is built
         b.slice_break()                             # last: the sets' offsets stay as they were
     text = b.header()

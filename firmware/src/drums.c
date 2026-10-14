@@ -8,8 +8,9 @@
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
 #define NDRUM 6
 #include "drum_synth.c"       /* synthesised kits (DS_KITS) */
-/* P_E0 was unused on the drum track: it holds the kit. 0..4: the GM sample kit and its four
- * treatments (as before: old projects keep their kit), 5..: the synthesised kits, then (2.4) USR1..USR4:
+#include "hex_drums.c"        /* HEX kits (the first five) */
+/* P_E0 was unused on the drum track: it holds the kit. 0..4: the HEX kits (hex_drums.c; they took the places of the
+ * GM sample kit and its four treatments, gone with the samples), 5..: the synthesised kits, then (2.4) USR1..USR4:
  * a user sample slot as a kit (the web editor's DRUM KIT: a sound per lane, zone lo..hi = the lane's note),
  * and USR3+4: one kit over the slots USR3 and USR4 (a lane's sound in either) */
 #define DRUM_SAMPLED 5u
@@ -17,10 +18,10 @@
 #define DRUM_PAIR (DRUM_USR + SMP_USER_SLOTS)   /* USR3+4: one kit in two slots (the editor splits it), ~15 s */
 #define DRUM_SYN (DRUM_PAIR + 1u)                /* SLOOP 2.5: SYN1..SYN4, your synthesised kits (drum_synth.c dsu) */
 #define DRUM_KITS (DRUM_SYN + DSU_N)
-static const char *const DRUM_KIT_NAMES[] = {"ACOUSTIC", "DEEP", "TIGHT", "BRIGHT", "DUST", DS_KIT_NAME_LIST,
+static const char *const DRUM_KIT_NAMES[] = {"HEX BOOM", "HEX ACID", "HEX METAL", "HEX GLITCH", "HEX ROOM", DS_KIT_NAME_LIST,
                                              "USR1", "USR2", "USR3", "USR4", "USR3+4",
                                              "SYN1", "SYN2", "SYN3", "SYN4"};
-static const char *const DRUM_KIT_STYLES[] = {"STUDIO", "SOFT", "PUNCHY", "BRIGHT", "DUSTY", DS_KIT_STYLE_LIST,
+static const char *const DRUM_KIT_STYLES[] = {"ELECTRO", "TECHNO", "INDUSTRIAL", "GLITCH", "SOFT", DS_KIT_STYLE_LIST,
                                               "YOUR KIT", "YOUR KIT", "YOUR KIT", "YOUR KIT", "BIG KIT",
                                               "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH", "YOUR SYNTH"};
 _Static_assert(sizeof(DRUM_KIT_NAMES) / sizeof(DRUM_KIT_NAMES[0]) == DRUM_KITS, "a name per kit");
@@ -49,6 +50,7 @@ static struct {
     int32_t filter[NDRUM], env[NDRUM];
     uint8_t synth[NDRUM];        /* the voice plays a synthesised kit (ds[]) */
     dsv_t ds[NDRUM];
+    hex_v_t hx[NDRUM];           /* .. or a HEX kit (synth[] 2) */
     volatile uint16_t hits;      /* bit per lane hit since the UI last looked (pads, key LEDs) */
     volatile uint8_t kick;       /* a kick was hit (fx.c DUCK) */
     int32_t a0, a1;              /* the drum track's mute / solo attenuation over this block (fx.c), Q15, 0 = heard */
@@ -194,6 +196,7 @@ static void click_render(int32_t *ml, int32_t *mr, uint32_t n)
 /* a synthesised voice: note on the 16 sounds snd (a factory kit, SYN1..4), the oldest voice stolen */
 static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel, uint32_t kit, const dsnd_t *snd, uint32_t crush)
 {
+    const hex_snd_t *hex = kit < DRUM_SAMPLED ? HEX_KITS[kit].s : 0;   /* (a HEX kit: snd unused) */
     voice_t *v = &drums.v[0];
     uint32_t i;
     if (note == 42u || note == 44u)                 /* hi-hat choke */
@@ -218,10 +221,13 @@ static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel,
     v->active = 1;
     v->s[7] = 0;
     v->age = ++drums.age;
-    drums.synth[i] = 1;
+    drums.synth[i] = hex ? 2 : 1;
     drums.lane[i] = (uint8_t)(note < 128u ? lane_of_note(note) : 0u);
     drums.kit[i] = (uint8_t)kit;
-    ds_on(&drums.ds[i], snd, crush, note, vel);
+    if (hex)
+        hex_on(&drums.hx[i], hex, note, vel);
+    else
+        ds_on(&drums.ds[i], snd, crush, note, vel);
 }
 /* the editor's audition (editor_dsyn.c DSYN_PLAY): queued, played by the audio ISR (drum_audition_poll) */
 static volatile uint8_t dsu_aud_k, dsu_aud_lane, dsu_aud_vel;
@@ -266,7 +272,10 @@ static void drum_on(uint32_t note, uint32_t vel)
         }
         if (zid < 0)
             return;                                 /* (an empty slot, or no sound on this lane) */
-    } else if (kit >= DRUM_SAMPLED) {               /* synthesised kit */
+    } else if (kit < DRUM_SAMPLED) {                /* a HEX kit */
+        drum_synth_on(note, vel, kit, 0, 0);
+        return;
+    } else {                                        /* synthesised kit */
         drum_synth_on(note, vel, kit, DS_KITS[kit - DRUM_SAMPLED].s, DS_KITS[kit - DRUM_SAMPLED].crush);
         return;
     }
@@ -362,7 +371,7 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
             continue;
         drum_voice_sends(k, mono != 0, &send, &dsend);
         csend = drum_cloud[drums.lane[k] % DRUM_LANES] * 258;   /* the sound's own send to the CLOUD (cloud.c) */
-        if (!ds_render(&drums.ds[k], ds_buf, m))
+        if (!(drums.synth[k] == 2 ? hex_render(&drums.hx[k], ds_buf, m) : ds_render(&drums.ds[k], ds_buf, m)))
             v->active = 0;
         for (i = 0; i < m; i++) {
             int32_t s = mulq15(ds_buf[i], mulq15(lvl, 32767 - drums.a0 - (((drums.a1 - drums.a0) * (int32_t)i) >> CTL_LOG2)));
