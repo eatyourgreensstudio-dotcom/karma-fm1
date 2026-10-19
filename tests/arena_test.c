@@ -32,12 +32,13 @@ static uint64_t fnv(uint64_t h, const int32_t *x, uint32_t n)
 }
 
 typedef struct { uint8_t e, pi; int8_t model; const char *name; } cfg_t;   /* model >= 0: PHYS MODEL forced */
-static const cfg_t CFG[] = {
-    {ENGI_GRAIN, 0, -1, "GRAIN LOFI CLOUD"}, {ENGI_GRAIN, 4, -1, "GRAIN SHIMMER"},
-    {ENGI_FM6, 0, -1, "FM6 TINE EP"}, {ENGI_FM6, 2, -1, "FM6 ROUND BASS"},
-    {ENGI_PHYS, 0, 0, "PHYS MODAL"}, {ENGI_PHYS, 2, 1, "PHYS STRING"}, {ENGI_PHYS, 5, 2, "PHYS MEMB"},
-    {ENGI_PHYS, 7, 3, "PHYS SYMP"}, {ENGI_PHYS, 8, 3, "PHYS SYMP HARP"},
+static const cfg_t CFG[] = {   /* (2026-10-19: the engines that are left: ACID, JUNO, PLAITS, ELEMENTS) */
+    {ENGI_ACID, 0, -1, "ACID TB ACID"}, {ENGI_JUNO, 1, -1, "JUNO STRING"}, {ENGI_JUNO, 3, -1, "JUNO BASS"},
+    {ENGI_PRISM, 6, -1, "PLAITS SUPER SWARM"}, {ENGI_PRISM, 11, -1, "PLAITS TABLE SWEEP"},
+    {ENGI_ELEM, 0, 0, "ELEMENTS BOUNCE"}, {ENGI_ELEM, 3, 1, "ELEMENTS PICK"}, {ENGI_ELEM, 5, 2, "ELEMENTS BOW (solo)"},
+    {ENGI_ELEM, 8, 3, "ELEMENTS BLOW (solo)"},
 };
+static const uint8_t LIVE[] = {ENGI_ACID, ENGI_JUNO, ENGI_PRISM, ENGI_ELEM};
 #define NCFG (sizeof CFG / sizeof CFG[0])
 
 static void load(track_t *t, const cfg_t *c)
@@ -175,7 +176,7 @@ int main(int argc, char **argv)
     for (b = 0; b < NCFG; b++)
         for (a = 0; a < NCFG; a++) {
             uint64_t h;
-            if (a == b || (CFG[a].e == CFG[b].e && CFG[a].e != ENGI_PHYS))
+            if (a == b || (CFG[a].e == CFG[b].e && CFG[a].e != ENGI_ELEM))
                 continue;                               /* (the same engine keeps its arena: not a takeover) */
             h = in_child(after, a, b);
             pairs++;
@@ -186,7 +187,7 @@ int main(int argc, char **argv)
                 check(0, what);
             }
         }
-    snprintf(what, sizeof what, "arena: every engine after every other one (%u pairs, both PHYS layouts) bit-identical to a fresh start", pairs);
+    snprintf(what, sizeof what, "arena: every engine after every other one (%u pairs, both ELEMENTS layouts) bit-identical to a fresh start", pairs);
     check(same == pairs, what);
 
     /* 3. the long random session (2. is counted all along) */
@@ -197,17 +198,17 @@ int main(int argc, char **argv)
         memset(held, 0, sizeof held);
         host_tracks_init();
         for (p = 0; p < NPART; p++)
-            host_preset(&trk[p], 0, 0);
+            host_preset(&trk[p], eng_default(&trk[p]), 0);
         for (blk = 0; blk < nblk; blk++) {
             if (frnd(64) == 0) {                        /* ~ every 46 ms an event */
                 uint32_t ev = frnd(100);
                 p = frnd(NPART);
                 if (ev < 12) {                          /* engine and preset, the UI's way */
-                    uint32_t e = frnd(argc > 2 ? (uint32_t)atoi(argv[2]) : NENGINES);
+                    uint32_t e = LIVE[frnd(sizeof LIVE)];
                     host_preset_req(&trk[p], e, frnd(ENGINES[e]->npresets));
                     switches++;
-                } else if (ev < 20) {                   /* PHYS: MODEL under the notes (layout flips) */
-                    if (trk[p].engine == ENGI_PHYS) {
+                } else if (ev < 20) {                   /* ELEMENTS: MODEL under the notes (layout flips) */
+                    if (trk[p].engine == ENGI_ELEM) {
                         trk[p].p[P_E0] = (int16_t)frnd(4);
                         flips++;
                     }
@@ -276,7 +277,7 @@ int main(int argc, char **argv)
             fz = 0x13579BDFu;
             host_tracks_init();
             for (p = 0; p < NPART; p++) {
-                host_preset(&trk[p], ENGI_PHYS, p == 0 ? 2u : p == 1 ? 7u : 0u);
+                host_preset(&trk[p], ENGI_ELEM, p == 0 ? 3u : p == 1 ? 5u : 0u);
             }
             for (blk = 0; blk < 120u * (FS / CTL); blk++) {
                 if (frnd(64) == 0) {

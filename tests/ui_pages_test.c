@@ -74,6 +74,7 @@ static int up_load_to(track_t *t, uint32_t k) { (void)t; (void)k; return 0; }
 static uint32_t up_count(void) { return 2; }
 static uint32_t up_nth(uint32_t n) { return n; }
 static uint32_t up_rank(uint32_t s) { return s; }
+static uint32_t up_engine(uint32_t k) { return k ? ENGI_PRISM : ENGI_ACID; }   /* (MY LEAD on track 1, MY PAD on 3) */
 static void up_name(uint32_t k, char *b) { str_cpy(b, k ? "MY PAD" : "MY LEAD", 13); }
 static void up_slot_label(char *b, uint32_t k) { fmt_int(b, (int32_t)k + 1); }
 static void up_ui(uint32_t op, uint32_t k) { (void)op; (void)k; }
@@ -134,7 +135,7 @@ int main(int argc, char **argv)
                 fails++;
             }
         for (e = 0; e < NENGINES; e++)
-            for (k = 0; k < ENGINES[e]->npresets; k++) {
+            for (k = 0; k < ENGINES[e]->npresets && ENGINES[e] != &ENG_GONE; k++) {
                 for (hits = 0, n = 0; n < NBANK; n++)
                     hits += BANK[n].e == e && bank_pi[n] == k;
                 if (hits != 1) {
@@ -142,6 +143,19 @@ int main(int argc, char **argv)
                     fails++;
                 }
             }
+    }
+    {   /* each track's list: its engines only (track 1 ACID + JUNO, 2 ELEMENTS, 3 PLAITS) */
+        uint32_t t, n, k, ok = 1, seen[NENGINES] = {0};
+        for (t = 0; t < NPART; t++)
+            for (n = 0; n < pl_total(&trk[t]); n++) {
+                uint32_t e = preset_at_of(&trk[t], n, &k);
+                if (e < NENGINES) {
+                    ok &= eng_allowed(&trk[t], e);
+                    seen[e] |= 1u << t;
+                }
+            }
+        check(ok && seen[ENGI_ACID] == 1u && seen[ENGI_JUNO] == 1u && seen[ENGI_ELEM] == 2u && seen[ENGI_PRISM] == 4u,
+              "PRESETS: track 1 lists ACID and JUNO, track 2 ELEMENTS, track 3 PLAITS, nothing else");
     }
     panel = PANEL_DEFAULT;
     layers_init();
@@ -1082,19 +1096,19 @@ int main(int argc, char **argv)
         {   /* 2.6, after Felucca 1.5.1: MIDI Program Change (queued by seq.c, loaded here) and FX + OCT- / OCT+: the THROWs */
             uint8_t e0 = trk[1].eng_req, p0 = trk[1].preset;
             int16_t k0 = TDRUM->p[P_E0];
-            uint32_t k, tot = NBANK + up_count();
+            uint32_t k, tot = pl_total(&trk[1]), x0 = pl_entry(&trk[1], 0);
             go_home(); frame();
             pc_req[1] = 1;                                /* PC 0 on track 2's channel: the first sound of the list */
             frame();
-            check(trk[1].eng_req == BANK[0].e && trk[1].preset == bank_pi[0] && !strncmp(ui.msg, "T2 PROG 0", 9),
-                  "MIDI Program Change 0: track 2 takes the first sound of the PRESETS list (T2 PROG 0)");
+            check(trk[1].eng_req == BANK[x0].e && trk[1].preset == bank_pi[x0] && !strncmp(ui.msg, "T2 PROG 0", 9),
+                  "MIDI Program Change 0: track 2 takes the first sound of its PRESETS list (T2 PROG 0)");
             pc_req[3] = 3;                                /* PC 2 on the drum channel: kit 2 */
             frame();
             check(TDRUM->p[P_E0] == 2, "MIDI Program Change on the drum channel: kit 2");
             pc_req[1] = (uint8_t)(tot + 1u);              /* past the end: nothing */
             k = trk[1].eng_req;
             frame();
-            check(trk[1].eng_req == k && trk[1].preset == bank_pi[0], "MIDI Program Change past the list: ignored (no wrap)");
+            check(trk[1].eng_req == k && trk[1].preset == bank_pi[x0], "MIDI Program Change past the list: ignored (no wrap)");
             TDRUM->p[P_E0] = k0;
             set_engine_of(&trk[1], e0); apply_preset_to(&trk[1], p0); trk[1].engine = trk[1].eng_req;
             frames(4);
@@ -1333,12 +1347,26 @@ int main(int argc, char **argv)
         }
         go_home(); frames(2);
     }
-    {   /* JUNO on track 3: its two EDIT pages */
+    {   /* the PRESETS page on each track: its engines' sounds only */
+        uint32_t t, k;
+        static const char *const NM[3] = {"browse-t1", "browse-t2", "browse-t3"};
+        for (t = 0; t < 3u; t++) {
+            go_home(); frames(2);
+            track_select(t); frames(2);
+            for (k = 0; k < NPAGES; k++)
+                if (PAGES[k].graph == GR_BROWSE)
+                    ui.page = (uint8_t)k;
+            ui.home = 0; ui.force = 1; frames(3);
+            ppm(NM[t]);
+        }
+        go_home(); frames(2);
+    }
+    {   /* JUNO on track 1: its two EDIT pages */
         go_home(); song.playing = 0; ly_lock = LY_PLAY;
-        track_select(2); frames(2);
-        host_preset(&trk[2], ENGI_JUNO, 1); frames(2);
-        check(!strcmp(ENGINES[trk[2].engine]->name, "JUNO"), "JUNO: the preset loads the engine");
-        trk[2].p[P_MUTE] = 0; ui.fam_last[FAM_EDIT] = 0;
+        track_select(0); frames(2);
+        host_preset(&trk[0], ENGI_JUNO, 1); frames(2);
+        check(!strcmp(ENGINES[trk[0].engine]->name, "JUNO"), "JUNO: the preset loads the engine");
+        trk[0].p[P_MUTE] = 0; ui.fam_last[FAM_EDIT] = 0;
         open_family(FAM_EDIT); ui.force = 1; frames(3);
         ppm("juno-dco");
         encs[panel.enc[EN_SELECT]] = 1; ui.force = 1; frames(3);

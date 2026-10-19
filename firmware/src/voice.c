@@ -302,31 +302,12 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
         v->ph[0] = ph0;                                 /* (resetting them clicks) */
         v->ph[1] = ph1;
         v->ph[2] = ph2;
-        if (e == &ENG_ANALOG) {
-            v->s[0] = s0;
-            v->s[1] = s1;
-        } else if (e == &ENG_DIGITAL) {
-            v->s[5] = s5;
-            v->s[6] = s6;
-            v->s[7] = s7;                               /* op 4 phase; the modulator envelope restarts */
-        } else if (e == &ENG_LOFI) {
-            v->s[0] = s0;
-            v->s[4] = s4;
-        } else if (e == &ENG_TRIO) {
-            v->s[0] = s0;                               /* filter */
-            v->s[1] = s1;
-            v->s[4] = s4;                               /* the sample waiting for its step corrections */
-        } else if (e == &ENG_PHASE) {
-            v->s[0] = s0;                               /* the WAVE / WAVE2 toggles go with the phases kept */
-            v->s[1] = s1;
-        } else if (e == &ENG_NOISE) {
-            v->s[0] = s0;                               /* the filter and the colour poles (2.5) */
-            v->s[1] = s1;
-            v->s[4] = s4;
-            v->s[5] = s5;
-            v->s[6] = s6;
-            v->s[7] = s7;
-        }
+        v->s[0] = s0;                                   /* (the engines' filter states: kept) */
+        v->s[1] = s1;
+        v->s[4] = s4;
+        v->s[5] = s5;
+        v->s[6] = s6;
+        v->s[7] = s7;
     }
 }
 
@@ -603,9 +584,6 @@ static void engine_block(track_t *t)
             v->stage = 0;
             v->env = v->env_out = 0;
         }
-        if (t->xf_on && t->eng_req == ENGI_FM6 && ((fm6_pend >> ((uint32_t)(t - trk) % NPART)) & 1u))
-            return;                                     /* (2.6) FM6: the new notes wait for the preset's patch
-                                                         * (eng_fm6.c fm6_poll, main loop): not a note of the old */
         t->engine = t->eng_req % NENGINES;
         t->xf_on = 0;
         t->pold = 0;

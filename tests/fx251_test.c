@@ -89,9 +89,10 @@ static void setup(void)
         trk[i].p[P_REV] = trk[i].p[P_CHOR] = trk[i].p[P_DLY] = 0;
         trk[i].p[P_LEVEL] = 100;
     }
-    host_preset(&trk[0], 0, 0);
-    trk[0].p[P_E0] = 0, trk[0].p[P_E1] = 0, trk[0].p[P_E2] = 0, trk[0].p[P_E3] = 0;   /* SAW, one oscillator */
-    trk[0].p[P_E4] = 127, trk[0].p[P_E5] = 0, trk[0].p[P_E6] = 0, trk[0].p[P_E7] = 0;  /* open, no RES, DRV, KTR */
+    host_preset(&trk[0], ENGI_JUNO, 0);
+    trk[0].p[P_REV] = trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0;          /* (the preset's sends: off again) */
+    trk[0].p[P_E0] = 0, trk[0].p[P_E1] = 0, trk[0].p[P_E2] = 0, trk[0].p[P_E3] = 0;   /* JUNO: SAW, no PW, SUB, NOISE */
+    trk[0].p[P_E4] = 127, trk[0].p[P_E5] = 0, trk[0].p[P_E6] = 0, trk[0].p[P_E7] = 0;  /* open, no RES, ENV, CHORUS */
     trk[0].p[P_ATK] = 0, trk[0].p[P_DEC] = 0, trk[0].p[P_SUS] = 127, trk[0].p[P_REL] = 0;
     trk[0].p[P_ED_FLT] = trk[0].p[P_ED_PIT] = trk[0].p[P_ED_SHP] = 0;
     trk[0].p[P_LD_PIT] = trk[0].p[P_LD_FLT] = trk[0].p[P_LD_SHP] = trk[0].p[P_LD_AMP] = 0;
@@ -168,35 +169,6 @@ static void t_insert(void)
     }
 }
 
-static void t_filter(void)
-{
-    /* each type's gain at 55 Hz (A1's fundamental), 660 Hz (the 12th harmonic, about the cutoff) and 3.3 kHz (the
-     * 60th) against the same saw unfiltered (TYPE LP, cutoff fully open), from the same start (fork_dry) */
-    static const double HZ[3] = {55, 660, 3300};
-    double g[3][3], d[3];
-    uint32_t a = 200u * CTL, b = 600u * CTL, ty, k;
-    for (ty = 0; ty < 3u; ty++) {
-        setup();
-        trk[0].p[P_E4] = 127;
-        trk_note_on(&trk[0], 33, 100);                /* A1 (55 Hz): a saw, every harmonic */
-        fork_dry(600);
-        trk[0].p[P_E4] = 64, trk[0].p[P_FTYPE] = (int16_t)ty;   /* cutoff ~ 650 Hz; LP BP HP */
-        render(600);
-        for (k = 0; k < 3u; k++)
-            g[ty][k] = 10 * log10(tonew(a, b, HZ[k]));
-        memcpy(out_l, shared_dry, 600u * CTL * 4u);
-        for (k = 0; k < 3u; k++) {
-            d[k] = 10 * log10(tonew(a, b, HZ[k]));
-            g[ty][k] -= d[k];
-        }
-        printf("  %s: 55 Hz %+.1f dB, 660 Hz %+.1f dB, 3.3 kHz %+.1f dB\n", N_FTYPE[ty], g[ty][0], g[ty][1], g[ty][2]);
-    }
-    /* two poles: 12 dB an octave (LP, HP), 6 on each side (BP); 3.3 kHz is 2.3 octaves over the cutoff, 55 Hz 3.6 under */
-    check(g[0][2] < -20 && g[2][0] < -30 && g[2][2] > -3,
-          "ANALOG filter TYPE: LP keeps the lows (3.3 kHz 20 dB down), HP the highs (55 Hz 30 dB down)");
-    check(g[1][1] > g[1][0] + 12 && g[1][1] > g[1][2] + 6, "ANALOG filter TYPE BP: the middle over both ends");
-    check(g[0][0] > -1.5 && g[0][0] < 1.5, "  (LP below its cutoff: as the open filter, within 1.5 dB)");
-}
 
 static void t_esync(void)
 {
@@ -566,23 +538,25 @@ static void t_throw(void)
 }
 static void t_clicks(void)
 {
-    static const uint8_t E[5][3] = {{0, 2, 7}, {7, 0, 3}, {2, 3, 1}, {3, 4, 1}, {9, 7, 2}};   /* engine, from, to */
+    static const uint8_t E[5][3] = {{ENGI_JUNO, 0, 5}, {ENGI_ACID, 0, 2}, {ENGI_PRISM, 1, 6}, {ENGI_ELEM, 3, 0},
+                                    {ENGI_JUNO, 2, 9}};   /* engine, from, to */
     double worst = 0, base, sw;
     uint32_t k;
     for (k = 0; k < 5u; k++) {
         setup();
         host_preset(&trk[0], E[k][0], E[k][1]);
         trk[0].p[P_LEVEL] = 100;
+        trk[0].p[P_REV] = trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0;   /* (the click is the point: no tails for the next test) */
         trk_note_on(&trk[0], 48, 110), trk_note_on(&trk[0], 55, 110), trk_note_on(&trk[0], 60, 110);
         render(360);
         base = d2_of(260u * CTL, 360u * CTL);
         sound_change(&trk[0]);                          /* as ui.c apply_preset_to */
         host_preset_req(&trk[0], E[k][0], E[k][2]);
+        trk[0].p[P_REV] = trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0;
         panic_req |= 1u;
         for (sw = 0, k = k; sw == 0; ) {
             uint32_t b;
             for (b = 0; b < 20u; b++) {
-                fm6_poll();
                 render(1);
                 sw = d2_of(0, CTL) > sw ? d2_of(0, CTL) : sw;
             }
@@ -591,11 +565,12 @@ static void t_clicks(void)
             worst = sw / (base + 50);
     }
     printf("  a preset over held notes: the switch's worst sample step %.1f x the note's own\n", worst);
-    check(worst < 1.5, "a preset loaded over held notes: they fade out with their own sound (no click: WHEEL, PHASE, FM6..)");
+    check(worst < 1.5, "a preset loaded over held notes: they fade out with their own sound (no click)");
     {
         double lp, ms;
         setup();
-        host_preset(&trk[0], 0, 2);
+        host_preset(&trk[0], ENGI_JUNO, 3);             /* JUNO BASS (no sends) */
+        trk[0].p[P_REV] = trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0;
         trk[0].p[P_LEVEL] = 110;
         trk_note_on(&trk[0], 40, 120);
         render(360);
@@ -617,7 +592,6 @@ int main(void)
 {
     setvbuf(stdout, 0, _IONBF, 0);
     t_insert();
-    t_filter();
     t_esync();
     t_lfo2();
     t_mutes();

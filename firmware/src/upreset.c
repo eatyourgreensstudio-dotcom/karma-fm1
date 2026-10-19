@@ -245,6 +245,8 @@ static int up_load_to(track_t *t, uint32_t k)       /* user preset k into track 
     if (!up_used(k) || is_drum(t))
         return 1;
     r = up_rec(k);
+    if (!eng_allowed(t, r->engine))                     /* (a sound of an engine gone, or of another track) */
+        return 1;
     up_values(r, v);
     for (i = 0; i < P_COUNT; i++)                       /* (LEN etc. of a kept pattern changed too, and */
         if (param_kept(i))                              /* a preset pattern then counted as edited) */
@@ -257,7 +259,6 @@ static int up_load_to(track_t *t, uint32_t k)       /* user preset k into track 
         t->p[i] = v[i];
     t->preset = 0;
     fm1_irq_on();
-    fm6_track_loaded(t);                                /* FM6: a user preset holds the PTCH and the macros */
     t->user = (uint8_t)(k + 1u);
     if (t == TSEL)
         sync_reload = 1;
@@ -266,6 +267,7 @@ static int up_load_to(track_t *t, uint32_t k)       /* user preset k into track 
 }
 static int up_load(uint32_t k) { return up_load_to(TSEL, k); }   /* into the selected track */
 
+static uint32_t up_engine(uint32_t k) { return up_used(k) ? up_rec(k)->engine : NENGINES; }   /* its engine */
 static uint32_t up_count(void)                 /* used slots */
 {
     uint32_t k, n = 0;

@@ -202,9 +202,11 @@ int main(void)
     for (t = 0; t < NTRK; t++)
         ok &= track_ok_v2(&q.t[t], &v2.t[t], t);
     bad += check("FUN2 -> FUN6: every parameter mapped, SLICER OFF, CHORD OFF (4 tracks)", ok);
-    bad += check("FUN2 -> FUN6: engine bytes kept (WHEEL 7, ANALOG 0, TRIO 6), drum 0",
-                 q.t[0].engine == 7 && q.t[1].engine == 0 && q.t[2].engine == 6 && q.t[3].engine == 0 &&
-                 str_eq(ENGINES[7]->name, "WHEEL") && str_eq(ENGINES[6]->name, "TRIO") && NENGINES > 8);
+    bad += check("FUN2 -> FUN6: engine bytes kept (old WHEEL 7, ANALOG 0, TRIO 6), drum 0",
+                 q.t[0].engine == 7 && q.t[1].engine == 0 && q.t[2].engine == 6 && q.t[3].engine == 0);
+    proj_apply(&q, 1);                                  /* (2026-10-19: those engines are gone: each track its own) */
+    bad += check("FUN2 applied: a gone engine -> the track's own (ACID, ELEMENTS, PLAITS)",
+                 trk[0].eng_req == ENGI_ACID && trk[1].eng_req == ENGI_ELEM && trk[2].eng_req == ENGI_PRISM);
 
     /* a FUN4 image (SLOOP 2.0 .. 2.3, as stored) -> FUN5: the same, zero nudges, every lock free */
     memset(&v4, 0, sizeof v4);

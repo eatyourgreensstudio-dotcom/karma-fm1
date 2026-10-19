@@ -598,7 +598,13 @@ static void proj_apply(const project_t *p, int all)
                 for (j = 0; j < 4u; j++)
                     st->note[j] &= 127u;
             }
-        fm6_track_loaded(t);                            /* FM6: the project keeps PTCH, not the patch: its slot's */
+        if (!eng_allowed(t, t->eng_req)) {              /* an engine gone, or not this track's: its own, as it starts */
+            uint32_t k2;
+            t->eng_req = (uint8_t)eng_default(t);
+            for (k2 = 0; k2 < 8u; k2++)
+                t->p[P_E0 + k2] = ENGINES[t->eng_req]->edit[k2].def;
+            t->preset = 0;
+        }
     }
 }
 
@@ -624,7 +630,6 @@ static void proj_fetch(uint32_t slot)
     if (!proj_import(q, &proj_tmp, n))
         q->magic = 0;
 }
-#include "fm6_bank.c"                           /* the FM6 patch bank (eng_fm6.c PTCH B1..B27): staged in proj_tmp */
 #endif
 
 static void project_save(uint32_t slot)
@@ -878,7 +883,6 @@ static void persist_boot(void)                    /* before settings_init / pane
     }
     dsu_boot();                                    /* SLOOP 2.5: the SYN kits (after the settings) */
     up_boot();                                     /* user presets */
-    fm6_bank_boot();                               /* the FM6 patch bank (fm6_bank.c) */
 #endif
 }
 

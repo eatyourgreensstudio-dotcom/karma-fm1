@@ -521,7 +521,7 @@ static void midi_pkt(uint32_t st, uint32_t d1, uint32_t d2)   /* as usb.c: the q
  * (a stolen voice fades out), the VOICE part at most 4; then all off: every voice free */
 static int chk_budget(char *msg, uint32_t n)
 {
-    static const uint8_t E[3] = {0, 1, 5};
+    static const uint8_t E[3] = {ENGI_PRISM, ENGI_PRISM, ENGI_JUNO};   /* (8, 8, JUNO capped at 6) */
     uint8_t held[NPART][128] = {{0}};
     uint32_t p, k, worst = 0, vworst = 0, fading = 0, kills0 = voice_kills;
     host_tracks_init();
@@ -563,10 +563,10 @@ static int chk_budget(char *msg, uint32_t n)
                 trk_note_off(&trk[p], k);
     rel_at = fpos;
     finish();
-    snprintf(msg, n, "3 POLY parts, random notes: at most %u voices active (budget %u), VOICE part at most %u (cap 4), "
+    snprintf(msg, n, "3 POLY parts, random notes: at most %u voices active (budget %u), JUNO part at most %u (cap 6), "
              "%u voices taken, %u still fading after their KILL_BLOCKS, all free %.2f s after the note-offs",
              worst, NVOICE, vworst, voice_kills - kills0, fading, R.free_s);
-    return worst <= NVOICE && vworst <= 4u && !fading && R.free_s >= 0 && voice_kills > kills0;
+    return worst <= NVOICE && vworst <= 6u && !fading && R.free_s >= 0 && voice_kills > kills0;
 }
 
 /* a stolen voice fades: plain sines (filter open, no sends) on 3 parts; part 1 holds 7 notes, part 2 one,
@@ -652,14 +652,14 @@ static int chk_keep_mono(char *m, uint32_t n) { return chk_keep(m, n, V_MONO); }
 static int chk_keep_legato(char *m, uint32_t n) { return chk_keep(m, n, V_LEGATO); }
 static int chk_keep_unison(char *m, uint32_t n) { return chk_keep(m, n, V_UNISON); }
 
-/* the VOICE engine's cap: 8 keys in POLY and in UNISON (alone: the budget does not limit it) */
+/* an engine's voice cap (JUNO: 6): 8 keys in POLY and in UNISON (alone: the budget does not limit it) */
 static int chk_voice_cap(char *msg, uint32_t n)
 {
     uint32_t mode, k, i, most[2] = {0, 0};
     for (mode = 0; mode < 2u; mode++) {
         track_t *t = &trk[0];
         host_tracks_init();
-        host_preset(t, 5, 0);
+        host_preset(t, ENGI_JUNO, 0);
         t->p[P_VOICE] = mode ? V_UNISON : V_POLY;
         t->p[P_AMODE] = 0;
         for (k = 0; k < 8u; k++)
@@ -678,9 +678,9 @@ static int chk_voice_cap(char *msg, uint32_t n)
         if (!parts_free())
             most[mode] = 99;
     }
-    snprintf(msg, n, "VOICE engine, 8 keys: at most %u voices in POLY, %u in UNISON (cap 4); freed after release",
+    snprintf(msg, n, "JUNO, 8 keys: at most %u voices in POLY, %u in UNISON (cap 6); freed after release",
              most[0], most[1]);
-    return most[0] == 4u && most[1] == 4u;
+    return most[0] == 6u && most[1] == 6u;
 }
 
 /* no hanging notes: 6 s of random MIDI note-ons / offs on channels 1, 2, 3 (the parts), 10 (drums), 5 and
@@ -815,8 +815,8 @@ int main(int argc, char **argv)
     uint32_t jobs_at_once = getenv("JOBS") ? (uint32_t)atoi(getenv("JOBS")) : 8u;
     static const char *const MN[4] = {"POLY", "MONO", "LEGATO", "UNISON"};
     static const char *const SN[6] = {"dry", "chorus", "delay", "reverb", "all", "dist"};
-    static const uint8_t MODE_E[3][2] = {{0, 0}, {1, 1}, {5, 0}};   /* engine, preset */
-    static const uint8_t SEND_E[2][2] = {{0, 7}, {1, 0}};   /* ANALOG TRAP PLUCK, DIGITAL RHODES */
+    static const uint8_t MODE_E[3][2] = {{ENGI_JUNO, 0}, {ENGI_PRISM, 7}, {ENGI_ELEM, 3}};   /* engine, preset */
+    static const uint8_t SEND_E[2][2] = {{ENGI_JUNO, 5}, {ENGI_PRISM, 13}};   /* JUNO KEYS, PLAITS DIGI KEYS */
     static uint8_t cpu_parts[MAXJ][NPART + 1][3];
     static kv_t gold[MAXJ], cpu[MAXJ];
     uint32_t ng, nc, e, pi, i, g0, g1, c0, c1, k0, ncpu = 0;
@@ -831,7 +831,7 @@ int main(int argc, char **argv)
 
     /* 1 + 2: the golden renders */
     g0 = nj;
-    for (e = 0; e < NENGINES; e++)
+    for (e = 0; e < NENGINES; e++) if (ENGINES[e] != &ENG_GONE)   /* (the engines left) */
         for (pi = 0; pi < ENGINES[e]->npresets; pi++) {
             job_t *j;
             slug(s, ENGINES[e]->presets[pi].name, sizeof s);
@@ -881,13 +881,13 @@ int main(int argc, char **argv)
     add(J_CHECK, "voices: MONO keeps its note")->check = chk_keep_mono;
     add(J_CHECK, "voices: LEGATO keeps its note")->check = chk_keep_legato;
     add(J_CHECK, "voices: UNISON keeps its note")->check = chk_keep_unison;
-    add(J_CHECK, "voices: VOICE engine cap")->check = chk_voice_cap;
+    add(J_CHECK, "voices: an engine's voice cap (JUNO)")->check = chk_voice_cap;
     add(J_CHECK, "routing: no hanging notes")->check = chk_hang;
     run_jobs(J, nj, jobs_at_once);
 
     /* 3: CPU, one child at a time (the ns are for information; the instruction counts do not care) */
     c0 = nj;
-    for (e = 0; e < NENGINES; e++)
+    for (e = 0; e < NENGINES; e++) if (ENGINES[e] != &ENG_GONE)   /* (the engines left) */
         for (pi = 0; pi < ENGINES[e]->npresets; pi++) {
             job_t *j;
             slug(s, ENGINES[e]->presets[pi].name, sizeof s);
@@ -904,19 +904,19 @@ int main(int argc, char **argv)
     {   /* mixes: idle (subtracted from the presets' counts), idle + drums, DIGITAL + PHASE + VOICE asking
          * 8 + 8 + 4 (the budget keeps 8) + drums */
         job_t *j;
-        j = add(J_CPU, "cpu/mix/3parts_heavy_now_drums");      /* (2.5 exp) FM6, GRAIN, TRIO */
+        j = add(J_CPU, "cpu/mix/3parts_heavy_now_drums");      /* (2026-10-19) JUNO STRING, ELEMENTS BOW, PLAITS SWARM */
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-        cpu_parts[ncpu][0][0] = ENGI_FM6, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;
-        cpu_parts[ncpu][1][0] = ENGI_GRAIN, cpu_parts[ncpu][1][1] = 0, cpu_parts[ncpu][1][2] = 8;
-        cpu_parts[ncpu][2][0] = 6, cpu_parts[ncpu][2][1] = 3, cpu_parts[ncpu][2][2] = 8;
+        cpu_parts[ncpu][0][0] = ENGI_JUNO, cpu_parts[ncpu][0][1] = 1, cpu_parts[ncpu][0][2] = 8;
+        cpu_parts[ncpu][1][0] = ENGI_ELEM, cpu_parts[ncpu][1][1] = 5, cpu_parts[ncpu][1][2] = 8;
+        cpu_parts[ncpu][2][0] = ENGI_PRISM, cpu_parts[ncpu][2][1] = 6, cpu_parts[ncpu][2][2] = 8;
         cpu_parts[ncpu][NPART][0] = 1;
         j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
         j->e = 0xFF;
-        j = add(J_CPU, "cpu/mix/3parts_phys_noise_drums");     /* (2.5 exp) PHYS SYMP, PHYS MODAL, NOISE */
+        j = add(J_CPU, "cpu/mix/3parts_phys_noise_drums");     /* (2026-10-19) ACID, ELEMENTS PICK, PLAITS TABLE */
         memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-        cpu_parts[ncpu][0][0] = ENGI_PHYS, cpu_parts[ncpu][0][1] = 7, cpu_parts[ncpu][0][2] = 8;
-        cpu_parts[ncpu][1][0] = ENGI_PHYS, cpu_parts[ncpu][1][1] = 3, cpu_parts[ncpu][1][2] = 8;
-        cpu_parts[ncpu][2][0] = ENGI_NOISE, cpu_parts[ncpu][2][1] = 1, cpu_parts[ncpu][2][2] = 8;
+        cpu_parts[ncpu][0][0] = ENGI_ACID, cpu_parts[ncpu][0][1] = 0, cpu_parts[ncpu][0][2] = 8;
+        cpu_parts[ncpu][1][0] = ENGI_ELEM, cpu_parts[ncpu][1][1] = 3, cpu_parts[ncpu][1][2] = 8;
+        cpu_parts[ncpu][2][0] = ENGI_PRISM, cpu_parts[ncpu][2][1] = 11, cpu_parts[ncpu][2][2] = 8;
         cpu_parts[ncpu][NPART][0] = 1;
         j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
         j->e = 0xFF;
@@ -1112,7 +1112,7 @@ int main(int argc, char **argv)
     }
     printf("regress: CPU, one part with 8 notes held (VOICE 4), heaviest preset per engine (%s / ns per sample):\n",
            J[c0].r.ipc ? "instructions" : "per mille");
-    for (e = 0; e < NENGINES; e++)
+    for (e = 0; e < NENGINES; e++) if (ENGINES[e] != &ENG_GONE)   /* (the engines left) */
         printf("regress:   %-8s %-14s %6.0f %s  %6.1f ns\n", ENGINES[e]->name, ENGINES[e]->presets[heavy_p[e]].name,
                J[c0].r.ipc ? heavy[e] : heavy[e] / cpu_cost(&J[c1 - 2u]) * 1000.0, J[c0].r.ipc ? "instr" : "/1000", heavy_ns[e]);
     for (i = c1 - 3u; i < c1; i++)

@@ -801,7 +801,7 @@ static void t_midichan(void)
     usb.config = 1;
     song.g[G_ROUTE] = 0;
     song.g[G_CH1] = 2, song.g[G_CH2] = 11, song.g[G_CH3] = 8, song.g[G_DRCH] = 10, song.g[G_CHOTH] = 0;   /* bass 2, pad 11, lead 8 */
-    for (i = 0; i < NPART; i++) trk[i].p[P_AMODE] = 0, trk[i].eng_req = trk[i].engine = 0;
+    for (i = 0; i < NPART; i++) trk[i].p[P_AMODE] = 0, trk[i].eng_req = trk[i].engine = ENGI_JUNO;
     song.sel = 2;
     mclk_push(0x09u | (0x90u | 1u) << 8 | 40u << 16 | 100u << 24);    /* ch 2 */
     mclk_push(0x09u | (0x90u | 10u) << 8 | 64u << 16 | 100u << 24);   /* ch 11 */
@@ -1119,35 +1119,35 @@ static void t_plock(void)
     uint32_t i, bpb = (uint32_t)((double)FS * 60.0 / 120.0 / CTL + 0.5), ok1, ok2, ok3, ok4;
     int16_t at2, at3, dist0;
     reset(120);
-    host_preset(t, 0, 7);                             /* ANALOG TRAP PLUCK: P_E0 = WAVE (0..4) */
+    host_preset(t, ENGI_JUNO, 0);                     /* JUNO BRASS: P_E4 = CUT (0..127) */
     for (i = 0; i < 16u; i++)
         put_step(t, i, 1, (const uint8_t[]){60}, ST_NOTE, 0);
-    t->p[P_E0] = 3;
+    t->p[P_E4] = 30;
     dist0 = t->p[P_DIST];
-    check(lock_set(t, 2, P_E0, 1) && lock_set(t, 2, P_DIST, 90) && !lock_set(t, 2, P_SLEN, 8) && !lock_set(t, 2, P_AMODE, 1),
-          "2.4: lock_set takes P_E0 and P_DIST, refuses P_SLEN and P_AMODE (not lockable)");
-    check(lock_set(t, 70, P_E0, 1) == 0 && lock_set(t, 2, P_COUNT, 1) == 0, "2.4: lock_set bounds the step and the parameter");
+    check(lock_set(t, 2, P_E4, 10) && lock_set(t, 2, P_DIST, 90) && !lock_set(t, 2, P_SLEN, 8) && !lock_set(t, 2, P_AMODE, 1),
+          "2.4: lock_set takes P_E4 and P_DIST, refuses P_SLEN and P_AMODE (not lockable)");
+    check(lock_set(t, 70, P_E4, 10) == 0 && lock_set(t, 2, P_COUNT, 1) == 0, "2.4: lock_set bounds the step and the parameter");
     transport_req = 1;
     while (t->seq_idx != 2u) run_block();
-    at2 = t->p[P_E0];
+    at2 = t->p[P_E4];
     ok1 = t->p[P_DIST] == 90;
     while (t->seq_idx != 3u) run_block();
-    at3 = t->p[P_E0];
-    check(at2 == 1 && at3 == 3 && ok1 && t->p[P_DIST] == dist0, "2.4: a lock on P_E0 / P_DIST at step 3: set for that step, the base back at step 4");
+    at3 = t->p[P_E4];
+    check(at2 == 10 && at3 == 30 && ok1 && t->p[P_DIST] == dist0, "2.4: a lock on P_E4 / P_DIST at step 3: set for that step, the base back at step 4");
     while (t->seq_idx != 2u) run_block();            /* the next pass: the knob is turned while the lock is on */
-    ok2 = t->p[P_E0] == 1;
-    t->p[P_E0] = 4;
+    ok2 = t->p[P_E4] == 10;
+    t->p[P_E4] = 40;
     while (t->seq_idx != 3u) run_block();
-    check(ok2 && t->p[P_E0] == 4, "2.4: a knob turned during the locked step: kept as the new base");
+    check(ok2 && t->p[P_E4] == 40, "2.4: a knob turned during the locked step: kept as the new base");
     while (t->seq_idx != 2u) run_block();
-    ok3 = t->p[P_E0] == 1;
+    ok3 = t->p[P_E4] == 10;
     transport_req = 2; run_block();
-    check(ok3 && t->p[P_E0] == 4 && t->lk_n == 0, "2.4: STOP during the locked step: the base (4) is back");
+    check(ok3 && t->p[P_E4] == 40 && t->lk_n == 0, "2.4: STOP during the locked step: the base (40) is back");
     /* the lock's value is clamped to the parameter's range; a lock on every step of two params fits NLOCK */
-    ok4 = lock_set(t, 5, P_E0, 99) && t->lock[lock_find(t, 5, P_E0, 0)].val == 4;
+    ok4 = lock_set(t, 5, P_E4, 999) && t->lock[lock_find(t, 5, P_E4, 0)].val == 127;
     lock_del(t, 2, P_COUNT);
-    check(ok4 && lock_find(t, 2, P_E0, 0) < 0 && lock_find(t, 2, P_DIST, 0) < 0 && lock_find(t, 5, P_E0, 0) >= 0,
-          "2.4: a lock's value is clamped (WAVE 99 -> 4); lock_del clears a step's locks");
+    check(ok4 && lock_find(t, 2, P_E4, 0) < 0 && lock_find(t, 2, P_DIST, 0) < 0 && lock_find(t, 5, P_E4, 0) >= 0,
+          "2.4: a lock's value is clamped (CUT 999 -> 127); lock_del clears a step's locks");
     steps_clear(t);
     for (i = 0, ok4 = 1; i < NLOCK; i++) ok4 &= t->lock[i].step == LOCK_FREE;
     check(ok4 && !step_locked(t, 5), "2.4: steps_clear frees every lock and nudge");
@@ -1462,10 +1462,10 @@ static void t_midicc(void)
     mi_r = mi_w;
     song.g[G_ROUTE] = 0;
     a = &trk[0]; b = &trk[1];
-    a->eng_req = a->engine = 0;                         /* ANALOG: has RES */
-    b->eng_req = b->engine = 1;                         /* DIGITAL: none */
+    a->eng_req = a->engine = ENGI_JUNO;                 /* JUNO: has RES */
+    b->eng_req = b->engine = ENGI_ELEM;                 /* ELEMENTS: none */
     for (i = 0; i < 8u; i++)
-        if (str_eq(ENGINES[0]->edit[i].label, "RES"))
+        if (str_eq(ENGINES[ENGI_JUNO]->edit[i].label, "RES"))
             res = i;
     cc_push(0, 7, 0); cc_push(0, 10, 127); cc_push(0, 74, 64); cc_push(0, 72, 127); cc_push(0, 73, 0);
     cc_push(0, 75, 64); cc_push(0, 5, 127); cc_push(0, 91, 127); cc_push(0, 93, 64); cc_push(0, 94, 1);
@@ -1478,7 +1478,7 @@ static void t_midicc(void)
     check(a->p[P_PAN] == -64 && a->p[P_TFLT] == -64 && a->p[P_LEVEL] == 127, "2.5: CC 0 / 127: the ends of the range");
     cc_push(0, 71, 127);
     for (i = 0; i < P_COUNT; i++) before[i] = b->p[i];
-    cc_push(1, 71, 127); cc_push(1, 1, 99); cc_push(1, 64, 127);   /* DIGITAL has no RES; mod wheel, sustain: not mapped */
+    cc_push(1, 71, 127); cc_push(1, 1, 99); cc_push(1, 64, 127);   /* ELEMENTS has no RES; mod wheel, sustain: not mapped */
     run_block(); run_block();
     for (i = 0; i < P_COUNT; i++) same &= b->p[i] == before[i];
     check(res < 8u && a->p[P_E0 + res] == 127 && same, "2.5: CC71 = the engine's RES; an engine without one, and unmapped CCs, change nothing");
@@ -1516,7 +1516,7 @@ static void t_usbfull(void)
     song.master_q12 = 512;                            /* MASTER low */
     master_cur = -1;
     usb_full_now = 1;
-    for (k = 0; k < 8u; k++) trk_note_on(&trk[0], 48u + k * 3u, 110);
+    for (k = 0; k < 3u; k++) trk_note_on(&trk[0], 48u + k * 3u, 60);   /* (under the limiter's ceiling) */
     for (k = 0; k < 600u; k++) {
         mix_block(out, CTL);
         if (k > 100u)
@@ -1527,8 +1527,9 @@ static void t_usbfull(void)
             }
     }
     usb_full_now = 0;
-    for (k = 0; k < 8u; k++) trk_note_off(&trk[0], 48u + k * 3u);
+    for (k = 0; k < 3u; k++) trk_note_off(&trk[0], 48u + k * 3u);
     song.master_q12 = 2048;
+    printf("  USB AUDIO FULL: peak USB %d, DAC %d\n", pk_usb, pk_dac);
     check(pk_usb > pk_dac * 3 && pk_usb <= 32767, "USB AUDIO FULL: the USB level stays up when MASTER is low, no clipping");
 }
 

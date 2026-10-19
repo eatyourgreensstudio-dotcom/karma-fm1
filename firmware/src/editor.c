@@ -428,11 +428,8 @@ static const uint8_t *ed_bk_obj(uint32_t id, uint32_t *len)   /* 0 = no such obj
             *len = sizeof up_bank[0];
         return (const uint8_t *)&up_bank[id - 6u];
     }
-    if (id == 8u) {                                       /* the FM6 patch bank, in flash (XIP) */
-        if (fm6_bank_cur >= 0)
-            *len = sizeof(fm6_bank_t);
-        return (const uint8_t *)fm6_bank_flash(fm6_bank_cur < 0 ? 0u : (uint32_t)fm6_bank_cur);
-    }
+    if (id == 8u)                                         /* (the FM6 patch bank: FM6 is gone, empty) */
+        return (const uint8_t *)&up_bank[0];
     if (id == 9u) {                                       /* SLOOP 2.5: the SYN drum kits (drum_synth.c dsu) */
         (void)dsu_kit(0);
         *len = sizeof dsu;
@@ -486,17 +483,8 @@ static uint32_t ed_bk_commit(void)
         up_gen++;
         return 0;
     }
-    if (id == 8u) {                                       /* the FM6 patch bank (n 0: empty) */
-        if (ed_flash_busy())
-            return 3;
-        if (n && (n != sizeof(fm6_bank_t) || !fm6_bank_valid((const fm6_bank_t *)raw)))
-            return 2;
-        if (!flash_ok || st_save(OBJ_FM6BANK, raw, n))
-            return 4;
-        fm6_bank_scan();
-        fm6_bank_changed();
+    if (id == 8u)                                         /* (the FM6 patch bank: FM6 is gone, ignored) */
         return 0;
-    }
     if (id == 9u) {                                       /* SLOOP 2.5: the SYN drum kits, written with the settings */
         persist_t p;
         uint32_t k;
@@ -628,7 +616,6 @@ static int ed_backup(uint32_t cmd, const uint8_t *a, uint32_t na)   /* no flash:
 }
 #endif
 
-#include "editor_fm6.c"                               /* v9: the FM6 patches (68..71) */
 #include "editor_dsyn.c"                              /* v10: the SYN drum kits (72..76) */
 
 static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0 and F7 */
@@ -640,10 +627,6 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
     const param_desc_t *d;
     ed_begin(cmd);
     if (ed_backup(cmd, a, na)) {                           /* v6: backup / restore */
-        ed_send();
-        return;
-    }
-    if (ed_fm6_handle(cmd, a, na)) {                       /* v9: FM6 patches */
         ed_send();
         return;
     }
@@ -670,7 +653,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             return;
         if (cmd == ED_SET && na >= 4u) {
             if (a[0] == 1 && a[1] == G_ENGSEL) {          /* engine change: the safe path */
-                set_engine((uint32_t)clamp(ed_rv(a + 2), 0, NENGINES - 1));
+                if (eng_allowed(TSEL, (uint32_t)clamp(ed_rv(a + 2), 0, NENGINES - 1)))   /* (the track's own) */
+                    set_engine((uint32_t)clamp(ed_rv(a + 2), 0, NENGINES - 1));
             } else if (d->max > d->min) {
                 *vp = (int16_t)clamp(ed_rv(a + 2), d->min, d->max);
             }

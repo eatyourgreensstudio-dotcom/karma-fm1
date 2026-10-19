@@ -406,7 +406,16 @@ static void edit_param(uint32_t slot, int32_t steps)
             if (total)
                 preset_go((uint32_t)(((int32_t)cur + steps % (int32_t)total + (int32_t)total) % (int32_t)total));
         } else if (slot == 1u && !is_drum(TSEL)) {
-            select_engine((TSEL->eng_req + (steps > 0 ? 1u : NENGINES - 1u)) % NENGINES);
+        {                                                 /* (the track's engines only: ACID <-> JUNO) */
+            uint32_t e = TSEL->eng_req, j;
+            for (j = 0; j < NENGINES; j++) {
+                e = (e + (steps > 0 ? 1u : NENGINES - 1u)) % NENGINES;
+                if (eng_allowed(TSEL, e))
+                    break;
+            }
+            if (e != TSEL->eng_req)
+                select_engine(e);
+        }
         }
         return;
     }
@@ -950,7 +959,6 @@ static void ui_input(void)
         ui_input_ms = fm1_ms;
     pc_poll();                                          /* MIDI Program Change: a sound (2.6, ui.c) */
     midi_chan_fix();                                    /* GLO > MIDI: no channel on two tracks (2.6, ui.c) */
-    fm6_poll();                                         /* FM6: PTCH turned -> its patch */
     ml_poll();                                          /* MIDI LEARN: a CC came for the picked parameter (2.6) */
     page_fix();                                         /* (a page the track does not have: its neighbour, 2.6) */
     midi_entry();                                       /* (the STEP page's MIDI notes: read every frame, 2.6) */

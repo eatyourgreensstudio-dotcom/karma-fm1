@@ -16,26 +16,36 @@ static inline int32_t soft_knee(int32_t y, int32_t k)   /* linear up to k, then 
     return y < 0 ? -a : a;
 }
 /* (pitch_inc: felucca_tables.h, SLOOP 2.5: from the top octave) */
-#include "eng_analog.c"
-#include "eng_digital.c"
-#include "eng_phase.c"
-#include "eng_lofi.c"
-#include "eng_sample.c"
-#include "eng_formant.c"
-#include "eng_trio.c"
-#include "eng_drawbar.c"
-#include "eng_grain.c"
-#include "eng_fm6.c"            /* FM6: 6-operator FM, msfa ported (fm6_core.c, Apache-2.0); SLOOP 2.4 */
-#include "eng_phys.c"           /* PHYS: physical models, from Felucca 1.0 (DaisySP, Rings: MIT); SLOOP 2.5 */
+/* SLOOP for the FM-1 OS (2026-10-19, Ariel's call): the bass track plays ACID or JUNO, track 2 ELEMENTS, track 3
+ * PLAITS; the other engines are gone. Their numbers stay (projects, user presets and the editor keep them) and
+ * hold ENG_GONE, which no track can choose (eng_allowed) */
+#include "eng_sample.c"         /* (the sample store: the drum track's user kits use it; SAMPLE itself is gone) */
+#include "eng_phys.c"           /* PHYS's bank and models, for ELEMENTS (from Felucca 1.0: DaisySP, Rings: MIT) */
 #include "eng_elem.c"           /* ELEMENTS: Elements' exciters (Emilie Gillet, MIT) on PHYS's bank */
 #include "eng_acid.c"           /* ACID: X0X's TB-303 (Charles Vestal, GPL-3.0; Open303, MIT) */
 #include "eng_juno.c"           /* JUNO: FM-106's Juno-106 voice (PatttF, GPL-3.0; after ultramaster KR-106) */
-#include "eng_noise.c"          /* NOISE: from Felucca 1.0; SLOOP 2.5 */
 #include "eng_prism.c"          /* PRISM: models of Plaits (Emilie Gillet, MIT), fixed point: prism_dsp.c */
 
+static void gone_note_on(track_t *t, voice_t *v) { (void)t; (void)v; }
+static void gone_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+{ (void)t; (void)v; (void)out; (void)n; (void)m; }
+static const preset_t GONE_PRESETS[] = {{"-", {0}, {0, 0, 127, 10}, 0, 0}};
+static const engine_t ENG_GONE = {
+    .name = "-",
+    .page_title = {"-", "-"},
+    .edit = {{"-", F_INT, 0, 0, 0, 0, 0}, {"-", F_INT, 0, 0, 0, 0, 0}, {"-", F_INT, 0, 0, 0, 0, 0}, {"-", F_INT, 0, 0, 0, 0, 0},
+             {"-", F_INT, 0, 0, 0, 0, 0}, {"-", F_INT, 0, 0, 0, 0, 0}, {"-", F_INT, 0, 0, 0, 0, 0}, {"-", F_INT, 0, 0, 0, 0, 0}},
+    .presets = GONE_PRESETS,
+    .npresets = 1,
+    .note_on = gone_note_on,
+    .render = gone_render,
+    .fil_page = -1,
+    .color = 0x8410,
+    .macro = {P_E0, P_E1, P_E2, P_E3},
+    .poly = 1,
+};
+
 typedef union {
-    gr_part_t grain;
-    fm6_note_t fm6[FM6_POLY];
     uint32_t phys[PHYS_ARENA / 4u];      /* eng_phys.c: two SYMP slots or three small ones; ELEMENTS: or one solo */
     prism_slot_t prism[NVOICE];          /* eng_prism.c: the state of SWARM and WAVE, a slot a voice */
     acid_slot_t acid;                    /* eng_acid.c: the 303 */
@@ -68,17 +78,26 @@ static void *eng_arena_of(const track_t *t, uint32_t eng)
 #include "eng_slice.c"
 #endif
 
-static const engine_t *const ENGINES[NENGINES] = {&ENG_ANALOG, &ENG_DIGITAL, &ENG_PHASE, &ENG_LOFI, &ENG_SAMPLE,
-                                                    &ENG_FORMANT, &ENG_TRIO, &ENG_DRAWBAR, &ENG_GRAIN,
-                                                    &ENG_FM6,    /* 9 (ENGI_FM6): always; SLICE after it (core.h) */
-                                                    &ENG_PHYS, &ENG_NOISE,
+static const engine_t *const ENGINES[NENGINES] = {&ENG_GONE, &ENG_GONE, &ENG_GONE, &ENG_GONE, &ENG_GONE,
+                                                    &ENG_GONE, &ENG_GONE, &ENG_GONE, &ENG_GONE,
+                                                    &ENG_GONE,   /* 9: FM6 was here */
+                                                    &ENG_GONE, &ENG_GONE,   /* PHYS, NOISE were here */
 #if FELUCCA_SLICE
                                                     &ENG_SLICE,
 #endif
                                                     &ENG_PRISM, &ENG_ELEM, &ENG_ACID, &ENG_JUNO,
 };
-_Static_assert(ENGI_FM6 == 9u, "ENGINES[ENGI_FM6] is FM6");
-_Static_assert(ENGI_GRAIN == 8u && ENGI_PHYS == 10u && ENGI_NOISE == 11u && ENGI_SLICE == 12u, "ENGINES[] order");
+/* the engines each synth track may play (the drum track: none). PRESETS lists only theirs */
+static int eng_allowed(const track_t *t, uint32_t e)
+{
+    uint32_t p = (uint32_t)(t - trk);
+    return p == 0u ? (e == ENGI_ACID || e == ENGI_JUNO) : p == 1u ? e == ENGI_ELEM : p == 2u ? e == ENGI_PRISM : 0;
+}
+static uint32_t eng_default(const track_t *t)        /* the engine a track falls back to */
+{
+    uint32_t p = (uint32_t)(t - trk);
+    return p == 0u ? ENGI_ACID : p == 1u ? ENGI_ELEM : ENGI_PRISM;
+}
 
 /* every factory sound as loud as the others: a level trim per preset, 1/2 dB, measured on a phrase
  * that fits the sound (tools/level_presets.py writes preset_trim.h); a track keeps it in P_ED_FX */

@@ -82,8 +82,15 @@ static void host_tracks_init(void)                /* as felucca_init: defaults, 
         for (i = 0; i < P_E0; i++)
             trk[k].p[i] = TP[i].def;
         steps_clear(&trk[k]);
+        if (k < NPART) {                         /* (2026-10-19: ANALOG, the old engine 0, is gone: the tests' plain
+                                                  * synth is JUNO, its defaults, on every synth track) */
+            trk[k].eng_req = trk[k].engine = (uint8_t)ENGI_JUNO;
+            for (i = 0; i < 8u; i++)
+                trk[k].p[P_E0 + i] = ENG_JUNO.edit[i].def;
+        }
     }
     song.master_q12 = 4096;
+    memset(eng_arena_own, 0, sizeof eng_arena_own);   /* (the engines' state: as at power-on, not the last test's) */
 }
 
 /* the factory preset as ui.c apply_preset_to sets it (sound, sends, arp; not the pattern, not the mix);
@@ -91,8 +98,11 @@ static void host_tracks_init(void)                /* as felucca_init: defaults, 
 static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
 {
     static const uint8_t FX_DEF[4] = {0, 24, 28, 36};
-    const preset_t *p = &ENGINES[e]->presets[pi % ENGINES[e]->npresets];
+    const preset_t *p;
     uint32_t i;
+    if (ENGINES[e % NENGINES] == &ENG_GONE)      /* an old engine's number (the tests' "a synth"): JUNO's */
+        e = ENGI_JUNO;
+    p = &ENGINES[e]->presets[pi % ENGINES[e]->npresets];
     t->eng_req = (uint8_t)e;
     t->preset = (uint8_t)(pi % ENGINES[e]->npresets);
     for (i = 0; i < 8u; i++)
@@ -109,12 +119,11 @@ static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
         t->p[P_AMODE + i] = (int16_t)(p->arp[i] ? p->arp[i] - 1 : TP[P_AMODE + i].def);
     }
     preset_extras(t->p, p);
-    fm6_track_loaded(t);                          /* FM6: the preset's patch (ui.c apply_preset_to) */
 }
 static void host_preset(track_t *t, uint32_t e, uint32_t pi)
 {
     host_preset_req(t, e, pi);
-    t->engine = (uint8_t)e;
+    t->engine = t->eng_req;
 }
 
 /* the sequencer clock as the harness sees it: the step of t at the clock (as the next block plays it),
@@ -364,9 +373,10 @@ static int steal_test(const char *dir)
     host_tracks_init();
     for (p = 0; p < NPART; p++) {
         track_t *t = &trk[p];
-        host_preset(t, 0, 5);                      /* ANALOG SINE KEY, as a plain held sine: */
-        t->p[P_E4] = 127;                          /* filter open, no resonance, no drive */
-        t->p[P_E5] = t->p[P_E6] = 0;
+        host_preset(t, ENGI_PRISM, 0);             /* PLAITS FOLD, unfolded: a plain held tone (8 voices) */
+        t->p[P_E0] = 0;                            /* (FOLD, no shaper, no folds, no sub) */
+        t->p[P_E1] = t->p[P_E2] = t->p[P_E5] = 0;
+        t->p[P_E3] = 64;
         t->p[P_ED_FLT] = 0;
         t->p[P_ATK] = 40;                          /* slow attack, full sustain, no sends */
         t->p[P_SUS] = 127;
@@ -427,12 +437,11 @@ static int steal_test(const char *dir)
  * Writes DIR/engine_switch.wav. */
 static void xfade_sine(track_t *t)
 {
-    host_preset(t, 0, 5);                          /* ANALOG, as a plain held sine */
-    t->p[P_E0] = 3;                                /* (SIN, whichever preset that is) */
-    t->p[P_E1] = t->p[P_E2] = t->p[P_E3] = 0;
+    host_preset(t, ENGI_PRISM, 0);                 /* PLAITS FOLD, unfolded: a plain held tone */
+    t->p[P_E0] = 0;
+    t->p[P_E1] = t->p[P_E2] = t->p[P_E5] = 0;
+    t->p[P_E3] = 64;
     t->p[P_ED_FX] = 0;
-    t->p[P_E4] = 127;
-    t->p[P_E5] = t->p[P_E6] = 0;
     t->p[P_ED_FLT] = 0;
     t->p[P_ATK] = 40;
     t->p[P_SUS] = 127;
@@ -448,7 +457,7 @@ static int xfade_test(const char *dir)
     /* switches: (a) in a release tail, (b) twice with a chord held, (c) with a note right after it */
     const uint32_t sw[4] = {11u * B, 23u * B, 29u * B + 7u * CTL, 33u * B};
     const uint32_t on[3] = {B, 15u * B, 25u * B}, sine[3] = {14u * B, 24u * B, 32u * B};
-    const uint8_t to[4] = {1, 2, 3, 4};
+    const uint8_t to[4] = {ENGI_JUNO, ENGI_ACID, ENGI_ELEM, ENGI_JUNO};
     char path[512];
     FILE *w;
     int32_t *L = calloc(frames, sizeof *L);
@@ -502,7 +511,7 @@ static int xfade_test(const char *dir)
         for (i = sw[k]; i < sw[k] + FS / 100u; i++)
             at = abs(L[i] - L[i - 1]) > at ? abs(L[i] - L[i - 1]) : at;
         printf("tracks: engine switch %s -> %s (%s): largest sample step %d in the 10 ms after, %d in the 0.1 s "
-               "before (%.2f x)\n", ENGINES[0]->name, ENGINES[to[k]]->name, k ? "chord held" : "release tail", at,
+               "before (%.2f x)\n", ENGINES[ENGI_PRISM]->name, ENGINES[to[k]]->name, k ? "chord held" : "release tail", at,
                calm, (double)at / calm);
         worst = (double)at / calm > worst ? (double)at / calm : worst;
         bad += at > calm * 3 / 2;
@@ -803,7 +812,6 @@ int main(int argc, char **argv)
         inst.p[P_SUS] = p->env[2]; inst.p[P_REL] = p->env[3]; inst.p[P_ED_FLT] = p->fenv;
         preset_extras(inst.p, p);
     }
-    fm6_track_loaded(&inst);                            /* FM6: the preset's patch */
     inst.p[P_VOICE] = (int16_t)mono;
     inst.p[P_CHOR] = argc > 5 ? atoi(argv[5]) : 24;      /* as felucca_init */
     inst.p[P_DLY] = argc > 5 ? atoi(argv[5]) : 28;
