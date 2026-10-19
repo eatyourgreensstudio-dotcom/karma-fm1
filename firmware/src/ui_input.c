@@ -660,12 +660,12 @@ static void layer_tap(uint32_t layer)
             open_family(FAM_EDIT);
             break;
         }
-        if (on_drum_page()) {                             /* DRUMS: SEQ -> GRID <-> KIT */
-            drum_page = (uint8_t)((drum_page + 1u) % 2u);
-            ui.force = 1;
+        if (on_drum_page()) {                             /* DRUMS: SEQ -> GRID -> KIT -> DRUM GEN */
+            drum_seq_tap();
             break;
         }
-        if (layer == LY_STEP && !ui.home && cur_page()->graph == GR_HEX) {   /* the sound's pages: SEQ -> back */
+        if (layer == LY_STEP && !ui.home && (cur_page()->graph == GR_HEX || cur_page()->graph == GR_DGEN)) {
+                                                          /* the sound's pages, DRUM GEN: SEQ -> back */
             studio_open(SC_DRUM);                         /* to the drums */
             break;
         }

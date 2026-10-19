@@ -1305,6 +1305,34 @@ int main(int argc, char **argv)
             check(gen_on == 0u, "SEQ > GEN: OFF again");
             ui.page = (uint8_t)pg; ui.force = 1; frame();
         }
+    {   /* DRUMS: SEQ -> GRID -> KIT -> DRUM GEN -> GRID; DRUM GEN MAP on, playing */
+        go_home(); song.playing = 0; ly_lock = LY_PLAY;
+        track_select(TRK_DRUM); frames(2);
+        studio_open(SC_DRUM); drum_page = 0; frames(2);
+        tap(B_SEQ); frames(2);
+        check(on_drum_page() && drum_page == 1u, "DRUMS: SEQ, GRID -> KIT");
+        tap(B_SEQ); frames(2);
+        check(!ui.home && !strcmp(PAGES[ui.page].title, "DRUM GEN"), "DRUMS: SEQ on KIT -> SEQ > DRUM GEN");
+        song.g[G_DGMODE] = 1; song.g[G_DGX] = 20; song.g[G_DGY] = 90; frames(2);
+        song.playing = 1; TDRUM->seq_idx = 6; ui.force = 1; frame();
+        ppm("page-dgen");
+        song.playing = 0;
+        encs[panel.enc[EN_SELECT]] = 1; frames(3);
+        check(!strcmp(PAGES[ui.page].title, "DRUM GEN 2"), "DRUM GEN: SELECT -> DRUM GEN 2");
+        song.g[G_DGMODE] = 2; ui.force = 1; frames(2);
+        ppm("page-dgen2");
+        tap(B_SEQ); frames(2);
+        check(on_drum_page() && drum_page == 0u, "DRUM GEN: SEQ -> back to the GRID");
+        song.g[G_DGMODE] = 0; frames(2);
+        track_select(0); frames(2);
+        open_family(FAM_SEQ); frames(2);
+        {
+            uint32_t k, seen = 0;
+            for (k = 0; k < 14u; k++) { seen |= !strcmp(PAGES[ui.page].title, "DRUM GEN"); encs[panel.enc[EN_SELECT]] = 1; frames(2); }
+            check(!seen, "a synth track: no DRUM GEN pages");
+        }
+        go_home(); frames(2);
+    }
     printf("ui: %s\n", fails ? "FAILED" : "pages, layers (punch, steps, erase, roll, key, mix), layer lock, song layer, REC hold, drums, REC, 20000-frame fuzz PASS");
     return fails;
 }

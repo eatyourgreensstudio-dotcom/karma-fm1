@@ -56,6 +56,7 @@ static const char *const N_NOTE[] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", 
 static const char *const N_DASH[] = {"--"};
 static const char *const N_SYNC[] = {"INT", "USB", "TRS"};   /* G_SYNC: the tempo and PLAY / STOP from (seq.c mclk) */
 static const char *const N_GO[] = {"--", "GO"};
+static const char *const N_DGMODE[] = {"OFF", "MAP", "EUCL"};
 static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};   /* HEX (hex_drums.c) */
 static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
 static const char *const N_HXCLICK[] = {"OFF", "TICK", "NOIS", "POP", "BLIP", "ZAP"};
@@ -247,6 +248,14 @@ static const param_desc_t GP[G_COUNT] = {
     [G_GNACC] = PD("ACC", F_PCT, 0, 127, 25),
     [G_GNSLD] = PD("SLIDE", F_PCT, 0, 127, 13),
     [G_GNNEW] = PE("NEW", N_GO, 0),
+    [G_DGMODE] = PE("MODE", N_DGMODE, 0),           /* SEQ > DRUM GEN (gen_seq.c) */
+    [G_DGX] = PD("MAP X", F_INT, 0, 127, 64),
+    [G_DGY] = PD("MAP Y", F_INT, 0, 127, 64),
+    [G_DGCHAOS] = PD("CHAOS", F_PCT, 0, 127, 0),
+    [G_DGK] = PD("KICK", F_PCT, 0, 127, 80),
+    [G_DGS] = PD("SNARE", F_PCT, 0, 127, 64),
+    [G_DGH] = PD("HATS", F_PCT, 0, 127, 80),
+    [G_DGROT] = PD("ROT", F_INT, 0, 15, 4),
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -429,7 +438,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
        FAM_COUNT };
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK, SC_SONG, SC_DRUM };
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
-       GR_SLCR, GR_INS, GR_HEX };
+       GR_SLCR, GR_INS, GR_HEX, GR_DGEN };
 
 typedef struct {
     const char *title;
@@ -489,6 +498,8 @@ static const page_t PAGES[] = {
     {"ACID GEN 2", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGSCALE, G_AGOCT, G_AGROOT, G_AGMUT}},  /* track (acid_gen.c) */
     {"GEN", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNON, G_GNCHG, G_GNDENS, G_GNRANGE}},   /* a loop that changes as */
     {"GEN 2", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNOCT, G_GNACC, G_GNSLD, G_GNNEW}},    /* it plays (gen_seq.c) */
+    {"DRUM GEN", FAM_SEQ, SC_GLOBAL, GR_DGEN, {G_DGMODE, G_DGX, G_DGY, G_DGCHAOS}},   /* the drum track's */
+    {"DRUM GEN 2", FAM_SEQ, SC_GLOBAL, GR_DGEN, {G_DGK, G_DGS, G_DGH, G_DGROT}},     /* KICK SNARE HAT */
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},   /* REC button; TRACK LEVEL LEN PAN */
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},
@@ -514,8 +525,11 @@ static int page_shown(const page_t *pg)
         return is_drum(TSEL);
     if (pg->fam == FAM_EDIT && is_drum(TSEL))
         return 0;
-    if (pg->scope == SC_GLOBAL && (pg->id[0] == G_GNON || pg->id[0] == G_GNOCT))
-        return !is_drum(TSEL);                       /* GEN: the synth tracks' */
+    if (pg->scope == SC_GLOBAL && (pg->id[0] == G_GNON || pg->id[0] == G_GNOCT || pg->id[0] == G_AGDENS ||
+                                   pg->id[0] == G_AGSCALE))
+        return !is_drum(TSEL);                       /* GEN, ACID GEN: the synth tracks' */
+    if (pg->graph == GR_DGEN)
+        return is_drum(TSEL);                        /* DRUM GEN: the drum track's */
     return pg->id[0] != P_FTYPE || (!is_drum(TSEL) && TSEL->eng_req % NENGINES == 0u);
 }
 

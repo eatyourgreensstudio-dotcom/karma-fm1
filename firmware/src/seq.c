@@ -2082,7 +2082,9 @@ static void seq_tick(track_t *t, uint32_t adv)
         if (!idx)
             t->pass++;                               /* a new pass of the loop (recording: one undo) */
         if (!is_drum(t))
-            gen_tick(t, idx);                        /* GEN: the step perhaps rolled again before it plays */
+            gen_tick(t, idx);
+        else
+            drum_gen_tick(t, idx);                   /* DRUM GEN: its lanes written as they come */                        /* GEN: the step perhaps rolled again before it plays */
         if (erasing(t))
             erase_step(t, idx);                      /* EDIT + key held: gone as it passes */
         t->seq_skip = (uint8_t)!step_plays(t, idx);

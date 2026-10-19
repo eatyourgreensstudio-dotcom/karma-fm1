@@ -85,6 +85,73 @@ int main(void)
         song.g[G_GNON] = 1; frames(2);
         ck(song.g[G_GNON] == 0 && gen_on == 2u, "the drum track: GEN stays OFF");
     }
+    {   /* DRUM GEN */
+        track_t *d = TDRUM;
+        uint32_t dl = 16, ok, p, x, y, n;
+        d->p[P_SLEN] = 16;
+        dl = trk_len(d);
+        memset(d->dstep, 0, sizeof d->dstep);
+        for (i = 0; i < dl; i++)
+            d->dstep[i].on[1] = 0x81;                     /* SNARE 2 and COWBELL on every step: never touched */
+        song.g[G_DGMODE] = DG_MAPM; song.g[G_DGCHAOS] = 0;
+        song.g[G_DGK] = song.g[G_DGS] = song.g[G_DGH] = 127;
+        memset(dg_pert, 0, sizeof dg_pert);
+        for (ok = 1, y = 0; y < 5u; y++)
+            for (x = 0; x < 5u; x++) {                    /* each node of the map, at its corner: exactly Grids' */
+                const uint8_t *nd = DG_NODE[DG_MAP[x][y]];
+                song.g[G_DGX] = (int16_t)(x < 4u ? x * 32u : 127u);
+                song.g[G_DGY] = (int16_t)(y < 4u ? y * 32u : 127u);
+                if (x == 4u || y == 4u)
+                    continue;                             /* (127 * 2 = 254: not quite the last node) */
+                drum_gen_fill(d);
+                for (p = 0; p < 3u; p++)
+                    for (i = 0; i < dl; i++)
+                        ok &= dstep_has(&d->dstep[i], DG_LANE[p]) == (nd[p * 32u + i] > 0u) &&
+                              (!dstep_has(&d->dstep[i], DG_LANE[p]) || (dstep_lvl(&d->dstep[i], DG_LANE[p]) == LV_HARD) == (nd[p * 32u + i] > 192u));
+            }
+        ck(ok, "MAP: at each node, KICK SNARE HATS are Grids' pattern (accents over 192 HARD)");
+        song.g[G_DGX] = 40; song.g[G_DGY] = 90;
+        drum_gen_fill(d);
+        for (ok = 1, i = 0; i < dl; i++)
+            ok &= d->dstep[i].on[1] == 0x81;
+        ck(ok, "the other lanes (SNARE 2, COWBELL) untouched");
+        song.g[G_DGK] = song.g[G_DGS] = song.g[G_DGH] = 0;
+        drum_gen_fill(d);
+        for (n = 0, i = 0; i < dl; i++)
+            for (p = 0; p < 3u; p++)
+                n += dstep_has(&d->dstep[i], DG_LANE[p]);
+        ck(n == 0u, "MAP: density 0, no hits");
+        song.g[G_DGMODE] = DG_EUCL;
+        song.g[G_DGK] = 32; song.g[G_DGS] = 16; song.g[G_DGH] = 127; song.g[G_DGROT] = 4;
+        drum_gen_fill(d);
+        for (ok = 1, i = 0; i < dl; i++) {
+            ok &= dstep_has(&d->dstep[i], 0) == (i % 4u == 0u);          /* 4 kicks in 16: on the beats */
+            ok &= dstep_has(&d->dstep[i], 2) == (i == 4u || i == 12u);   /* 2 snares, turned 4: the backbeat */
+            ok &= dstep_has(&d->dstep[i], 4);                            /* hats on every step */
+        }
+        ck(ok, "EUCL: 4 kicks on the beats, 2 snares on 5 and 13 (ROT 4), 16 hats");
+        song.g[G_DGMODE] = DG_OFF;
+        memcpy(was, d->dstep, sizeof(dstep_t) * dl);
+        song.g[G_DGK] = 127;
+        for (i = 0; i < dl; i++)
+            drum_gen_tick(d, i);
+        ck(!memcmp(was, d->dstep, sizeof(dstep_t) * dl), "MODE OFF: the lanes stay as they are");
+        song.g[G_DGMODE] = DG_MAPM; song.g[G_DGCHAOS] = 127; song.g[G_DGX] = 64; song.g[G_DGY] = 64;
+        song.g[G_DGK] = song.g[G_DGS] = song.g[G_DGH] = 50;
+        {
+            uint32_t pass, diff = 0;
+            step_t prev[16];
+            drum_gen_fill(d);
+            for (pass = 0; pass < 8u; pass++) {
+                memcpy(prev, d->dstep, sizeof(dstep_t) * dl);
+                for (i = 0; i < dl; i++)
+                    drum_gen_tick(d, i);
+                diff += memcmp(prev, d->dstep, sizeof(dstep_t) * dl) != 0;
+            }
+            ck(diff >= 4u, "CHAOS: the passes differ");
+        }
+        song.g[G_DGMODE] = DG_OFF; frames(2);
+    }
     printf(fails ? "gen: FAILED\n" : "gen: all ok\n");
     return fails ? 1 : 0;
 }

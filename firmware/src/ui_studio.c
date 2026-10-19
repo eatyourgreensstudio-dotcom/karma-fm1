@@ -270,6 +270,24 @@ static void gen_ui_sync(void)
             gen_on &= (uint8_t)~bit;
         }
     }
+    {                                                /* DRUM GEN: a knob turned, the lanes written now */
+        static int16_t dg_was[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+        uint32_t i, ch = 0;
+        for (i = 0; i < 8u; i++)
+            if (song.g[G_DGMODE + i] != dg_was[i]) {
+                ch |= 1u << i;
+                dg_was[i] = song.g[G_DGMODE + i];
+            }
+        if (ch && song.g[G_DGMODE]) {
+            if (ch & 1u) {                           /* MODE on (or MAP <-> EUCL): the pattern before kept for UNDO */
+                undo_sess++;
+                undo_mark(TDRUM, undo_sess);
+                dg_roll_chaos();
+            }
+            drum_gen_fill(TDRUM);
+            ui.force = 1;
+        }
+    }
     if (song.g[G_GNNEW]) {
         song.g[G_GNNEW] = 0;
         if (bit) {
@@ -547,6 +565,27 @@ static void grid_key(uint32_t k)
     sync_reload = 1;
 }
 
+/* DRUMS: SEQ -> GRID -> KIT -> SEQ > DRUM GEN (SEQ there: back to the GRID) */
+static void drum_seq_tap(void)
+{
+    uint32_t i;
+    if (!drum_page) {
+        drum_page = 1;
+        ui.msg_t = 0;
+        ui.force = 1;
+        return;
+    }
+    drum_page = 0;
+    for (i = 0; i < NPAGES; i++)
+        if (str_eq(PAGES[i].title, "DRUM GEN")) {
+            ui.page = (uint8_t)i;
+            ui.fam_last[FAM_SEQ] = (uint8_t)i;
+            ui.home = 0;
+            page_entered();
+            ui.force = 1;
+        }
+}
+
 static void drum_screen_input(uint32_t pressed, uint32_t home)
 {
     uint32_t k, b;
@@ -565,9 +604,8 @@ static void drum_screen_input(uint32_t pressed, uint32_t home)
             open_family(FAM_EDIT);
             return;
         } else if (b == B_SEQ) {
-            drum_page = (uint8_t)((drum_page + 1u) % 2u);
-            ui.msg_t = 0;
-            ui.force = 1;
+            drum_seq_tap();
+            return;
         } else if (b == B_SAVE) {
             studio_open(SC_SONG);
             return;

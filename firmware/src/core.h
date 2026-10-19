@@ -109,6 +109,8 @@ enum {                          /* global parameters */
                                                                                 * order; ui_studio.c hex_ui_sync) */
     G_GNON, G_GNCHG, G_GNDENS, G_GNRANGE,   /* SEQ > GEN (gen_seq.c): ON is the selected synth track's (ui_studio.c */
     G_GNOCT, G_GNACC, G_GNSLD, G_GNNEW,     /* gen_ui_sync); the rest the FM-1's, not in a project. In this order */
+    G_DGMODE, G_DGX, G_DGY, G_DGCHAOS,      /* SEQ > DRUM GEN (gen_seq.c): the drum track's KICK SNARE HAT lanes; */
+    G_DGK, G_DGS, G_DGH, G_DGROT,           /* settings of the FM-1, not in a project. G_DGK..G_DGH in this order */
     G_COUNT
 };
 
