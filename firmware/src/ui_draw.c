@@ -204,51 +204,57 @@ static void graph_steps(const track_t *t, uint16_t c)
             cv_rect(x - 1, y + 16, 3, 3, C_WHITE);
     }
 }
-/* STEP page: the cursor's 16-step bank as a little piano roll */
+/* STEP page: the cursor's 16-step bank as 2 rows of 8 boxes, each with its note, readable on the
+ * small screen. A note: filled in the track's colour (an ACC a white bar on top, a SLD an arrow on
+ * to the next step, a chord "+n" small); a TIE: a band carried on from the note before; a rest: an
+ * empty box. The cursor's box in a white frame, the step playing all white. */
 static void graph_roll(const track_t *t, uint16_t c)
 {
-    uint32_t i, j, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
-    int32_t lo = 127, hi = 0, prev_y = -1;
-    for (i = 0; i < len; i++)
-        for (j = 0; j < t->step[i].n; j++) {
-            if (t->step[i].note[j] < lo)
-                lo = t->step[i].note[j];
-            if (t->step[i].note[j] > hi)
-                hi = t->step[i].note[j];
-        }
-    if (lo > hi) {
-        lo = 48;
-        hi = 72;
-    }
-    if (hi - lo < 12)
-        hi = lo + 12;
+    uint32_t i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
     for (i = 0; i < 16u; i++) {
         uint32_t si = base + i;
         const step_t *st = &t->step[si];
-        int32_t x = (int32_t)i * 15, yb = 86;
-        if (si >= len)
-            break;
-        if (si == ui.cursor)
-            cv_rect(x + 5, 92, 3, 3, C_WHITE);
-        if (song.playing && si == t->seq_idx)
-            cv_rect(x + 1, 97, 12, 1, C_WHITE);
-        if (st->time == ST_TIE && prev_y >= 0) {
-            cv_rect(x, prev_y, 14, 1, C_GRAY);
+        int32_t x = 1 + (int32_t)(i % 8u) * 30, y = 2 + (int32_t)(i / 8u) * 46, w = 28, h = 42;
+        int play = song.playing && si == t->seq_idx, cur = si == ui.cursor;
+        uint16_t fill = play ? C_WHITE : c, ink = C_BLACK;
+        char nm[8];
+        if (si >= len) {                             /* past the pattern's end */
+            cv_rect(x + w / 2 - 2, y + h / 2, 4, 1, TE_G1);
             continue;
         }
-        if (!step_on(st)) {
-            cv_rect(x + 6, yb, 2, 1, C_DIM);
-            prev_y = -1;
-            continue;
+        if (step_on(st)) {
+            note_name(nm, st->note[0]);
+            if (text_w(&FONT_S, nm) > w - 2)         /* (C#-1: the octave would not fit) */
+                str_cpy(nm, N_NOTE[st->note[0] % 12u], 8);
+            cv_rect(x, y, w, h, fill);
+            if (st->flags & SF_ACCENT)
+                cv_rect(x + 2, y + 2, w - 4, 3, play ? C_BLACK : C_WHITE);
+            cv_text(x + (w - text_w(&FONT_S, nm)) / 2, y + 12, &FONT_S, nm, ink);
+            if (st->n > 1) {                         /* a chord: how many more notes */
+                char ch[4];
+                ch[0] = '+';
+                ch[1] = (char)('0' + (st->n - 1 > 9 ? 9 : st->n - 1));
+                ch[2] = 0;
+                cv_text(x + (w - text_w(&FONT_S, ch)) / 2, y + 26, &FONT_S, ch, ink);
+            }
+            if (st->flags & SF_SLIDE) {              /* an arrow on to the next step */
+                int32_t k;
+                for (k = 0; k < 4; k++)
+                    cv_rect(x + w - 2 + k, y + h - 10 + k, 1, 8 - 2 * k, play ? C_BLACK : C_WHITE);
+            }
+        } else if (st->time == ST_TIE) {             /* the note before, held on */
+            cv_rect(x - 2, y + 16, w + 2, 10, play ? C_WHITE : c);
+            cv_rect(x, y, w, 1, TE_G2);
+            cv_rect(x, y + h - 1, w, 1, TE_G2);
+        } else {                                     /* a rest */
+            op_box(x, y, w, h, play ? C_WHITE : TE_G2);
+            fmt_int(nm, (int32_t)si + 1);             /* its number, to find the way */
+            cv_text(x + (w - text_w(&FONT_S, nm)) / 2, y + 12, &FONT_S, nm, play ? C_WHITE : TE_G3);
         }
-        for (j = 0; j < st->n; j++) {
-            int32_t y = 80 - (st->note[j] - lo) * 74 / (hi - lo);
-            cv_rect(x + 2, y, 10, 1, (st->flags & SF_ACCENT) ? C_WHITE : c);
-            if (j == 0)
-                prev_y = y;
+        if (cur) {                                   /* the step the knobs edit */
+            op_box(x - 1, y - 1, w + 2, h + 2, C_WHITE);
+            op_box(x - 2, y - 2, w + 4, h + 4, C_WHITE);
         }
-        if (st->flags & SF_SLIDE)
-            cv_line(x + 11, prev_y, x + 17, prev_y + 2, c);
     }
 }
 static void graph_scale(const track_t *t, uint16_t c)

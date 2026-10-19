@@ -994,6 +994,29 @@ int main(int argc, char **argv)
         check(note_len(&trk[0], 4) == 3u && trk[0].step[5].time == ST_TIE && trk[0].step[6].time == ST_TIE &&
               trk[0].step[7].time != ST_TIE, "STEP page, KNOB 3 on a note: LEN 1 -> 3 (two TIEs after it)");
         ui.force = 1; frame(); ppm("page-step-len");
+        {   /* the STEP page with a busier bank: ACC, SLD, a chord, a TIE, the step playing */
+            static const uint8_t RN[16] = {36, 0, 48, 39, 0, 43, 0, 46, 36, 36, 0, 51, 0, 41, 0, 34};
+            uint32_t k;
+            step_t keep[16];
+            for (k = 0; k < 16u; k++) {
+                keep[k] = trk[0].step[k];
+                trk[0].step[k].time = RN[k] ? ST_NOTE : ST_REST;
+                trk[0].step[k].n = RN[k] ? 1 : 0;
+                trk[0].step[k].note[0] = RN[k];
+                trk[0].step[k].flags = 0;
+            }
+            trk[0].step[1].time = ST_TIE;
+            trk[0].step[2].flags = SF_ACCENT;
+            trk[0].step[3].flags = SF_SLIDE;
+            trk[0].step[7].flags = SF_ACCENT | SF_SLIDE;
+            trk[0].step[11].n = 3; trk[0].step[11].note[1] = 55; trk[0].step[11].note[2] = 58;
+            song.playing = 1; trk[0].seq_idx = 9; ui.cursor = 5;
+            ui.force = 1; frame(); ppm("page-step-busy");
+            song.playing = 0; ui.cursor = 4;
+            for (k = 0; k < 16u; k++)
+                trk[0].step[k] = keep[k];
+            ui.force = 1; frame();
+        }
         K(EN_K3, -1);
         check(note_len(&trk[0], 4) == 2u && trk[0].step[6].time == ST_REST, "KNOB 3 back: LEN 2 (its last TIE a REST)");
         trk[0].step[5].n = 1, trk[0].step[5].note[0] = 64;   /* a TIE holding a note (TIME, or an older SLOOP) */
