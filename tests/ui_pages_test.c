@@ -1333,6 +1333,18 @@ int main(int argc, char **argv)
         }
         go_home(); frames(2);
     }
+    {   /* JUNO on track 3: its two EDIT pages */
+        go_home(); song.playing = 0; ly_lock = LY_PLAY;
+        track_select(2); frames(2);
+        host_preset(&trk[2], ENGI_JUNO, 1); frames(2);
+        check(!strcmp(ENGINES[trk[2].engine]->name, "JUNO"), "JUNO: the preset loads the engine");
+        trk[2].p[P_MUTE] = 0; ui.fam_last[FAM_EDIT] = 0;
+        open_family(FAM_EDIT); ui.force = 1; frames(3);
+        ppm("juno-dco");
+        encs[panel.enc[EN_SELECT]] = 1; ui.force = 1; frames(3);
+        ppm("juno-vcf");
+        go_home(); frames(2);
+    }
     printf("ui: %s\n", fails ? "FAILED" : "pages, layers (punch, steps, erase, roll, key, mix), layer lock, song layer, REC hold, drums, REC, 20000-frame fuzz PASS");
     return fails;
 }

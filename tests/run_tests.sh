@@ -52,6 +52,11 @@ run "song screen: commands, load (OCT+ twice), display bounds" "$OUT/song_ui_tes
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/studio_drums_test" tests/studio_drums_test.c -lm
 run "drum lanes, kit audio, metronome, record arm, free take" "$OUT/studio_drums_test" "$OUT/drum-styles.wav"
 $CC -O1 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/gen_seq_test" tests/gen_seq_test.c -lm
+FM106=${FM106:-$HOME/fm1-firmware/ref/fm-106}         # JUNO against FM-106's own code, when its checkout is there
+if [ -d "$FM106/firmware/src" ]; then
+    $CC -O1 -w -Ifirmware/src -I"$FM106/firmware/src" -o "$OUT/juno_test" tests/juno_test.c -lm
+    run "JUNO: DCO, VCF, chorus as FM-106's, sample for sample" "$OUT/juno_test"
+fi
 run "SEQ > GEN: a loop that changes as it plays (CHANGE, SCALE, RANGE, ON per track)" "$OUT/gen_seq_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq2_test" tests/seq2_test.c -lm
 run "sequencer 2.0: no drift, ratchets, roll, erase / undo, ghost / hard, chords, mute / solo, nudge, locks" "$OUT/seq2_test"
