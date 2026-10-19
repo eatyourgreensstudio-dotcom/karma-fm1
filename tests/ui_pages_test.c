@@ -771,7 +771,7 @@ int main(int argc, char **argv)
         SEL(9);
         check(!strcmp(PT(), "VOICE 2"), "SELECT on EDIT: up to VOICE 2");
         tap(B_SEQ); SEL(9);
-        check(!strcmp(PT(), "ACID GEN 2"), "SELECT on SEQ: STEP .. ACID GEN 2, not into the SONG screen");
+        check(!strcmp(PT(), "GEN 2"), "SELECT on SEQ: STEP .. GEN 2, not into the SONG screen");
         tap(B_ENV);
         check(!strcmp(PT(), "ENV"), "the button still opens its family");
         tap(B_ENV);
@@ -1286,6 +1286,25 @@ int main(int argc, char **argv)
         fm1_in.buttons = 0; fm1_in.notes = 0; frames(4);
         #undef R
     }
+        {   /* SEQ > GEN, GEN 2 on track 1, ON */
+            uint32_t k, pg;
+            go_home(); song.sel = 0; song.playing = 0; ly_lock = LY_PLAY; open_family(FAM_SEQ); frames(2);
+            pg = ui.page;
+            for (k = 0; k < NPAGES; k++)
+                if (!strcmp(PAGES[k].title, "GEN"))
+                    ui.page = (uint8_t)k;
+            song.g[G_GNON] = 1; ui.force = 1; frames(3);
+            check(gen_on == 1u, "SEQ > GEN: ON on track 1");
+            trk[0].p[P_SLEN] = 16; song.g[G_GNNEW] = 1; frames(2);
+            song.playing = 1; trk[0].seq_idx = 3; ui.force = 1; frame();
+            ppm("page-gen");
+            song.playing = 0;
+            ui.page = (uint8_t)(ui.page + 1u); ui.force = 1; frames(2);
+            ppm("page-gen2");
+            song.g[G_GNON] = 0; frames(2);
+            check(gen_on == 0u, "SEQ > GEN: OFF again");
+            ui.page = (uint8_t)pg; ui.force = 1; frame();
+        }
     printf("ui: %s\n", fails ? "FAILED" : "pages, layers (punch, steps, erase, roll, key, mix), layer lock, song layer, REC hold, drums, REC, 20000-frame fuzz PASS");
     return fails;
 }

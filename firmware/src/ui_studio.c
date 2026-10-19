@@ -245,6 +245,41 @@ static uint8_t op_note = 60, op_hit;                    /* the selected synth tr
 
 /* FX > CLOUD's SEND (G_CLSEND) is the selected track's send, on the drum track the selected sound's: the value on
  * the page follows the selection, and what the knob (or the editor) sets goes to that track / sound. Once a frame */
+/* SEQ > GEN: ON shows and sets the selected synth track's (gen_on); NEW rolls its loop. Turned on, and NEW,
+ * keep the pattern before for UNDO. Once a frame */
+static void gen_ui_sync(void)
+{
+    static uint8_t sel_was = 0xFF;
+    static int16_t on_was = -1;
+    uint32_t s = song.sel, bit = s < NPART ? 1u << s : 0u;
+    if (s != sel_was) {
+        sel_was = (uint8_t)s;
+        song.g[G_GNON] = (int16_t)((gen_on & bit) != 0u);
+        on_was = song.g[G_GNON];
+    }
+    if (song.g[G_GNON] != on_was) {
+        on_was = song.g[G_GNON];
+        if (!bit) {
+            song.g[G_GNON] = on_was = 0;
+        } else if (on_was) {
+            undo_sess++;
+            undo_mark(TSEL, undo_sess);
+            gen_on |= (uint8_t)bit;
+            TSEL->seq_active = 1;
+        } else {
+            gen_on &= (uint8_t)~bit;
+        }
+    }
+    if (song.g[G_GNNEW]) {
+        song.g[G_GNNEW] = 0;
+        if (bit) {
+            undo_sess++;
+            undo_mark(TSEL, undo_sess);
+            gen_new(TSEL);
+            ui.force = 1;
+        }
+    }
+}
 static void cloud_ui_sync(void)
 {
     static uint16_t was = 0xFFFF;
@@ -340,6 +375,7 @@ static void pads_tick(void)                             /* once a frame: the hit
     fm1_irq_on();
     cloud_ui_sync();
     acid_gen_sync();
+    gen_ui_sync();
     hex_ui_sync();
     for (i = 0; i < DRUM_LANES; i++) {
         if ((hits >> i) & 1u) pad_lit[i] = 6;

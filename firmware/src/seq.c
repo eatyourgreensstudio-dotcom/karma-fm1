@@ -2037,6 +2037,8 @@ static int32_t micro_units(const track_t *t, uint32_t abs, uint32_t slen)
  * skipped or played twice, whatever its neighbours' nudges (two that cross play in order, a block
  * apart), and a step nudged late past the next one's early nudge still plays first. Ratchets and
  * the recording stay on the grid (rec_target); seq_ratchets gets the time since the step fired. */
+#include "gen_seq.c"         /* SEQ > GEN: a loop that changes as it plays */
+
 static void seq_tick(track_t *t, uint32_t adv)
 {
     uint32_t len = trk_len(t), into, slen, abs, idx, nabs, fire = 0;
@@ -2079,6 +2081,8 @@ static void seq_tick(track_t *t, uint32_t adv)
         t->rat_lanes = 0;
         if (!idx)
             t->pass++;                               /* a new pass of the loop (recording: one undo) */
+        if (!is_drum(t))
+            gen_tick(t, idx);                        /* GEN: the step perhaps rolled again before it plays */
         if (erasing(t))
             erase_step(t, idx);                      /* EDIT + key held: gone as it passes */
         t->seq_skip = (uint8_t)!step_plays(t, idx);

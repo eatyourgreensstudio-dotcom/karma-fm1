@@ -204,18 +204,23 @@ static void graph_steps(const track_t *t, uint16_t c)
             cv_rect(x - 1, y + 16, 3, 3, C_WHITE);
     }
 }
+/* the 16 steps the boxes show: STEP, the cursor's; SEQ > GEN, the ones playing */
+static uint32_t roll_bank(const track_t *t)
+{
+    return cur_page()->scope == SC_STEP || !song.playing ? ui.bank : t->seq_idx / 16u;
+}
 /* STEP page: the cursor's 16-step bank as 2 rows of 8 boxes, each with its note, readable on the
  * small screen. A note: filled in the track's colour (an ACC a white bar on top, a SLD an arrow on
  * to the next step, a chord "+n" small); a TIE: a band carried on from the note before; a rest: an
  * empty box. The cursor's box in a white frame, the step playing all white. */
 static void graph_roll(const track_t *t, uint16_t c)
 {
-    uint32_t i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
+    uint32_t i, len = (uint32_t)t->p[P_SLEN], base = roll_bank(t) * 16u;
     for (i = 0; i < 16u; i++) {
         uint32_t si = base + i;
         const step_t *st = &t->step[si];
         int32_t x = 1 + (int32_t)(i % 8u) * 30, y = 2 + (int32_t)(i / 8u) * 46, w = 28, h = 42;
-        int play = song.playing && si == t->seq_idx, cur = si == ui.cursor;
+        int play = song.playing && si == t->seq_idx, cur = si == ui.cursor && cur_page()->scope == SC_STEP;
         uint16_t fill = play ? C_WHITE : c, ink = C_BLACK;
         char nm[8];
         if (si >= len) {                             /* past the pattern's end */
@@ -360,7 +365,7 @@ static uint32_t graph_signature(void)
             h ^= (uint32_t)project_used(i) << (20u + i);
     if (pg->graph == GR_STEPS || pg->graph == GR_ROLL) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
-        if (pg->graph == GR_ROLL && ph / 16u != ui.bank)
+        if (pg->graph == GR_ROLL && ph / 16u != roll_bank(t))
             ph = 0xFFFFu;                            /* the roll shows the cursor's bank only */
         h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u;
     }

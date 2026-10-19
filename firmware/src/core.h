@@ -107,6 +107,8 @@ enum {                          /* global parameters */
     G_HXPAMT, G_HXPDEC, G_HXRATIO, G_HXFM, G_HXCLICK, G_HXCLVL, G_HXCTONE,         /* the selected sound of a HEX */
     G_HXFTYPE, G_HXCUT, G_HXRES, G_HXDRIVE, G_HXAUX1, G_HXAUX2, G_HXCRUSH,          /* kit (hex_drums.c hex_snd_t, in its
                                                                                 * order; ui_studio.c hex_ui_sync) */
+    G_GNON, G_GNCHG, G_GNDENS, G_GNRANGE,   /* SEQ > GEN (gen_seq.c): ON is the selected synth track's (ui_studio.c */
+    G_GNOCT, G_GNACC, G_GNSLD, G_GNNEW,     /* gen_ui_sync); the rest the FM-1's, not in a project. In this order */
     G_COUNT
 };
 

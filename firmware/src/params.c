@@ -239,6 +239,14 @@ static const param_desc_t GP[G_COUNT] = {
     [G_HXAUX1] = PD("AUX A", F_PCT, 0, 127, 0),
     [G_HXAUX2] = PD("AUX B", F_PCT, 0, 127, 0),
     [G_HXCRUSH] = PD("CRUSH", F_PCT, 0, 127, 0),
+    [G_GNON] = PE("GEN", N_ONOFF, 0),                /* SEQ > GEN (gen_seq.c) */
+    [G_GNCHG] = PD("DRIFT", F_PCT, 0, 127, 32),
+    [G_GNDENS] = PD("DENS", F_PCT, 0, 127, 89),
+    [G_GNRANGE] = PD("RANGE", F_INT, 1, 3, 2),
+    [G_GNOCT] = PD("OCT", F_INT, 1, 5, 3),
+    [G_GNACC] = PD("ACC", F_PCT, 0, 127, 25),
+    [G_GNSLD] = PD("SLIDE", F_PCT, 0, 127, 13),
+    [G_GNNEW] = PE("NEW", N_GO, 0),
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -479,6 +487,8 @@ static const page_t PAGES[] = {
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
     {"ACID GEN", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGDENS, G_AGACC, G_AGSLD, G_AGSEED}},     /* TB-3PO's lines into the */
     {"ACID GEN 2", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGSCALE, G_AGOCT, G_AGROOT, G_AGMUT}},  /* track (acid_gen.c) */
+    {"GEN", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNON, G_GNCHG, G_GNDENS, G_GNRANGE}},   /* a loop that changes as */
+    {"GEN 2", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNOCT, G_GNACC, G_GNSLD, G_GNNEW}},    /* it plays (gen_seq.c) */
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"TRACKS", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},   /* REC button; TRACK LEVEL LEN PAN */
     {"DRUMS", FAM_TRK, SC_DRUM, GR_NONE, {0xFF,0xFF,0xFF,0xFF}},
@@ -504,6 +514,8 @@ static int page_shown(const page_t *pg)
         return is_drum(TSEL);
     if (pg->fam == FAM_EDIT && is_drum(TSEL))
         return 0;
+    if (pg->scope == SC_GLOBAL && (pg->id[0] == G_GNON || pg->id[0] == G_GNOCT))
+        return !is_drum(TSEL);                       /* GEN: the synth tracks' */
     return pg->id[0] != P_FTYPE || (!is_drum(TSEL) && TSEL->eng_req % NENGINES == 0u);
 }
 
