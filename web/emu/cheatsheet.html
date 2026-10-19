@@ -86,18 +86,28 @@ td:first-child { font-family: var(--mono); font-size: 12.5px; white-space: nowra
   <div class="knobs"><div class="c1">WAVE<span>saw / square</span></div><div class="c2">CUT<span>cutoff</span></div><div class="c3">RES<span>resonance</span></div><div class="c4">ENV<span>env amount</span></div></div>
   <div class="knobs"><div class="c1">DEC<span>decay</span></div><div class="c2">ACC<span>accent</span></div><div class="c3">DRV<span>drive</span></div><div class="c4">SLIDE<span>slide time</span></div></div>
   <h3>Accent and slide on a step</h3>
-  <div class="how">SEQ → STEP page: KNOB 1 picks the step, KNOB 4 FLAG = − / ACC / SLD / A+S</div>
+  <div class="how">SEQ → STEP page: KNOB 1 picks the step, KNOB 4 FLAG = − / ACC / SLD / A+S · in the boxes: white bar = ACC, arrow = SLD, +2 = chord</div>
   <p class="note">Presets: TB ACID, TB SQUARE, TB DIRTY, TB DEEP, TB SQUELCH, TB RUBBER (PRESETS knob).</p>
 </section>
 
 <section>
   <h2>ACID GEN <small>acid lines, any synth track</small></h2>
-  <div class="how">SEQ → turn SELECT to the last two pages</div>
+  <div class="how">SEQ → turn SELECT past STEP and PATTERN</div>
   <div class="pg">ACID GEN</div>
   <div class="knobs"><div class="c1">DENS<span>notes that play</span></div><div class="c2">ACC<span>accents</span></div><div class="c3">SLIDE<span>slides</span></div><div class="c4">SEED<span>a new line each step</span></div></div>
   <div class="pg">ACID GEN 2</div>
   <div class="knobs"><div class="c1">SCALE<span>MIN PHRY HARM MPEN DOR MAJ</span></div><div class="c2">OCT<span>1–3 octaves</span></div><div class="c3">ROOT<span>key</span></div><div class="c4">VARY<span>GO: reroll ¼</span></div></div>
   <p class="note">Turning any knob rewrites the track's pattern at once. EDIT + OCT− brings your old one back. The knob settings are not saved; the line is (it is the pattern).</p>
+</section>
+
+<section>
+  <h2>GEN <small>a loop that changes as it plays, synth tracks</small></h2>
+  <div class="how">SEQ → turn SELECT past ACID GEN 2 · the boxes show the loop as it changes</div>
+  <div class="pg">GEN</div>
+  <div class="knobs"><div class="c1">GEN<span>ON / OFF, this track</span></div><div class="c2">DRIFT<span>0 = locked … all new</span></div><div class="c3">DENS<span>notes that play</span></div><div class="c4">RANGE<span>1–3 octaves</span></div></div>
+  <div class="pg">GEN 2</div>
+  <div class="knobs"><div class="c1">OCT<span>lowest octave</span></div><div class="c2">ACC<span>accents</span></div><div class="c3">SLIDE<span>slides</span></div><div class="c4">NEW<span>GO: a fresh loop</span></div></div>
+  <p class="note">Notes stay in the track's SCALE and ROOT. Like what you hear? DRIFT to 0 and it stays; it's a normal pattern. EDIT + OCT− goes back to before GEN was turned on. GEN is OFF again after power off.</p>
 </section>
 
 <section>
