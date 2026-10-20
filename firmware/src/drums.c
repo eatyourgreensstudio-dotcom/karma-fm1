@@ -349,10 +349,22 @@ static inline void drum_voice_sends(uint32_t k, int own_only, int32_t *rs, int32
 /* adds the drums into the dry mix and the reverb and delay sends; mono != 0: into mono instead, before
  * the pan and the kit's sends (the SLICER, slicer.c slicer_drums, does those after it), each sound's own
  * sends from here (so they stay the sound's with the SLICER on) */
+/* the synthesised kits (HEX, the SYN ones) as loud as the synth tracks (2026-10-20: they were 5 .. 13 dB under):
+ * a gain, then a soft knee rounds each hit's peak instead of the master limiter pumping the mix */
+#ifndef DRUM_BOOST_Q8
+#define DRUM_BOOST_Q8 1024                      /* x 4 (+12 dB) */
+#endif
+#ifndef DRUM_KNEE
+#define DRUM_KNEE 9000                          /* (where the soft knee starts) */
+#endif
+/* and each kit level with the others (Q8; measured on a house beat, tests: about -16.5 LUFS): HEX BOOM, ACID,
+ * METAL, GLITCH, ROOM, then 808, 909 (the rest: 1) */
+static const uint16_t DRUM_KIT_TRIM[7] = {320, 560, 245, 860, 290, 215, 256};
 static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n)
 {
     uint32_t k, i;
     int32_t lvl = song.g[G_DRLVL] * 200, send, dsend, csend, pk = drums.peak;
+    int32_t kboost = (int32_t)((DRUM_BOOST_Q8 * (drum_kit() < 7u ? DRUM_KIT_TRIM[drum_kit()] : 256u)) >> 8);
     int32_t pan = trk[TRK_DRUM].p[P_PAN], gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
     for (i = 0; i < n && drums.tail; i++) {         /* declick tail, ~0.4 ms */
         if (mono) {
@@ -374,6 +386,7 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
             v->active = 0;
         for (i = 0; i < m; i++) {
             int32_t s = mulq15(ds_buf[i], mulq15(lvl, 32767 - drums.a0 - (((drums.a1 - drums.a0) * (int32_t)i) >> CTL_LOG2)));
+            s = soft_knee((s * kboost) >> 8, DRUM_KNEE);   /* louder, the hits' tips rounded (2026-10-20) */
             v->s[7] = s;
             if (csend)
                 cloud_bus[i] += mulq15(s, csend);
