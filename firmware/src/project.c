@@ -39,7 +39,7 @@
 #define PROJ_NG 32u                            /* the globals of formats 4 and 5 (G_COUNT until 2.4). SLOOP 2.5's
                                                 * G_DRDLY rides in the byte after sel (0 in older projects: off),
                                                 * so the format and its size do not change */
-_Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 59u,   /* (+20: SEQ > GEN, DRUM GEN, PLAY, not in a project) */
+_Static_assert(G_DRDLY == PROJ_NG && G_TXSRC == PROJ_NG + 5u && G_COUNT == G_BEND + 60u,   /* (+21: SEQ > GEN, DRUM GEN, PLAY, KNOBS, not in a project) */
                "the globals a project holds, then G_DRDLY (then 2.6's GLO > MIDI: settings of the FM-1)");
 #define PROJ_NC6 ((uint32_t)P_ITYPE)           /* format 6: the parameters kept in 16 bits, P_LEVEL .. P_VLEAD (as 5), */
 #define PROJ_NX6 ((uint32_t)(P_E0 - P_ITYPE))  /* the 2.6 ones in a byte (0..127), then P_E0 .. P_E7 */
@@ -1066,6 +1066,7 @@ static uint32_t settings_restore(const void *raw, uint32_t n)
     song.g[G_SYNC] = (int16_t)lights_sync;
     song.g[G_MIDI] = (int16_t)lights_mout;
     song.g[G_ROUTE] = (int16_t)lights_min;
+    song.g[G_KNOBS] = (int16_t)midi_knobs;
     palette_set(settings.palette);
     fx_lowcut = (uint8_t)(settings.lowcut != 0);
     ui.force = 1;
@@ -1183,6 +1184,10 @@ static void sections_flush(void)                        /* main loop */
     }
     if ((uint32_t)song.g[G_ROUTE] != lights_min) {        /* GLO > SYSTEM > IN: the same (2.6: CH n too) */
         lights_min = (uint8_t)song.g[G_ROUTE];
+        settings_later = 1;
+    }
+    if ((uint32_t)song.g[G_KNOBS] != midi_knobs) {        /* GLO > MIDI 3 > KNOBS: the same */
+        midi_knobs = (uint8_t)song.g[G_KNOBS];
         settings_later = 1;
     }
     {   /* 2.6: GLO > MIDI (CH1 CH2 CH3 OTHER) and GLO > DRUMS > CH: the same */

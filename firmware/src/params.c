@@ -58,6 +58,7 @@ static const char *const N_SYNC[] = {"INT", "USB", "TRS"};   /* G_SYNC: the temp
 static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_DGMODE[] = {"OFF", "MAP", "EUCL"};
 static const char *const N_PLDIR[] = {"FWD", "REV", "PEND", "RAND", "WALK"};
+static const char *const N_KNOBS[] = {"GM", "70-77"};
 static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};   /* HEX (hex_drums.c) */
 static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
 static const char *const N_HXCLICK[] = {"OFF", "TICK", "NOIS", "POP", "BLIP", "ZAP"};
@@ -173,7 +174,8 @@ static const param_desc_t GP[G_COUNT] = {
     [G_CDEPTH] = PD("CDP", F_PCT, 0, 127, 60),
     [G_MIDI] = PE("OUT", N_MOUT, 0),            /* MIDI OUT: the keys, or the sequencer too (a setting of the FM-1) */
     [G_SYNC] = PE("SYNC", N_SYNC, 0),           /* a setting of the FM-1, not of a project (panel.c lights_sync) */
-    [G_ROUTE] = PE("IN", N_MIN, 0),             /* MIDI IN: NOTES (and the clock), CLOCK only, or CH n: that channel only (a setting of the FM-1) */
+    [G_ROUTE] = PE("IN", N_MIN, 0),               /* MIDI IN: NOTES (and the clock), CLOCK only, or CH n: that channel plays the
+                                                   * selected track (a setting of the FM-1; it starts at CH 1: panel.c lights_min) */
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
     [G_SLOT] = PD("SLOT", F_INT, 1, 4, 1),
     [G_NAME] = PE("NAME", N_DASH, 0),
@@ -261,6 +263,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_PLCHN] = PD("CHANCE", F_PCT, 0, 127, 64),
     [G_PLJMP] = PD("JUMP", F_PCT, 0, 127, 0),
     [G_PLSTR] = PD("STRIDE", F_INT, 1, 7, 1),
+    [G_KNOBS] = PE("KNOBS", N_KNOBS, 1),            /* 70-77: a controller's 8 knobs (Akai MPK mini) = EDIT's two pages */
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -489,6 +492,7 @@ static const page_t PAGES[] = {
     {"MIDI 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_ROUTE, G_CHOTH, G_MIDI, G_BEND}},   /* 2.6: IN, OTHER, OUT, BEND: every MIDI
                                                                            * setting in these two pages (IN and OUT on
                                                                            * SYSTEM too, the drums' channel on DRUMS) */
+    {"MIDI 3", FAM_GLO, SC_GLOBAL, GR_NONE, {G_KNOBS, 0xFF, 0xFF, 0xFF}},   /* a controller's knobs (2026-10-20) */
     {"TEXTURE", FAM_GLO, SC_GLOBAL, GR_NONE, {G_TXSRC, G_TXLVL, G_TXTONE, G_TXMOVE}},   /* 2.6: the bed under the mix */
     {"TEXTURE 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_TXRATE, G_TXWHEN, G_TXDUCK, 0xFF}},
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */

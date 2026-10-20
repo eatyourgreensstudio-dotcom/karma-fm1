@@ -1369,11 +1369,13 @@ static void t_midich(void)
     song.g[G_ROUTE] = 2 + 11;                           /* CH 12 */
     run_block();
     song.sel = 2;
-    mclk_push(0x643C9009u);                             /* C4 on ch 1: ignored (track 1 would play it) */
-    mclk_push(0x6440900Fu);                             /* E4 on ch 10 (the drums): ignored */
-    mclk_push(0x64409509u);                             /* E4 on ch 6 (the selected track): ignored */
+    mclk_push(0x643C9009u);                             /* C4 on ch 1: its own track, 1 (2026-10-20: as IN = NOTES) */
+    mclk_push(0x64409509u);                             /* E4 on ch 6 (nobody's): OTHER = SEL, the selected track */
     run_block(); run_block();
-    check(!gates(&trk[0], 200) && !gates(&trk[2], 200), "2.6: IN = CH 12: notes on other channels play nothing");
+    check(gates(&trk[0], 60) && gates(&trk[2], 64), "IN = CH 12: the other channels play as with IN = NOTES (ch 1: track 1)");
+    mclk_push(0x003C8009u);                             /* (their note-offs) */
+    mclk_push(0x00408509u);
+    run_block(); run_block();
     mclk_push(0x64439B09u);                             /* G4 on ch 12 */
     run_block(); run_block();
     check(gates(&trk[2], 67) == 1u, "2.6: IN = CH 12: a note on channel 12 plays the selected track (3)");
@@ -1386,8 +1388,8 @@ static void t_midich(void)
         int16_t l1 = trk[1].p[P_LEVEL], l0 = trk[0].p[P_LEVEL];
         cc_push(11, 7, 20); cc_push(0, 7, 127);
         run_block(); run_block();
-        check(trk[1].p[P_LEVEL] != l1 && trk[1].p[P_LEVEL] < 40 && trk[0].p[P_LEVEL] == l0,
-              "2.6: a CC on channel 12 sets the selected track; on channel 1 it is ignored");
+        check(trk[1].p[P_LEVEL] != l1 && trk[1].p[P_LEVEL] < 40 && trk[0].p[P_LEVEL] == 127,
+              "a CC on channel 12 sets the selected track; on channel 1, track 1's (as IN = NOTES)");
     }
     mclk_push(0x64409B09u);                             /* E4 on ch 12, held, then IN back to NOTES: released */
     run_block(); run_block();
@@ -1461,6 +1463,7 @@ static void t_midicc(void)
     reset(120);
     mi_r = mi_w;
     song.g[G_ROUTE] = 0;
+    song.g[G_KNOBS] = 0;                                /* (the GM map; KNOBS 70-77 below) */
     a = &trk[0]; b = &trk[1];
     a->eng_req = a->engine = ENGI_JUNO;                 /* JUNO: has RES */
     b->eng_req = b->engine = ENGI_ELEM;                 /* ELEMENTS: none */
@@ -1484,6 +1487,31 @@ static void t_midicc(void)
     check(res < 8u && a->p[P_E0 + res] == 127 && same, "2.5: CC71 = the engine's RES; an engine without one, and unmapped CCs, change nothing");
     check(sus_on[1] == 1u, "2.6: CC 64 (sustain) on ch 2: track 2's pedal down (no parameter changed)");
     cc_push(1, 64, 0); run_block();                     /* (the pedal up again) */
+    {   /* (2026-10-20) KNOBS 70-77: a controller's 8 knobs are the EDIT knobs; IN = CH 1: ch 1 plays the selected track,
+         * ch 2 its own, ch 10 the drums */
+        uint32_t k, ok = 1;
+        song.g[G_KNOBS] = 1;
+        for (k = 0; k < 8u; k++)
+            cc_push(1, 70u + k, 127);
+        run_block(); run_block();
+        for (k = 0; k < 8u; k++) {
+            const param_desc_t *d = &ENGINES[b->eng_req % NENGINES]->edit[k];
+            ok &= d->max <= d->min || b->p[P_E0 + k] == d->max;
+        }
+        check(ok, "KNOBS 70-77: CC 70..77 set the track's EDIT knobs 1..8 (each to its top)");
+        song.g[G_KNOBS] = 0;
+        song.g[G_ROUTE] = 2;                              /* IN = CH 1 */
+        song.sel = 2;
+        mclk_push(0x09u | (0x90u | 0u) << 8 | 60u << 16 | 100u << 24);   /* ch 1 */
+        mclk_push(0x09u | (0x90u | 1u) << 8 | 62u << 16 | 100u << 24);   /* ch 2 */
+        run_block(); run_block();
+        check(sounding(&trk[2], 60) && !sounding(&trk[0], 60) && sounding(&trk[1], 62),
+              "IN = CH 1: ch 1 plays the selected track (3), ch 2 still track 2");
+        mclk_push(0x08u | (0x80u | 0u) << 8 | 60u << 16);
+        mclk_push(0x08u | (0x80u | 1u) << 8 | 62u << 16);
+        run_block(); run_block();
+        song.g[G_ROUTE] = 0; song.sel = 0;
+    }
     song.sel = 2;
     cc_push(6, 93, 127);                                /* ch 7: the selected track */
     run_block(); run_block();

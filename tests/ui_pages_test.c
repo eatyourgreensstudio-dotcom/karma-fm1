@@ -1238,7 +1238,7 @@ int main(int argc, char **argv)
                 go_home(); frame();
                 open_family(FAM_GLO); frame();
                 for (j = 0; j < 12u && strcmp(PAGES[ui.page].title, "MIDI"); j++) { encs[panel.enc[EN_SELECT]] = 1; frame(); }
-                check(!strcmp(ui.msg, "IN CH 5: SEL TRK ONLY"), "GLO > MIDI with IN = CH 5: says the channels are set aside");
+                check(!strcmp(ui.msg, "IN CH 5: SELECTED TRK"), "GLO > MIDI with IN = CH 5: says that channel plays the selected track");
                 song.g[G_ROUTE] = 0;
             }
             song.g[G_CH2] = 2;

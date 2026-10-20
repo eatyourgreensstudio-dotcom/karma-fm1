@@ -113,6 +113,7 @@ enum {                          /* global parameters */
     G_DGMODE, G_DGX, G_DGY, G_DGCHAOS,      /* SEQ > DRUM GEN (gen_seq.c): the drum track's KICK SNARE HAT lanes; */
     G_DGK, G_DGS, G_DGH, G_DGROT,           /* settings of the FM-1, not in a project. G_DGK..G_DGH in this order */
     G_PLDIR, G_PLCHN, G_PLJMP, G_PLSTR,     /* SEQ > PLAY: the selected track's (seq.c pl_*; ui_studio.c play_ui_sync) */
+    G_KNOBS,                                /* GLO > MIDI 3: CC 70-77 the EDIT knobs, or the GM map (a setting of the FM-1) */
     G_COUNT
 };
 

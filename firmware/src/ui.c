@@ -125,14 +125,14 @@ static void page_entered(void)
     const page_t *pg = cur_page();
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
     if (!ui.home && pg->fam == FAM_GLO && pg->id[0] == G_CH1 && song.g[G_ROUTE]) {   /* (2.6) GLO > MIDI while MIDI 2 >
-                                                                                   * IN sets the channels aside */
+                                                                                   * IN sets a channel aside */
         if (song.g[G_ROUTE] == 1)
             ui_message("IN = CLOCK: NO NOTES");
         else {
             char b[10];
             str_cpy(b, "IN CH ", sizeof b);
             fmt_int(b + 6, song.g[G_ROUTE] - 1);
-            ui_say(b, ": SEL TRK ONLY");
+            ui_say(b, ": SELECTED TRK");
         }
     }
     ui.entry_open = 0;

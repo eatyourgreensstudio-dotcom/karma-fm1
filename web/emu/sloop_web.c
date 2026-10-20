@@ -91,6 +91,8 @@ EXPORT void web_boot(void)
     palette_set(4);
     host_tracks_init();
     song.g[G_BPM] = 90;                               /* (as SLOOP powers on) */
+    song.g[G_ROUTE] = (int16_t)lights_min;            /* (as main.c: the FM-1's settings, CH 1 follows the selection */
+    song.g[G_KNOBS] = (int16_t)midi_knobs;            /* and a controller's knobs 70-77 are the EDIT knobs) */
     for (i = 0; i < NPART; i++) {
         set_engine_of(&trk[i], TRK_DEF[i][0]);
         apply_preset_to(&trk[i], TRK_DEF[i][1]);

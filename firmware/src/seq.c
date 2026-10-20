@@ -2318,6 +2318,11 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
         sus_set(t, value >= 64u);
         return;
     }
+    if (song.g[G_KNOBS] && cc >= 70u && cc <= 77u && !is_drum(t)) {   /* KNOBS 70-77: a controller's 8 knobs are the
+                                                                     * track's EDIT knobs, page 1 then page 2 */
+        midi_cc_set(t, P_E0 + (cc - 70u), value);
+        return;
+    }
     for (i = 0; i < NELEM(MIDI_CC_MAP); i++)
         if (MIDI_CC_MAP[i][0] == cc)
             id = MIDI_CC_MAP[i][1];
@@ -2591,10 +2596,9 @@ static void events_block(uint32_t n)
             mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u);
             continue;
         }
-        if (song.g[G_ROUTE] >= 2) {                   /* 2.6: IN = CH n: that channel only, on the selected
-                                                       * track (notes and CCs); every other channel ignored */
-            if (ch != (uint32_t)song.g[G_ROUTE] - 2u)
-                continue;
+        if (song.g[G_ROUTE] >= 2 && ch == (uint32_t)song.g[G_ROUTE] - 2u) {   /* IN = CH n: that channel plays the selected
+                                                       * track (notes and CCs); 2026-10-20: the other channels as with IN =
+                                                       * NOTES (their tracks, the drums' channel), the default CH 1 */
             if (st == 0xB0u) {
                 if (d1 == 64u)
                     midi_pedal(ch, TSEL, d2);
@@ -2621,30 +2625,30 @@ static void events_block(uint32_t n)
             }
         } else {
             if (st == 0xB0u) {                            /* a CC (IN = CLOCK: none) */
-                if (!song.g[G_ROUTE] && (t = midi_track(ch)) != 0) {
+                if (song.g[G_ROUTE] != 1 && (t = midi_track(ch)) != 0) {
                     if (d1 == 64u)
                         midi_pedal(ch, t, d2);
                     midi_cc(t, d1, d2);
                 }
-                else if (!song.g[G_ROUTE])
+                else if (song.g[G_ROUTE] != 1)
                     (void)midi_learned(d1, d2);           /* (OTHER = OFF: a learned CC still works, on any channel) */
                 continue;
             }
             if (st == 0xC0u) {                            /* Program Change (2.6): the sound of the track its channel
                                                            * plays (IN = CLOCK, OTHER = OFF and nobody's channel: none) */
-                if (!song.g[G_ROUTE] && (t = midi_track(ch)) != 0)
+                if (song.g[G_ROUTE] != 1 && (t = midi_track(ch)) != 0)
                     pc_req[trk_index(t) % NTRK] = (uint8_t)(d1 + 1u);
                 continue;
             }
             if (st == 0xE0u) {                            /* pitch bend (2.6): the track its channel plays (IN = CLOCK:
                                                            * none) */
-                if (!song.g[G_ROUTE] && (t = midi_track(ch)) != 0 && !is_drum(t))
+                if (song.g[G_ROUTE] != 1 && (t = midi_track(ch)) != 0 && !is_drum(t))
                     midi_bend(ch, t, d1, d2);
                 continue;
             }
             if (st != 0x90u && st != 0x80u)
                 continue;
-            if (song.g[G_ROUTE] && st == 0x90u && d2)
+            if (song.g[G_ROUTE] == 1 && st == 0x90u && d2)
                 continue;                                 /* GLO > SYSTEM > IN = CLOCK: no notes (the note-offs still
                                                            * end what was held when it was set) */
             t = midi_route(ch, d1, st == 0x90u && d2);
