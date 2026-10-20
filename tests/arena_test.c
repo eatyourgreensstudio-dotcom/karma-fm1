@@ -32,11 +32,13 @@ static uint64_t fnv(uint64_t h, const int32_t *x, uint32_t n)
 }
 
 typedef struct { uint8_t e, pi; int8_t model; const char *name; } cfg_t;   /* model >= 0: PHYS MODEL forced */
-static const cfg_t CFG[] = {   /* (2026-10-19: the engines that are left: ACID, JUNO, PLAITS, ELEMENTS) */
-    {ENGI_ACID, 0, -1, "ACID TB ACID"}, {ENGI_JUNO, 1, -1, "JUNO STRING"}, {ENGI_JUNO, 3, -1, "JUNO BASS"},
+static const cfg_t CFG[] = {   /* (2026-10-19: the engines that are left: ACID, JUNO, PLAITS, ELEMENTS; JUNO without
+                                * its chorus, whose LFO runs on through silence as the Juno's: not a stale state) */
+    {ENGI_ACID, 0, -1, "ACID TB ACID"}, {ENGI_JUNO, 4, -1, "JUNO SUB 106"}, {ENGI_JUNO, 3, -1, "JUNO BASS"},
     {ENGI_PRISM, 6, -1, "PLAITS SUPER SWARM"}, {ENGI_PRISM, 11, -1, "PLAITS TABLE SWEEP"},
     {ENGI_ELEM, 0, 0, "ELEMENTS BOUNCE"}, {ENGI_ELEM, 3, 1, "ELEMENTS PICK"}, {ENGI_ELEM, 5, 2, "ELEMENTS BOW (solo)"},
-    {ENGI_ELEM, 8, 3, "ELEMENTS BLOW (solo)"},
+    {ENGI_ELEM, 8, 3, "ELEMENTS BLOW (solo)"}, {ENGI_ELEM, 11, 4, "ELEMENTS OMIN (Ominous Voice)"},
+    {ENGI_PRISM, 47, -1, "PLAITS MODAL (her C++)"},
 };
 static const uint8_t LIVE[] = {ENGI_ACID, ENGI_JUNO, ENGI_PRISM, ENGI_ELEM};
 #define NCFG (sizeof CFG / sizeof CFG[0])

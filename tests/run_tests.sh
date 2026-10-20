@@ -49,6 +49,8 @@ run "song screen: commands, load (OCT+ twice), display bounds" "$OUT/song_ui_tes
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/studio_drums_test" tests/studio_drums_test.c $PLX -lm
 run "drum lanes, kit audio, metronome, record arm, free take" "$OUT/studio_drums_test" "$OUT/drum-styles.wav"
 $CC -O1 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -o "$OUT/gen_seq_test" tests/gen_seq_test.c $PLX -lm
+$CC -O1 -w -DARENA_STATS -Ibuild/gen -Ifirmware/src -o "$OUT/arena_test" tests/arena_test.c $PLX -lm
+run "engine arenas: every engine after every other one as on a fresh FM-1; 30 s of random switches" "$OUT/arena_test" 30
 $CC -O2 -w -Ifirmware/mi -o "$OUT/plx_test" tests/plx_test.c $PLX -lm
 run "PLAITS: each of Plaits' own models (firmware/mi) in its memory, sounding, bounded" "$OUT/plx_test"
 FM106=${FM106:-$HOME/fm1-firmware/ref/fm-106}         # JUNO against FM-106's own code, when its checkout is there
