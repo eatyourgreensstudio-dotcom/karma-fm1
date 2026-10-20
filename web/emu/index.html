@@ -88,6 +88,7 @@ footer small { font-size: 11px; opacity: .8; }
   <span>Double-click (or <kbd>Shift</kbd>-click) a button to hold it down, click it again to let go</span>
 </p>
 
+<p class="keys" id="midistat" aria-live="polite">MIDI: switch on first</p>
 <p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="#" id="csopen" style="color:inherit">Cheat sheet: where everything is</a></p>
 
 <footer>
@@ -426,21 +427,44 @@ function saveFlash(sectors) {
 }
 
 // ------------------------------------------------------------------ Web MIDI in (channel messages)
+const NOTE_N = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+function midiSay(t) { const e = document.getElementById("midistat"); if (e) e.textContent = "MIDI: " + t; }
 async function midiOn() {
-  if (!navigator.requestMIDIAccess) return;
+  if (!navigator.requestMIDIAccess) {
+    midiSay("this browser has no Web MIDI (Safari): use Chrome or Edge");
+    return;
+  }
+  if (window.top !== window && document.featurePolicy && !document.featurePolicy.allowsFeature("midi")) {
+    midiSay("blocked inside this embedded page: open the simulator on its own (localhost) in Chrome");
+    return;
+  }
   try {
     const access = await navigator.requestMIDIAccess();
+    let last = 0;
     const bind = () => {
+      const names = [];
       for (const input of access.inputs.values()) {
+        names.push(input.name);
         input.onmidimessage = (e) => {
           const d = e.data;
-          if (d.length >= 2 && d[0] >= 0x80 && d[0] < 0xF0) send({ type: "midi", data: [d[0], d[1], d[2] || 0] });
+          if (d.length >= 2 && d[0] >= 0x80 && d[0] < 0xF0) {
+            send({ type: "midi", data: [d[0], d[1], d[2] || 0] });
+            const now = performance.now(), st = d[0] & 0xF0, ch = (d[0] & 15) + 1;
+            if (now - last > 80) {                                   // (what came in, now and then: it works)
+              last = now;
+              midiSay(`${input.name} · ch ${ch} ` + (st === 0x90 && d[2] ? `note ${NOTE_N[d[1] % 12]}${Math.floor(d[1] / 12) - 1}`
+                : st === 0xB0 ? `CC ${d[1]} = ${d[2]}` : st === 0xE0 ? "pitch bend" : `status ${d[0].toString(16)}`));
+            }
+          }
         };
       }
+      midiSay(names.length ? "listening to " + names.join(", ") : "allowed, but no device: plug it in (it is found when it appears)");
     };
     access.onstatechange = bind;
     bind();
-  } catch { /* no permission: the panel only */ }
+  } catch (err) {
+    midiSay("not allowed (" + (err && err.name || err) + "): allow MIDI for this page in the browser's site settings, then reload");
+  }
 }
 
 // ------------------------------------------------------------------ switching on
