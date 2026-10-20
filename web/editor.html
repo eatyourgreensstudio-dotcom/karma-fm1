@@ -714,7 +714,7 @@ const lockable = (id, pe0 = typeof dev !== "undefined" && dev && dev.info ? dev.
 const MICRO = { MIN: -32, MAX: 31 };                 /* a step's nudge in 1/64 of a step (- early, + late), sent + 64 */
 /* v8: a step's fill condition (firmware core.h FC_*): 0 normal, 1 plays only during a fill, 2 silent during one; 2 bits a
    step, 4 steps a byte (step i: byte i >> 2, bits 2 (i & 3)..), the 16 bytes sent pack7 */
-const FC = { NORM: 0, FILL: 1, NOFILL: 2, NAMES: ["normal", "fill only", "no fill"] };
+const FC = { NORM: 0, FILL: 1, NOFILL: 2, CHANCE: 3, NAMES: ["normal", "fill only", "no fill", "chance"] };
 const fillGet = (bytes, i) => ((bytes[i >> 2] || 0) >> (2 * (i & 3))) & 3;
 const fillSet = (bytes, i, c) => { bytes[i >> 2] = (bytes[i >> 2] & ~(3 << (2 * (i & 3)))) | ((c & 3) << (2 * (i & 3))); };
 /* frames the device sends on its own (while WATCH is on); never replies */
@@ -899,7 +899,7 @@ const parse = {
   [CMD.MICRO_SET](a) { const r = new Reader(a); return { track: r.b(), step: r.b(), micro: r.b() - 64 }; },
   /* v8: a track's fill conditions (16 bytes, pack7; 3 reads as normal) and a set */
   [CMD.FILL_GET](a) { const r = new Reader(a), o = { track: r.b() }; o.fill = Array.from(unpack7(a.slice(r.i))).slice(0, 16); while (o.fill.length < 16) o.fill.push(0); return o; },
-  [CMD.FILL_SET](a) { const r = new Reader(a); return { track: r.b(), step: r.b(), cond: r.b() % 3 }; },
+  [CMD.FILL_SET](a) { const r = new Reader(a); return { track: r.b(), step: r.b(), cond: r.b() % 4 }; },
   /* v9 FM6 patches: target 0 a track (0..2), 1 a bank slot, 2 a factory patch; packed: the 128-byte record */
   [CMD.FM6_GET](a) { return { target: a[0], index: a[1], rc: a[2], packed: a[2] ? null : a.slice(3, 3 + 128) }; },
   [CMD.FM6_PUT](a) { return { target: a[0], index: a[1], rc: a[2] }; },
@@ -997,7 +997,7 @@ const req = {
   microSet: (tr, step, m) => [CMD.MICRO_SET, [tr & 0x7F, step & 0x7F, (Math.max(MICRO.MIN, Math.min(MICRO.MAX, Math.round(m))) + 64) & 0x7F]],
   /* v8: the fill conditions of a track; set one (c: FC.NORM / FILL / NOFILL) */
   fillGet: (tr) => [CMD.FILL_GET, [tr & 0x7F]],
-  fillSet: (tr, step, c) => [CMD.FILL_SET, [tr & 0x7F, step & 0x7F, (c % 3) & 0x7F]],
+  fillSet: (tr, step, c) => [CMD.FILL_SET, [tr & 0x7F, step & 0x7F, (c % 4) & 0x7F]],
   /* v9: FM6 patches (firmware proto >= 9) */
   fm6Get: (target, i) => [CMD.FM6_GET, [target & 0x7F, i & 0x7F]],
   fm6Put: (target, i, packed) => [CMD.FM6_PUT, [target & 0x7F, i & 0x7F, ...Array.from(packed, (x) => x & 0x7F)]],
@@ -2627,7 +2627,7 @@ function makeMockDevice(opt = {}) {
       case CMD.FILL_SET: {
         if (a.length < 3 || a[0] >= NTRK || a[1] >= NSTEP) return null;
         const t = st.tracks[a[0]];
-        fillSet(t.fill, a[1], a[2] % 3);
+        fillSet(t.fill, a[1], a[2] % 4);
         b(a[0]); b(a[1]); b(fillGet(t.fill, a[1]));
         break;
       }
@@ -3589,7 +3589,7 @@ const TEXT = {
     kit: "キット", hitLevel: "レベル", ratchet: "ロール", solo: "SOLO",
     drumHelp: "ドラムは KICK SNARE CHH のように GM の名前か番号で入力（最大 4 音）。",
     stepDetail: "ステップ", nudge: "ナッジ", locks: "パラメータロック", addLock: "+ ロック", noLock: "ロックなし",
-    fillCond: "フィル", fcNorm: "通常", fcFill: "フィル時のみ", fcNoFill: "フィル時は休み",
+    fillCond: "フィル", fcNorm: "通常", fcFill: "フィル時のみ", fcNoFill: "フィル時は休み", fcChance: "確率",
     lockFull: "ロックは 1 トラック 24 個まで。", lockRefused: "このパラメータはロックできません。",
     lockHelp: "ナッジ：ステップの長さの 1/64 単位で早め（−）／遅め（＋）。ロック：そのステップだけパラメータの値を変え、次のステップで元に戻ります。フィル：「フィル時のみ」のステップは GLO ＋ キー 9 を押している間（またはキー 10 で次の小節）だけ鳴り、「フィル時は休み」はその間だけ休みます（グリッドの F と ×）。本体では SEQ ＋ ステップ長押し ＋ KNOB 4（ナッジ）／PRESETS（ロック、ALGORITHM でパラメータ）／OCT+（フィル）。",
     mixer: "ミキサー", mixHelp: "本体の TRACKS ページと同じ 4 トラック。フェーダーはレベル（ドラムは GLO > DRUMS LEVEL）。パンはどのトラックも選択を変えずに書き込みます（0.8 のファームウェアでは一瞬そのトラックを選びます）。REC は本体での録音待機の表示です。",
@@ -3789,7 +3789,7 @@ const TEXT = {
     kit: "Kit", hitLevel: "Level", ratchet: "Roll", solo: "SOLO",
     drumHelp: "Enter drums by GM name or number, like KICK SNARE CHH (up to 4).",
     stepDetail: "Step", nudge: "Nudge", locks: "Parameter locks", addLock: "+ lock", noLock: "no lock",
-    fillCond: "Fill", fcNorm: "normal", fcFill: "fill only", fcNoFill: "no fill",
+    fillCond: "Fill", fcNorm: "normal", fcFill: "fill only", fcNoFill: "no fill", fcChance: "chance",
     lockFull: "A track holds 24 locks at most.", lockRefused: "This parameter cannot be locked.",
     lockHelp: "Nudge: the step early (-) or late (+), in 1/64 of a step. A lock gives a parameter another value for this step only; the base comes back at the next one. Fill: a \"fill only\" step plays only while GLO + key 9 is held (or key 10 makes the next bar a fill), a \"no fill\" step is silent then (F and \u00d7 on the grid). On the device: SEQ + a step held + KNOB 4 (nudge) / PRESETS (the lock; ALGORITHM picks its parameter) / OCT+ (the fill condition).",
     mixer: "Mixer", mixHelp: "The four tracks of the device's TRACKS page. The fader is the level (drums: GLO > DRUMS LEVEL). Pan is written to any track without changing the selection (firmware 0.8: by selecting it for a moment). REC shows a track armed for live recording on the device.",
@@ -5265,7 +5265,7 @@ for (const b of $("songloop").children) b.addEventListener("click", () => songEd
 /* ---- v7 (SLOOP 2.4): the selected step's nudge and parameter locks (a grid cell or a drum column picks it) */
 let selStep = 0;
 const stepLocked = (i) => !!dev && !!dev.micro && (dev.micro[i] !== 0 || dev.locks.some((l) => l.step === i));
-const stepFill = (i) => dev && dev.fill ? fillGet(dev.fill, i) % 3 : 0;   /* v8: 0 normal, 1 fill only, 2 no fill */
+const stepFill = (i) => dev && dev.fill ? fillGet(dev.fill, i) % 4 : 0;   /* v8: 0 normal, 1 fill only, 2 no fill, 3 chance */
 function selectStep(i) {
   if (!dev || i === selStep) return;
   selStep = i;
@@ -5286,7 +5286,7 @@ function renderStepDetail() {
     const nudge = el("input", { type: "number", id: "sdnudge", min: MICRO.MIN, max: MICRO.MAX, title: t("nudge") });
     nudge.addEventListener("change", () => writeMicro(selStep, +nudge.value || 0));
     const fill = el("select", { id: "sdfill", title: t("fillCond") },     /* v8: the fill condition */
-      ...["fcNorm", "fcFill", "fcNoFill"].map((k, c) => el("option", { value: c, text: t(k) })));
+      ...["fcNorm", "fcFill", "fcNoFill", "fcChance"].map((k, c) => el("option", { value: c, text: t(k) })));
     fill.addEventListener("change", () => writeFill(selStep, +fill.value || 0));
     fill.hidden = !hasFill();
     const add = el("button", { type: "button", id: "sdadd", text: t("addLock") });

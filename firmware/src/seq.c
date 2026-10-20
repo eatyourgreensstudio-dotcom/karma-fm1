@@ -807,10 +807,39 @@ static volatile uint8_t fill_arm;            /* GLO + key 10: the next bar is a 
 static uint8_t fill_bar_on;                  /* that bar, while it plays (the ISR) */
 static uint8_t fill_now;                     /* this block is a fill: fill_held || fill_bar_on, read once a block */
 static uint32_t fill_last_bar = 0xFFFFFFFFu; /* clk_beat / 4 of the last bar seen (events_block) */
-static uint32_t step_plays(const track_t *t, uint32_t idx)   /* its condition holds now (3: as normal) */
+/* SEQ > PLAY (2026-10-20), each track's: DIR the order its steps play in, CHANCE how often a FC_CHANCE step plays,
+ * JUMP how often a synth step plays an octave up, STRIDE the steps it moves by. Settings of the FM-1 (not in a
+ * project: it is full); the steps' FC_CHANCE marks are in the project (t->fill) */
+enum { PD_FWD, PD_REV, PD_PEND, PD_RAND, PD_WALK, PD_COUNT };
+static uint8_t pl_dir[NTRK], pl_jump[NTRK], pl_pos[NTRK];
+static uint8_t pl_chance[NTRK] = {64, 64, 64, 64}, pl_stride[NTRK] = {1, 1, 1, 1};
+static uint32_t step_plays(const track_t *t, uint32_t idx)   /* its condition holds now */
 {
     uint32_t c = step_fill(t, idx);
+    if (c == FC_CHANCE)
+        return rng() % 127u < pl_chance[(uint32_t)(t - trk) % NTRK];
     return c == FC_FILL ? fill_now : c == FC_NOFILL ? !fill_now : 1u;
+}
+/* the step that plays at the grid's step nabs (DIR, STRIDE); while recording: in order */
+static uint32_t play_idx(const track_t *t, uint32_t nabs, uint32_t len)
+{
+    uint32_t ti = (uint32_t)(t - trk) % NTRK, s = pl_stride[ti] ? pl_stride[ti] : 1u, d = pl_dir[ti], p;
+    if (song.rec || len < 2u)
+        return nabs % (len ? len : 1u);
+    switch (d) {
+    case PD_REV:
+        return len - 1u - (nabs * s) % len;
+    case PD_PEND:                                    /* there and back, the ends once */
+        p = (nabs * s) % (2u * len - 2u);
+        return p < len ? p : 2u * len - 2u - p;
+    case PD_RAND:
+        return rng() % len;
+    case PD_WALK:                                    /* a step back, stay or a step on (STRIDE steps) */
+        pl_pos[ti] = (uint8_t)((pl_pos[ti] + len * 8u + (rng() % 3u) * s - s) % len);
+        return pl_pos[ti];
+    default:
+        return (nabs * s) % len;
+    }
 }
 
 static void steps_clear(track_t *t)           /* an empty pattern (synth: REST steps, drums: no lane); no lock, no nudge, no condition */
@@ -2075,7 +2104,7 @@ static void seq_tick(track_t *t, uint32_t adv)
     }
     if (fire) {                                      /* a new step: one a block at most */
         t->seq_abs = nabs;
-        idx = nabs % len;
+        idx = play_idx(t, nabs, len);                /* (SEQ > PLAY: DIR, STRIDE) */
         t->seq_idx = (uint16_t)idx;
         t->rat_done[0] = t->rat_done[1] = t->rat_done[2] = t->rat_done[3] = 0;
         t->rat_lanes = 0;
@@ -2114,7 +2143,14 @@ static void seq_tick(track_t *t, uint32_t adv)
                         if (s->note[i] == t->rskip[k])
                             skip |= 1u << i;
             t->rskip_n = 0;
-            seq_step(t, s, slen, skip);
+            if (pl_jump[(uint32_t)(t - trk) % NTRK] && rng() % 127u < pl_jump[(uint32_t)(t - trk) % NTRK]) {
+                step_t up = *s;                      /* SEQ > PLAY JUMP: this time an octave up */
+                for (i = 0; i < up.n && i < 4u; i++)
+                    up.note[i] = (uint8_t)(up.note[i] + 12u > 127u ? up.note[i] : up.note[i] + 12u);
+                seq_step(t, &up, slen, skip);
+            } else {
+                seq_step(t, s, slen, skip);
+            }
         }
     }
     /* the ratchets of the step playing, timed from where it fired (its hits ride with its nudge) */

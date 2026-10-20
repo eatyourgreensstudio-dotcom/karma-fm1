@@ -255,6 +255,13 @@ static void graph_roll(const track_t *t, uint16_t c)
             fmt_int(nm, (int32_t)si + 1);             /* its number, to find the way */
             cv_text(x + (w - text_w(&FONT_S, nm)) / 2, y + 12, &FONT_S, nm, play ? C_WHITE : TE_G3);
         }
+        if (step_fill(t, si) == FC_CHANCE) {         /* a CHANCE step (SEQ > PLAY): a ? in its corner */
+            uint16_t q = step_on(st) && !play ? C_BLACK : play ? C_BLACK : TE_G4;
+            cv_rect(x + 2, y + 3, 5, 2, q);
+            cv_rect(x + 5, y + 5, 2, 2, q);
+            cv_rect(x + 4, y + 7, 2, 1, q);
+            cv_rect(x + 4, y + 9, 2, 2, q);
+        }
         if (cur) {                                   /* the step the knobs edit */
             op_box(x - 1, y - 1, w + 2, h + 2, C_WHITE);
             op_box(x - 2, y - 2, w + 4, h + 4, C_WHITE);

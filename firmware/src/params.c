@@ -57,6 +57,7 @@ static const char *const N_DASH[] = {"--"};
 static const char *const N_SYNC[] = {"INT", "USB", "TRS"};   /* G_SYNC: the tempo and PLAY / STOP from (seq.c mclk) */
 static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_DGMODE[] = {"OFF", "MAP", "EUCL"};
+static const char *const N_PLDIR[] = {"FWD", "REV", "PEND", "RAND", "WALK"};
 static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};   /* HEX (hex_drums.c) */
 static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
 static const char *const N_HXCLICK[] = {"OFF", "TICK", "NOIS", "POP", "BLIP", "ZAP"};
@@ -256,6 +257,10 @@ static const param_desc_t GP[G_COUNT] = {
     [G_DGS] = PD("SNARE", F_PCT, 0, 127, 64),
     [G_DGH] = PD("HATS", F_PCT, 0, 127, 80),
     [G_DGROT] = PD("ROT", F_INT, 0, 15, 4),
+    [G_PLDIR] = PE("DIR", N_PLDIR, 0),              /* SEQ > PLAY (seq.c pl_*): the selected track's */
+    [G_PLCHN] = PD("CHANCE", F_PCT, 0, 127, 64),
+    [G_PLJMP] = PD("JUMP", F_PCT, 0, 127, 0),
+    [G_PLSTR] = PD("STRIDE", F_INT, 1, 7, 1),
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
@@ -494,6 +499,7 @@ static const page_t PAGES[] = {
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
     {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}},
+    {"PLAY", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_PLDIR, G_PLCHN, G_PLJMP, G_PLSTR}},   /* the order steps play in, chance */
     {"ACID GEN", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGDENS, G_AGACC, G_AGSLD, G_AGSEED}},     /* TB-3PO's lines into the */
     {"ACID GEN 2", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGSCALE, G_AGOCT, G_AGROOT, G_AGMUT}},  /* track (acid_gen.c) */
     {"GEN", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNON, G_GNCHG, G_GNDENS, G_GNRANGE}},   /* a loop that changes as */

@@ -1106,7 +1106,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             return;
         t = &trk[a[0]];
         fm1_irq_off();
-        step_fill_set(t, a[1], a[2] % 3u);
+        step_fill_set(t, a[1], a[2] % 4u);
         fm1_irq_on();
         ui.force = 1;
         if (a[0] == song.sel)

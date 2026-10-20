@@ -408,6 +408,9 @@ int main(int argc, char **argv)
         check(step_fill(&trk[0], 4) == FC_NOFILL, "OCT+ again: NO FILL");
         ui.force = 1; frame(); ppm("layer-steps-nofill");
         edges_btn |= BT(B_OCTUP); fm1_in.buttons |= BT(B_OCTUP); frame(); fm1_in.buttons &= ~BT(B_OCTUP); frame();
+        check(step_fill(&trk[0], 4) == FC_CHANCE, "OCT+ again: CHANCE (2026-10-20)");
+        ui.force = 1; frame(); ppm("layer-steps-chance");
+        edges_btn |= BT(B_OCTUP); fm1_in.buttons |= BT(B_OCTUP); frame(); fm1_in.buttons &= ~BT(B_OCTUP); frame();
         check(step_fill(&trk[0], 4) == FC_NORM, "OCT+ again: normal");
         edges_btn |= BT(B_OCTUP); fm1_in.buttons |= BT(B_OCTUP); frame(); fm1_in.buttons &= ~BT(B_OCTUP); frame();
         encs[panel.enc[EN_K4]] = 3; frame();
@@ -1024,11 +1027,13 @@ int main(int argc, char **argv)
             trk[0].step[3].flags = SF_SLIDE;
             trk[0].step[7].flags = SF_ACCENT | SF_SLIDE;
             trk[0].step[11].n = 3; trk[0].step[11].note[1] = 55; trk[0].step[11].note[2] = 58;
+            step_fill_set(&trk[0], 2, FC_CHANCE); step_fill_set(&trk[0], 8, FC_CHANCE);
             song.playing = 1; trk[0].seq_idx = 9; ui.cursor = 5;
             ui.force = 1; frame(); ppm("page-step-busy");
             song.playing = 0; ui.cursor = 4;
             for (k = 0; k < 16u; k++)
                 trk[0].step[k] = keep[k];
+            step_fill_set(&trk[0], 2, FC_NORM); step_fill_set(&trk[0], 8, FC_NORM);
             ui.force = 1; frame();
         }
         K(EN_K3, -1);

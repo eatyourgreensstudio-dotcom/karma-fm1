@@ -112,6 +112,7 @@ enum {                          /* global parameters */
     G_GNOCT, G_GNACC, G_GNSLD, G_GNNEW,     /* gen_ui_sync); the rest the FM-1's, not in a project. In this order */
     G_DGMODE, G_DGX, G_DGY, G_DGCHAOS,      /* SEQ > DRUM GEN (gen_seq.c): the drum track's KICK SNARE HAT lanes; */
     G_DGK, G_DGS, G_DGH, G_DGROT,           /* settings of the FM-1, not in a project. G_DGK..G_DGH in this order */
+    G_PLDIR, G_PLCHN, G_PLJMP, G_PLSTR,     /* SEQ > PLAY: the selected track's (seq.c pl_*; ui_studio.c play_ui_sync) */
     G_COUNT
 };
 
@@ -225,7 +226,7 @@ typedef struct {                 /* a lock: on step `step` the track's p[param] 
 } plock_t;
 #define LOCK_FREE 0xFFu
 /* a step's condition (SLOOP 2.4 fill, GLO + key 9 / 10): plays always, only during a fill, never during one */
-enum { FC_NORM, FC_FILL, FC_NOFILL };     /* (3: as FC_NORM) */
+enum { FC_NORM, FC_FILL, FC_NOFILL, FC_CHANCE };   /* FC_CHANCE: plays at the track's SEQ > PLAY CHANCE (2026-10-20) */
 
 typedef struct track {
     int16_t p[P_COUNT];

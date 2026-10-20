@@ -279,11 +279,11 @@ static void steps_held_clear(void)
     sync_reload = 1;
     ui_message(n ? "NUDGE, LOCKS, FILL CLEARED" : "NO NUDGE, LOCK OR FILL");
 }
-/* OCT+ with step keys held: their fill condition, round: normal -> fill only -> no fill (the first one's next) */
+/* OCT+ with step keys held: their condition, round: normal -> fill only -> no fill -> chance (SEQ > PLAY CHANCE) */
 static void steps_held_fill(void)
 {
     track_t *t = TSEL;
-    static const char *const MSG[3] = {"FILL: NORMAL", "FILL ONLY", "NO FILL"};
+    static const char *const MSG[4] = {"FILL: NORMAL", "FILL ONLY", "NO FILL", "CHANCE"};
     uint32_t w, v = 0, first = 1;
     layer_undo_mark(t);
     step_pend_off &= (uint16_t)~ui.step_held;
@@ -293,13 +293,13 @@ static void steps_held_fill(void)
         if (!((ui.step_held >> w) & 1u) || idx >= trk_len(t))
             continue;
         if (first)
-            v = (step_fill(t, idx) + 1u) % 3u;
+            v = (step_fill(t, idx) + 1u) % 4u;
         first = 0;
         step_fill_set(t, idx, v);
     }
     fm1_irq_on();
     sync_reload = 1;
-    ui_message(MSG[v % 3u]);
+    ui_message(MSG[v % 4u]);
 }
 
 /* ------------------------------------------------------------- GLO --- */
@@ -599,6 +599,11 @@ static void tiles_draw(const tile_t *tl, uint32_t *cache)
                 cv_rect(x + 4, 7, 2, 7, t->fg);
                 cv_rect(x + 4, 7, 5, 2, t->fg);
                 cv_rect(x + 4, 10, 4, 2, t->fg);
+            } else if (t->cond == FC_CHANCE) {          /* a ?, 5 x 7: plays at the track's CHANCE */
+                cv_rect(x + 4, 7, 5, 2, t->fg);
+                cv_rect(x + 7, 9, 2, 2, t->fg);
+                cv_rect(x + 6, 11, 2, 1, t->fg);
+                cv_rect(x + 6, 13, 2, 2, t->fg);
             } else if (t->cond == FC_NOFILL) {          /* an x, 7 x 7: silent in a fill */
                 int32_t d;
                 for (d = 0; d < 6; d++) {
@@ -819,7 +824,7 @@ static void layer_screen_draw(void)
             tl[i].fg = on ? C_BLACK : TE_G3;
             tl[i].marks = (uint8_t)(on ? rt : 0u);
             tl[i].tag = (uint8_t)step_locked(t, idx);   /* a nudge or a lock on it */
-            tl[i].cond = (uint8_t)(step_fill(t, idx) % 3u);   /* its fill condition */
+            tl[i].cond = (uint8_t)step_fill(t, idx);   /* its condition (fill, no fill, chance) */
             if (song.playing && idx == t->seq_idx)
                 tl[i].top = C_WHITE;
             if ((ui.step_held >> i) & 1u)

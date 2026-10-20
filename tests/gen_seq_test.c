@@ -152,6 +152,46 @@ int main(void)
         }
         song.g[G_DGMODE] = DG_OFF; frames(2);
     }
+    {   /* SEQ > PLAY: the order (DIR, STRIDE), CHANCE steps */
+        track_t *u = &trk[0];
+        uint32_t n, ok = 1, seen = 0, hits = 0, moves = 0, prev;
+        static const uint8_t PEND[10] = {0, 1, 2, 3, 2, 1, 0, 1, 2, 3};
+        song.rec = 0;
+        pl_dir[0] = PD_FWD; pl_stride[0] = 1;
+        for (n = 0; n < 40u; n++) ok &= play_idx(u, n, 16) == n % 16u;
+        ck(ok, "PLAY DIR FWD: 0, 1, 2 .. 15, 0 ..");
+        pl_dir[0] = PD_REV;
+        for (ok = 1, n = 0; n < 40u; n++) ok &= play_idx(u, n, 16) == 15u - n % 16u;
+        ck(ok, "PLAY DIR REV: 15, 14 .. 0, 15 ..");
+        pl_dir[0] = PD_PEND;
+        for (ok = 1, n = 0; n < 10u; n++) ok &= play_idx(u, n, 4) == PEND[n];
+        ck(ok, "PLAY DIR PEND (4 steps): 0 1 2 3 2 1 0 1 2 3 (the ends once)");
+        pl_dir[0] = PD_FWD; pl_stride[0] = 3;
+        for (ok = 1, n = 0; n < 16u; n++) { seen |= 1u << play_idx(u, n, 16); ok &= play_idx(u, n, 16) == n * 3u % 16u; }
+        ck(ok && seen == 0xFFFFu, "PLAY STRIDE 3: 0 3 6 9 .. every step of 16 once a round");
+        pl_dir[0] = PD_RAND; pl_stride[0] = 1; seen = 0;
+        for (n = 0; n < 400u; n++) seen |= 1u << play_idx(u, n, 16);
+        ck(seen == 0xFFFFu, "PLAY DIR RAND: every step comes up");
+        pl_dir[0] = PD_WALK; pl_pos[0] = 5; prev = 5; ok = 1;
+        for (n = 0; n < 400u; n++) {
+            uint32_t q = play_idx(u, n, 16), d = (q + 16u - prev) % 16u;
+            ok &= d == 0u || d == 1u || d == 15u;
+            moves += d != 0u;
+            prev = q;
+        }
+        ck(ok && moves > 150u, "PLAY DIR WALK: a step back, stay or a step on, never a leap");
+        song.rec = 1;
+        ck(play_idx(u, 7, 16) == 7u, "PLAY: while recording the steps go in order");
+        song.rec = 0; pl_dir[0] = PD_FWD;
+        step_fill_set(u, 3, FC_CHANCE);
+        pl_chance[0] = 32;
+        for (n = 0; n < 4000u; n++) hits += step_plays(u, 3);
+        ck(hits > 800u && hits < 1200u, "CHANCE step at 25 %: plays about 1 time in 4");
+        pl_chance[0] = 0;
+        for (hits = 0, n = 0; n < 400u; n++) hits += step_plays(u, 3);
+        ck(hits == 0u && step_plays(u, 4), "CHANCE 0: never; a normal step: always");
+        step_fill_set(u, 3, FC_NORM); pl_chance[0] = 64;
+    }
     printf(fails ? "gen: FAILED\n" : "gen: all ok\n");
     return fails ? 1 : 0;
 }

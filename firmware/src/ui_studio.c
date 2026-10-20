@@ -247,6 +247,23 @@ static uint8_t op_note = 60, op_hit;                    /* the selected synth tr
  * the page follows the selection, and what the knob (or the editor) sets goes to that track / sound. Once a frame */
 /* SEQ > GEN: ON shows and sets the selected synth track's (gen_on); NEW rolls its loop. Turned on, and NEW,
  * keep the pattern before for UNDO. Once a frame */
+/* SEQ > PLAY: its four values are the selected track's (seq.c pl_*), shown and set here. Once a frame */
+static void play_ui_sync(void)
+{
+    static uint8_t sel_was = 0xFF;
+    uint32_t s = song.sel % NTRK;
+    int16_t *g = song.g;
+    if (s != sel_was) {
+        sel_was = (uint8_t)s;
+        g[G_PLDIR] = pl_dir[s], g[G_PLCHN] = pl_chance[s], g[G_PLJMP] = pl_jump[s], g[G_PLSTR] = pl_stride[s];
+    }
+    if (g[G_PLDIR] != pl_dir[s] && pl_dir[s] == PD_WALK)
+        pl_pos[s] = (uint8_t)(trk[s].seq_idx % NSTEP);  /* (WALK starts where the track is) */
+    pl_dir[s] = (uint8_t)clamp(g[G_PLDIR], 0, PD_COUNT - 1);
+    pl_chance[s] = (uint8_t)clamp(g[G_PLCHN], 0, 127);
+    pl_jump[s] = (uint8_t)clamp(g[G_PLJMP], 0, 127);
+    pl_stride[s] = (uint8_t)clamp(g[G_PLSTR], 1, 7);
+}
 static void gen_ui_sync(void)
 {
     static uint8_t sel_was = 0xFF;
@@ -394,6 +411,7 @@ static void pads_tick(void)                             /* once a frame: the hit
     cloud_ui_sync();
     acid_gen_sync();
     gen_ui_sync();
+    play_ui_sync();
     hex_ui_sync();
     for (i = 0; i < DRUM_LANES; i++) {
         if ((hits >> i) & 1u) pad_lit[i] = 6;

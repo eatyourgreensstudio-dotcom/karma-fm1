@@ -764,19 +764,19 @@ async function editorV8() {
   ok(info.proto === 10, "v8: INFO ends with 10 (v10 includes v8)");
   /* the condition codes == core.h FC_*; the bit layout of a 2-bit step field */
   const ch = readFileSync(join(HERE, "../firmware/src/core.h"), "utf8"), sc = readFileSync(join(HERE, "../firmware/src/seq.c"), "utf8");
-  ok(/enum \{ FC_NORM, FC_FILL, FC_NOFILL \}/.test(ch) && /uint8_t fill\[NSTEP \/ 4\];/.test(ch)
-    && /t->fill\[idx \/ 4u\] >> \(2u \* \(idx % 4u\)\)\) & 3u/.test(sc) && E.FC.FILL === 1 && E.FC.NOFILL === 2,
+  ok(/enum \{ FC_NORM, FC_FILL, FC_NOFILL, FC_CHANCE \}/.test(ch) && /uint8_t fill\[NSTEP \/ 4\];/.test(ch)
+    && /t->fill\[idx \/ 4u\] >> \(2u \* \(idx % 4u\)\)\) & 3u/.test(sc) && E.FC.FILL === 1 && E.FC.NOFILL === 2 && E.FC.CHANCE === 3,
     "v8: FC codes and the 2-bit layout == core.h / seq.c step_fill");
   const g0 = E.parse[C.FILL_GET](await rq(E.req.fillGet(0)));
   ok(g0.track === 0 && g0.fill.length === 16 && g0.fill.every((x) => x === 0), "v8: FILL_GET: 16 bytes, every step normal");
   const s1 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 4, E.FC.FILL)));
   const s2 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 3, E.FC.NOFILL)));   /* (bits 6..7 of byte 0: the top bit crosses pack7) */
-  const s3 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 63, 3)));            /* 3: normal */
+  const s3 = E.parse[C.FILL_SET](await rq(E.req.fillSet(0, 63, 4)));            /* 4: normal (3 is CHANCE now) */
   const g1 = E.parse[C.FILL_GET](await rq(E.req.fillGet(0)));
   ok(s1.step === 4 && s1.cond === 1 && s2.cond === 2 && s3.cond === 0 && g1.fill[1] === 1 && g1.fill[0] === 0x80 && g1.fill[15] === 0
     && E.fillGet(g1.fill, 4) === 1 && E.fillGet(g1.fill, 3) === 2 && E.fillGet(g1.fill, 5) === 0
     && E.req.fillSet(0, 4, 1)[1].join() === "0,4,1" && E.req.fillGet(2)[1].join() === "2",
-    "v8: FILL_SET sets a step (3 -> normal); FILL_GET returns the bytes as stored (0x80 through pack7)");
+    "v8: FILL_SET sets a step (4 -> normal); FILL_GET returns the bytes as stored (0x80 through pack7)");
   {
     const b = new Uint8Array(16); E.fillSet(b, 7, 2); E.fillSet(b, 0, 1); E.fillSet(b, 7, 0);
     const rt = E.unpack7(E.pack7(Uint8Array.from([0x80, 0xFF, 0x01, 0x7F, 0x00, 0xC3, 0x55, 0xAA, 0x01, 0x80, 0, 0, 0, 0, 0, 0x40])));
