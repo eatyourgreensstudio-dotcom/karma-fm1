@@ -2318,9 +2318,10 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
         sus_set(t, value >= 64u);
         return;
     }
-    if (song.g[G_KNOBS] && cc >= 70u && cc <= 77u && !is_drum(t)) {   /* KNOBS 70-77: a controller's 8 knobs are the
+    if (!is_drum(t) && (((song.g[G_KNOBS] & 1) && cc >= 70u && cc <= 77u) ||
+                        ((song.g[G_KNOBS] & 2) && cc >= 1u && cc <= 8u))) {   /* KNOBS: a controller's 8 knobs are the
                                                                      * track's EDIT knobs, page 1 then page 2 */
-        midi_cc_set(t, P_E0 + (cc - 70u), value);
+        midi_cc_set(t, P_E0 + (cc >= 70u ? cc - 70u : cc - 1u), value);
         return;
     }
     for (i = 0; i < NELEM(MIDI_CC_MAP); i++)

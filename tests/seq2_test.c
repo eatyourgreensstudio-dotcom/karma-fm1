@@ -1367,6 +1367,7 @@ static void t_midich(void)
     reset(120);
     mi_r = mi_w;
     song.g[G_ROUTE] = 2 + 11;                           /* CH 12 */
+    song.g[G_KNOBS] = 0;                                /* (the GM map: CC 7 is LEVEL) */
     run_block();
     song.sel = 2;
     mclk_push(0x643C9009u);                             /* C4 on ch 1: its own track, 1 (2026-10-20: as IN = NOTES) */
@@ -1499,6 +1500,15 @@ static void t_midicc(void)
             ok &= d->max <= d->min || b->p[P_E0 + k] == d->max;
         }
         check(ok, "KNOBS 70-77: CC 70..77 set the track's EDIT knobs 1..8 (each to its top)");
+        song.g[G_KNOBS] = 3;                              /* AUTO: CC 1..8 too (the older MPK minis) */
+        for (k = 0; k < 8u; k++)
+            cc_push(1, 1u + k, 0);
+        run_block(); run_block();
+        for (ok = 1, k = 0; k < 8u; k++) {
+            const param_desc_t *d = &ENGINES[b->eng_req % NENGINES]->edit[k];
+            ok &= d->max <= d->min || b->p[P_E0 + k] == d->min;
+        }
+        check(ok, "KNOBS AUTO: CC 1..8 set them as well (each to its bottom)");
         song.g[G_KNOBS] = 0;
         song.g[G_ROUTE] = 2;                              /* IN = CH 1 */
         song.sel = 2;
