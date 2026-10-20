@@ -104,6 +104,34 @@ EXPORT void web_boot(void)
     web_booted = 1;
 }
 
+/* the project, as the FM-1 saves one (project.c, format 7: tracks, steps, locks, conditions, the globals a project
+ * holds, the CLOUD): the page keeps it in the browser (a reload brings it back) and in a file (SAVE / OPEN PATTERN).
+ * web_proj_get: what plays now into the buffer; web_proj_put: the buffer's n bytes loaded (any format the FM-1 reads),
+ * 0 = not a project */
+#define PROJ_HOST 1                                  /* project.c: the format, capture and apply (the flash is none) */
+#include "../../firmware/src/project.c"
+static project_t web_proj;
+EXPORT uint32_t web_proj_size(void) { return sizeof web_proj; }
+EXPORT uint8_t *web_proj_buf(void) { return (uint8_t *)&web_proj; }
+EXPORT uint8_t *web_proj_get(void)
+{
+    proj_capture(&web_proj);
+    return (uint8_t *)&web_proj;
+}
+EXPORT uint32_t web_proj_put(uint32_t n)
+{
+    static project_t q;
+    uint32_t i;
+    if (!proj_import(&q, &web_proj, (int)n))
+        return 0;
+    proj_apply(&q, 1);
+    song.sel = (uint8_t)(q.sel < NTRK ? q.sel : 0u);
+    for (i = 0; i < NPART; i++)
+        trk[i].engine = trk[i].eng_req;
+    ui.force = 1;
+    return 1;
+}
+
 /* a short pattern on the four tracks, to hear and to look at (the page's DEMO button); PLAY is the page's */
 EXPORT void web_demo(void)
 {

@@ -87,6 +87,14 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
       else if (m.type === "demo") ex.web_demo();
+      else if (m.type === "proj_get") {               // the project as the FM-1 saves it (the page keeps it)
+        const p = ex.web_proj_get(), n = ex.web_proj_size();
+        this.port.postMessage({ type: "proj", bytes: new Uint8Array(ex.memory.buffer, p, n).slice(), why: m.why });
+      } else if (m.type === "proj_put" && m.bytes) {
+        const b = new Uint8Array(m.bytes), n = Math.min(b.length, ex.web_proj_size());
+        new Uint8Array(ex.memory.buffer, ex.web_proj_buf(), n).set(b.subarray(0, n));
+        this.port.postMessage({ type: "proj_loaded", ok: !!ex.web_proj_put(b.length), why: m.why });
+      }
     }
 
     publish() {
