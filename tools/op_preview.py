@@ -19,8 +19,9 @@ def main():
     names = sys.argv[2:] or DEFAULT
     HOST.mkdir(parents=True, exist_ok=True)
     exe = HOST / "ui_pages_test"
+    subprocess.run(["sh", "tools/plx_host.sh"], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["cc", "-O2", "-w", "-Ibuild/gen", "-Ifirmware/src", "-Ifirmware/hal", "-o", str(exe),
-                    "tests/ui_pages_test.c", "-lm"], cwd=ROOT, check=True)
+                    "tests/ui_pages_test.c", "build/host/libplx.a", "-lc++", "-lm"], cwd=ROOT, check=True)
     r = subprocess.run([str(exe), str(HOST)], cwd=ROOT, capture_output=True, text=True)
     bad = [l for l in r.stdout.splitlines() if not l.rstrip().endswith(("ok", "PASS"))]
     print("\n".join(bad[-12:]) or "ui test: all ok")

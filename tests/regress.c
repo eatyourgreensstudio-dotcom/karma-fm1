@@ -177,9 +177,16 @@ typedef struct {
     int crashed;
 } job_t;
 
+static uint32_t home_part(uint32_t e)            /* the track an engine lives on (2026-10-20: its arena's size) */
+{
+    uint32_t p;
+    for (p = 0; p + 1u < NPART && !eng_allowed(&trk[p], e); p++)
+        ;
+    return p;
+}
 static void job_preset(const job_t *j)
 {
-    track_t *t = &trk[0];
+    track_t *t = &trk[home_part(j->e)];
     host_tracks_init();
     host_preset(t, j->e, j->pi);
     phrase(t, 60);
@@ -187,7 +194,7 @@ static void job_preset(const job_t *j)
 
 static void job_mode(const job_t *j)            /* arg: the voice mode, ARP off, glide on for MONO / LEGATO */
 {
-    track_t *t = &trk[0];
+    track_t *t = &trk[home_part(j->e)];
     host_tracks_init();
     host_preset(t, j->e, j->pi);
     t->p[P_VOICE] = j->arg;
@@ -363,7 +370,7 @@ static void job_cpu(const job_t *j)
             trk[p].p[P_E4] = SLC_LOOP;                  /* SLICE: its slices end by themselves; loop them */
 #endif
         for (i = 0; i < parts[p][2]; i++)
-            trk_note_on(&trk[p], NOTES[i] + 12u * p, 100);
+            trk_note_on(&trk[p], NOTES[i], 100);
     }
     for (k = 0; k < nb / 2u; k++) {                    /* 0.5 s to settle */
         if (drums_on)
@@ -894,9 +901,9 @@ int main(int argc, char **argv)
             snprintf(name, sizeof name, "cpu/%s/%02u_%s", ENGINES[e]->name, pi, s);
             j = add(J_CPU, name);
             memset(cpu_parts[ncpu], 0, sizeof cpu_parts[ncpu]);
-            cpu_parts[ncpu][0][0] = (uint8_t)e;
-            cpu_parts[ncpu][0][1] = (uint8_t)pi;
-            cpu_parts[ncpu][0][2] = 8;
+            cpu_parts[ncpu][home_part(e)][0] = (uint8_t)e;
+            cpu_parts[ncpu][home_part(e)][1] = (uint8_t)pi;
+            cpu_parts[ncpu][home_part(e)][2] = 8;
             j->parts = (const uint8_t (*)[3])cpu_parts[ncpu++];
             j->e = (uint8_t)e;
             j->pi = (uint8_t)pi;

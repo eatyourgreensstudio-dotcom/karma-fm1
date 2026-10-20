@@ -35,10 +35,11 @@ static const uint8_t CHORD[2][4] = {{60, 63, 67, 70}, {58, 62, 65, 68}};   /* Cm
 static const uint8_t COMP[] = {0, 3, 6, 10, 12, 16, 19, 22, 26, 28};
 
 static uint8_t held[128];
+static track_t *T;                       /* the track the engine lives on (2026-10-20: its arena's size) */
 static uint32_t off_at[128];
 static void play(uint32_t note, uint32_t vel, uint32_t off)
 {
-    trk_note_on(&trk[0], note, vel);
+    trk_note_on(T, note, vel);
     held[note] = 1;
     off_at[note] = off;
 }
@@ -52,14 +53,16 @@ int main(int argc, char **argv)
     if (!w || !rep || !raw)
         return 1;
     wav_hdr(w, 0);
-    for (e = 0; e < NENGINES; e++)
+    for (e = 0; e < NENGINES; e++) if (ENGINES[e] != &ENG_GONE)   /* (the engines left) */
         for (pi = 0; pi < ENGINES[e]->npresets; pi++) {
             const char *name = ENGINES[e]->presets[pi].name;
             int role = role_of(name);
             host_tracks_init();
             song.g[G_BPM] = 100;
-            host_preset(&trk[0], e, pi);
-            song.sel = 0;
+            for (T = &trk[0]; T < &trk[NPART - 1] && !eng_allowed(T, e); T++)
+                ;
+            host_preset(T, e, pi);
+            song.sel = (uint8_t)(T - trk);
             memset(held, 0, sizeof held);
             for (b = 0; b < FS / CTL; b++)                    /* the last one's sends die out (not kept) */
                 mix_block(o, CTL);
@@ -68,7 +71,7 @@ int main(int argc, char **argv)
                 uint32_t s0 = b * CTL, s1 = s0 + CTL, st;
                 for (n = 0; n < 128u; n++)
                     if (held[n] && (off_at[n] < s1 || b >= nb)) {
-                        trk_note_off(&trk[0], n);
+                        trk_note_off(T, n);
                         held[n] = 0;
                     }
                 for (st = 0; st < 32u && b < nb; st++) {

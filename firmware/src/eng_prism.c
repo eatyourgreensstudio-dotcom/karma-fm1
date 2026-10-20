@@ -11,29 +11,79 @@
  *   CHORD  a chord from one key: HARM picks it (octave, fifth, sus4, m, m7, m9, m11, 6/9, M9, M7, M), TIMB its
  *          inversion, MRPH the sound (a string machine, then organ and string waves)
  * The state of all but FOLD is in the part's engine arena (engines.c eng_arena_of), a slot a voice; they play four
- * voices a part at most, CHORD (five oscillators a key) two (voice.c: prism_poly). */
+ * voices a part at most, CHORD (five oscillators a key) two (voice.c: prism_poly).
+ * 2026-10-20: the rest of Plaits' models, her own code (C++, unchanged: firmware/mi, through plx.cc): VA, VCF,
+ * PHDIS(tortion), FM, 6OP A / B / C (the six-op FM banks), GRAIN (formant), TERRN (wave terrain), STRMC (string
+ * machine), CHIP(tune), STRNG (Karplus strings), MODAL, NOISE, SPECH (speech), PARTC (particles), KICK, SNARE,
+ * HIHAT. HARM, TIMB, MRPH are hers; a note starts her trigger. Each voice an instance in the arena: the small
+ * models up to four voices, MODAL and the drums two, the big ones (6OP, STRMC, STRNG, SPECH, PARTC) one. */
 #include "prism_tables.h"
 #include "prism_dsp.c"
+#include "../mi/plx.h"
 
-static const char *const N_PRISM_MODEL[] = {"FOLD", "SWARM", "WAVE", "HARM", "CHORD"};
-enum { PRM_FOLD, PRM_SWARM, PRM_WAVE, PRM_HARM, PRM_CHORD, PRM_COUNT };
+static const char *const N_PRISM_MODEL[] = {"FOLD", "SWARM", "WAVE", "HARM", "CHORD",
+                                            "VA", "VCF", "PHDIS", "FM", "6OP A", "6OP B", "6OP C", "GRAIN", "TERRN",
+                                            "STRMC", "CHIP", "STRNG", "MODAL", "NOISE", "SPECH", "PARTC", "KICK",
+                                            "SNARE", "HIHAT"};
+enum { PRM_FOLD, PRM_SWARM, PRM_WAVE, PRM_HARM, PRM_CHORD, PRM_PLX, PRM_COUNT = PRM_PLX + PLX_COUNT };
+_Static_assert(sizeof N_PRISM_MODEL / sizeof N_PRISM_MODEL[0] == PRM_COUNT, "a name a model");
+/* each Plaits model's voices (its instances): the CPU and the arena decide */
+static const uint8_t PLX_VOICES[PLX_COUNT] = {4, 4, 4, 4, 1, 1, 1, 4, 4, 1, 4, 1, 2, 4, 1, 1, 2, 2, 2};
+/* their output, x 2^n: the plucked and struck ones and the particles are quiet (at the factory LEVEL trims' end) */
+static const uint8_t PLX_BOOST[PLX_COUNT] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0};
 typedef union {
     pr_swarm_t swarm;
     pr_wave_t wave;
     pr_harm_t harm;
     pr_chord_t chord;
 } prism_slot_t;
-static void *eng_arena_of(const track_t *t, uint32_t eng);
+static void *eng_arena_of(const track_t *t, uint32_t eng);   /* (engines.c) */
 static uint32_t prism_model(const track_t *t) { return (uint32_t)clamp(t->p[P_E0], 0, PRM_COUNT - 1); }
+static uint32_t plx_stride(uint32_t k) { return (plx_size((int)k) + 7u) & ~7u; }
 static uint32_t prism_poly(const track_t *t)             /* (0: NVOICE) */
 {
     uint32_t m = prism_model(t);
+    if (m >= PRM_PLX) {                                   /* (as many as the part's arena holds, at most its own) */
+        uint32_t fit = eng_arena_size(t) / plx_stride(m - PRM_PLX), k = PLX_VOICES[m - PRM_PLX];
+        return fit < k ? (fit ? fit : 1u) : k;
+    }
     return m == PRM_FOLD ? 0u : m == PRM_CHORD ? 2u : 4u;
 }
-static prism_slot_t *prism_slot(track_t *t, voice_t *v)   /* the voice's slot (0 on the drum track: none) */
+/* Plaits' model k for voice v: its instance in the part's arena (0: it does not fit), set up when it is not the
+ * model's yet (a voice's slot keeps its model + 1 in plx_ready; the arena taken by another engine clears them) */
+static uint8_t plx_ready[NPART][NVOICE];
+static uint32_t plx_gen_seen[NPART];
+static void *plx_slot(track_t *t, voice_t *v, uint32_t k)
+{
+    uint32_t p = (uint32_t)(t - trk), st = plx_stride(k), n = prism_poly(t), i = (uint32_t)(v - t->v) % NVOICE;
+    uint8_t *a;
+    if (p >= NPART)
+        return 0;
+    a = (uint8_t *)eng_arena_need(t, ENGI_PRISM, st);
+    if (!a)
+        return 0;
+    if (plx_gen_seen[p] != eng_arena_gen[p]) {           /* (the arena was cleared: every instance starts over) */
+        memset(plx_ready[p], 0, sizeof plx_ready[p]);
+        plx_gen_seen[p] = eng_arena_gen[p];
+    }
+    i %= n ? n : 1u;                                     /* (one instance: every note plays it) */
+    if (plx_ready[p][i] != k + 1u) {
+        uint32_t j;
+        for (j = 0; j < NVOICE; j++)                     /* (another model's instances overlap this one) */
+            if (plx_ready[p][j] != k + 1u)
+                plx_ready[p][j] = 0;
+        if (plx_init((int)k, a + i * st, st))
+            return 0;
+        plx_ready[p][i] = (uint8_t)(k + 1u);
+    }
+    return a + i * st;
+}
+static prism_slot_t *prism_slot(track_t *t, voice_t *v)   /* the voice's slot (0 on the drum track, or past the
+                                                            * part's arena: none) */
 {
     prism_slot_t *a = (prism_slot_t *)eng_arena_of(t, ENGI_PRISM);
-    return a ? &a[(uint32_t)(v - t->v) % NVOICE] : 0;
+    uint32_t i = (uint32_t)(v - t->v) % NVOICE;
+    return a && (i + 1u) * sizeof(prism_slot_t) <= eng_arena_size(t) ? &a[i] : 0;
 }
 static void prism_slot_init(track_t *t, voice_t *v)      /* the slot set for the model the track plays now */
 {
@@ -58,7 +108,9 @@ static void prism_note_on(track_t *t, voice_t *v)
     v->s[0] = 0;                 /* next */
     v->s[3] = 1;                 /* high */
     v->s[4] = 0;                 /* on: the shape and the gain start where they are asked */
-    prism_slot_init(t, v);
+    v->s[6] = 1;                 /* (Plaits' models: a trigger at the next render) */
+    if (prism_model(t) < PRM_PLX)
+        prism_slot_init(t, v);
 }
 
 static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
@@ -69,6 +121,36 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     uint32_t ph2 = v->ph[2], done = 0, model = prism_model(t);
     prism_slot_t *sl = model == PRM_FOLD ? 0 : prism_slot(t, v);
     pr_fold_t s;
+    if (model >= PRM_PLX) {                              /* Plaits' own models (plx.cc) */
+        void *in = plx_slot(t, v, model - PRM_PLX);
+        plx_params_t q;
+        if (!in)
+            return;
+        q.note = (float)m->pitch16 * (1.0f / 16.0f);
+        q.harmonics = (float)p[P_E1] * (1.0f / 127.0f);
+        q.timbre = (float)clamp(timb, 0, 127 << 8) * (1.0f / (127 << 8));
+        q.morph = (float)clamp(mrph, 0, 127 << 8) * (1.0f / (127 << 8));
+        q.accent = (float)v->vel * (1.0f / 127.0f);
+        while (done < n) {
+            float b[16], aux[16];
+            uint32_t k = n - done < 16u ? n - done : 16u, i;
+            q.trigger = v->s[6] ? PLX_TRIG_RISE | PLX_TRIG_HIGH : v->gate ? PLX_TRIG_HIGH : PLX_TRIG_LOW;
+            v->s[6] = 0;
+            plx_render(in, &q, b, aux, k);
+            for (i = 0; i < k; i++) {
+                float f = b[i] * 32767.0f;
+                int32_t x = f > 32767.0f ? 32767 : f < -32767.0f ? -32767 : (int32_t)f;
+                if (sub) {
+                    ph2 += m->inc >> 1;
+                    x += mulq15(osc_sine(ph2), sub);
+                }
+                out[done + i] += mulq15(mulq15(x, amp_at(m, done + i)), VOICE_FS) << (1u + PLX_BOOST[model - PRM_PLX]);
+            }
+            done += k;
+        }
+        v->ph[2] = ph2;
+        return;
+    }
     if (v->s[5] != (int32_t)model + 1)                   /* (MODEL turned under a held note: its slot is not set) */
         prism_slot_init(t, v);
     timb = clamp(timb, 0, 127 << 8) * 32767 / (127 << 8);
@@ -144,6 +226,41 @@ static const preset_t PRISM_PRESETS[] = {
     {"HOUSE STAB", {4, 62, 45, 10, 0, 0, 0, 0}, {0, 62, 0, 40}, 0, 0, FX(0, 10, 26, 26)},
     {"RAVE 5TH", {4, 17, 30, 0, 0, 0, 0, 0}, {0, 66, 30, 30}, 0, 0, FX(20, 0, 22, 20)},
     {"DREAM 69", {4, 85, 60, 110, 0, 0, 0, 0}, {70, 90, 120, 90}, 0, 0, FX(0, 30, 24, 56), XP(P_LRATE + 1, 14, P_LD_FLT + 1, 24)},
+    /* (2026-10-20) Plaits' own models: 5 VA, 6 VCF, 7 PHDIS, 8 FM, 9..11 6OP A B C, 12 GRAIN, 13 TERRN, 14 STRMC,
+     * 15 CHIP, 16 STRNG, 17 MODAL, 18 NOISE, 19 SPECH, 20 PARTC, 21 KICK, 22 SNARE, 23 HIHAT. The ones with their
+     * own decay (6OP, STRNG, MODAL, the drums) hold SUS at 127 and ENV at 0 */
+    {"VA SAW LEAD", {5, 40, 20, 100, 30, 0, 0, 0}, {0, 70, 100, 30}, 0, 1, FX(0, 10, 22, 16), XP(P_GLIDE + 1, 26)},
+    {"VA PULSE PAD", {5, 70, 64, 30, 0, 0, 0, 0}, {70, 90, 118, 84}, 0, 0, FX(0, 40, 18, 50), XP(P_LRATE + 1, 20, P_LD_SHP + 1, 30)},
+    {"VCF BASS", {6, 40, 40, 30, 80, 40, 0, 0}, {0, 60, 50, 20}, 0, 1, FX(0, 0, 0, 4), XP(P_TRANS + 1, -24)},
+    {"VCF SWEEP", {6, 90, 30, 70, 50, 0, 0, 0}, {40, 100, 100, 80}, 0, 0, FX(0, 20, 20, 44), XP(P_LRATE + 1, 16, P_LD_FLT + 1, 40)},
+    {"PD KEYS", {7, 30, 60, 40, 70, 0, 0, 0}, {0, 76, 40, 50}, 0, 0, FX(0, 20, 16, 30)},
+    {"PD RESO", {7, 90, 80, 90, 60, 0, 0, 0}, {0, 70, 80, 40}, 0, 1, FX(0, 0, 20, 20), XP(P_GLIDE + 1, 20)},
+    {"FM BELL", {8, 100, 70, 20, 80, 0, 0, 0}, {0, 90, 0, 80}, 0, 0, FX(0, 10, 24, 46)},
+    {"FM BASS", {8, 40, 50, 60, 90, 30, 0, 0}, {0, 60, 40, 20}, 0, 1, FX(0, 0, 0, 4), XP(P_TRANS + 1, -12)},
+    {"DX BANK A", {9, 0, 64, 64, 0, 0, 0, 0}, {0, 0, 127, 50}, 0, 0, FX(0, 10, 14, 30)},
+    {"DX BANK B", {10, 0, 64, 64, 0, 0, 0, 0}, {0, 0, 127, 50}, 0, 0, FX(0, 10, 14, 30)},
+    {"DX BANK C", {11, 0, 64, 64, 0, 0, 0, 0}, {0, 0, 127, 50}, 0, 0, FX(0, 10, 14, 30)},
+    {"FORMANT VOX", {12, 50, 60, 40, 30, 0, 0, 0}, {20, 80, 110, 60}, 0, 0, FX(0, 30, 16, 40), XP(P_LRATE + 1, 18, P_LD_FLT + 1, 30)},
+    {"GRAIN BUZZ", {12, 100, 40, 90, 60, 0, 0, 0}, {0, 70, 90, 30}, 0, 1, FX(10, 0, 20, 16)},
+    {"TERRAIN", {13, 30, 50, 50, 40, 0, 0, 0}, {0, 70, 100, 40}, 0, 1, FX(0, 10, 20, 20), XP(P_LRATE + 1, 24, P_LD_SHP + 1, 40)},
+    {"TERRAIN PAD", {13, 90, 60, 80, 0, 0, 0, 0}, {70, 90, 118, 90}, 0, 0, FX(0, 40, 20, 56), XP(P_LRATE + 1, 12, P_LD_FLT + 1, 30)},
+    {"STR MACHINE", {14, 50, 60, 40, 0, 0, 0, 0}, {50, 90, 118, 80}, 0, 1, FX(0, 30, 10, 46)},
+    {"POLY STRING", {14, 100, 80, 80, 0, 0, 0, 0}, {40, 90, 118, 84}, 0, 1, FX(0, 40, 14, 50)},
+    {"CHIP LEAD", {15, 0, 30, 40, 0, 0, 0, 0}, {0, 70, 100, 20}, 0, 1, FX(0, 0, 24, 10), XP(P_GLIDE + 1, 10)},
+    {"CHIP ARP", {15, 70, 60, 50, 0, 0, 0, 0}, {0, 70, 100, 30}, 0, 1, FX(0, 0, 26, 14)},
+    {"KS GUITAR", {16, 20, 60, 70, 0, 0, 0, 0}, {0, 0, 127, 60}, 0, 1, FX(0, 0, 18, 30)},
+    {"KS HARP", {16, 60, 80, 100, 0, 0, 0, 0}, {0, 0, 127, 80}, 0, 1, FX(0, 20, 20, 50)},
+    {"MODAL BELL", {17, 90, 70, 90, 0, 0, 0, 0}, {0, 0, 127, 80}, 0, 0, FX(0, 0, 22, 50)},
+    {"MODAL WOOD", {17, 10, 40, 40, 0, 0, 0, 0}, {0, 0, 127, 40}, 0, 0, FX(0, 0, 16, 26)},
+    {"NOISE SWEEP", {18, 50, 70, 90, 60, 0, 0, 0}, {30, 90, 100, 70}, 0, 0, FX(0, 20, 24, 44), XP(P_LRATE + 1, 14, P_LD_FLT + 1, 50)},
+    {"NOISE TONE", {18, 110, 50, 110, 30, 0, 0, 0}, {0, 70, 90, 40}, 0, 1, FX(0, 0, 20, 30)},
+    {"SPEECH", {19, 20, 50, 50, 0, 0, 0, 0}, {0, 70, 110, 30}, 0, 1, FX(0, 0, 14, 20)},
+    {"ROBOT WORDS", {19, 110, 40, 30, 0, 0, 0, 0}, {0, 70, 110, 30}, 0, 1, FX(0, 0, 18, 16)},
+    {"PARTICLES", {20, 60, 70, 60, 0, 0, 0, 0}, {0, 0, 127, 70}, 0, 1, FX(0, 0, 20, 40)},
+    {"DROPLETS", {20, 20, 40, 100, 0, 0, 0, 0}, {0, 0, 127, 80}, 0, 1, FX(0, 0, 24, 50)},
+    {"PL KICK", {21, 50, 50, 60, 0, 0, 0, 0}, {0, 0, 127, 30}, 0, 0, FX(0, 0, 0, 6), XP(P_TRANS + 1, -24)},
+    {"PL SNARE", {22, 60, 60, 50, 0, 0, 0, 0}, {0, 0, 127, 30}, 0, 0, FX(0, 0, 0, 10)},
+    {"PL HIHAT", {23, 50, 70, 40, 0, 0, 0, 0}, {0, 0, 127, 20}, 0, 0, FX(0, 0, 0, 8)},
 };
 
 /* CHORD: its three controls by what they do there */

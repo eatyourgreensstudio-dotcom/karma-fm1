@@ -10,9 +10,10 @@ cd "$(dirname "$0")/../.."
 [ -f build/gen/felucca_tables.h ] || { echo "emu: run ./build.sh once first (build/gen)"; exit 1; }
 command -v emcc >/dev/null 2>&1 || { echo "emu: no emcc (Emscripten)"; exit 1; }
 mkdir -p build/emu/fonts
+sh tools/plx_host.sh em++ >/dev/null                 # Plaits' models (firmware/mi, C++) -> build/emu/libplx.a
 emcc -O2 -ffp-contract=off -std=gnu99 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -Itests \
     --no-entry -sSTANDALONE_WASM -sSTACK_SIZE=1048576 -sINITIAL_MEMORY=33554432 -sFILESYSTEM=0 \
-    -o build/emu/sloop.wasm web/emu/sloop_web.c
+    -o build/emu/sloop.wasm web/emu/sloop_web.c build/emu/libplx.a -sDEFAULT_TO_CXX
 cp web/emu/index.html web/emu/worklet.js web/emu/cheatsheet.html build/emu/
 cp web/emu/fonts/* build/emu/fonts/
 echo "emu: build/emu ($(wc -c < build/emu/sloop.wasm | tr -d ' ') B wasm)"

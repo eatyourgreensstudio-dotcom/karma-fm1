@@ -172,6 +172,48 @@ def build_loader():
     return ota
 
 
+# ---- Plaits' models (firmware/mi: C++, MIT; firmware/mi/plx.cc the C side's way in)
+
+CXXFLAGS = ["-Os", "-ffunction-sections", "-fdata-sections", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics",
+            "-fno-use-cxa-atexit", "-std=c++11", "-DTEST", "-DPLX_TARGET", "-w", "-Ifirmware/mi", "-Ifirmware/cxx"]
+
+
+def build_plx():
+    """compile firmware/mi/**.cc with the toolchain's clang++ (no C++ library: firmware/cxx holds the few <algorithm>
+    templates the sources use), only what changed; one container for all (the JieLi clang may crash at random:
+    each file is tried three times). Returns the objects."""
+    PO = OUT / "plx"
+    PO.mkdir(parents=True, exist_ok=True)
+    inc = "/opt/jieli/pi32v2/include" if use_docker() else str(toolchain() / "pi32v2" / "include")
+    cxx = "/opt/jieli/pi32v2/bin/clang++" if use_docker() else str(toolchain() / "pi32v2" / "bin" / "clang++")
+    hdr = max(p.stat().st_mtime for p in [*(FW / "mi").rglob("*.h"), *(FW / "cxx").iterdir()])
+    objs, todo = [], []
+    for src_ in sorted((FW / "mi").rglob("*.cc")):
+        rel = src_.relative_to(SRC)
+        obj = PO / (str(rel).replace("/", "_")[:-3] + ".o")
+        objs.append(obj)
+        if not obj.exists() or obj.stat().st_mtime < max(src_.stat().st_mtime, hdr):
+            todo.append((rel, obj.relative_to(SRC)))
+    if todo:
+        flags = " ".join(["-target pi32v2", *FPU, *CXXFLAGS, f"-isystem {inc}"])
+        lines = ["set -e"] + [f"for t in 1 2 3; do {cxx} {flags} -c {s_} -o {o} 2>/tmp/plx_err && break; "
+                              f"grep -q Segmentation /tmp/plx_err || {{ cat /tmp/plx_err; exit 1; }}; done"
+                              for s_, o in todo]
+        script = OUT / "plx_build.sh"
+        script.write_text("\n".join(lines) + "\n")
+        if use_docker():
+            cmd = ["docker", "run", "--rm", "--platform", "linux/amd64", "-v", f"{SRC}:/work",
+                   "-v", f"{toolchain()}:/opt/jieli:ro", "-w", "/work", DOCKER_IMAGE, "sh", str(script.relative_to(SRC))]
+        else:
+            cmd = ["sh", str(script)]
+        r = subprocess.run(cmd, cwd=SRC, capture_output=True, text=True)
+        if r.returncode:
+            sys.stderr.write(r.stdout + r.stderr)
+            raise SystemExit("build: plx (clang++) failed")
+        print(f"plx: {len(todo)} of {len(objs)} C++ files compiled")
+    return objs
+
+
 # ---- app
 
 def build_app():
@@ -188,9 +230,10 @@ def build_app():
            ("cc", "-c", FW / "hal" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
            ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
            ("cc", *flags, "-c", FW / "src" / "felucca.c", "-o", OUT / "felucca.o"))
+    plx = build_plx()
     elf = OUT / "felucca.elf"
     tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
-       OUT / "felucca.o", "-o", elf)
+       OUT / "felucca.o", *plx, "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),

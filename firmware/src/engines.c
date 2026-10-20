@@ -6,6 +6,9 @@
  * engine at a time: on a switch the old engine fades out, its voices end, then the new one starts, voice.c
  * engine_block). The first engine to ask for it after another one gets it cleared, as at power-on. */
 static void *eng_arena_of(const track_t *t, uint32_t eng);
+static void *eng_arena_need(const track_t *t, uint32_t eng, uint32_t need);
+static uint32_t eng_arena_size(const track_t *t);
+static uint32_t eng_arena_gen[NPART];           /* (counts the claims: an engine sees its state was cleared) */
 static inline int32_t voice_amp(int32_t s, const vmod_t *m, uint32_t i) { return mulq15(mulq15(s, amp_at(m, i)), VOICE_FS); }
 static inline int32_t soft_knee(int32_t y, int32_t k)   /* linear up to k, then only the peaks saturate */
 {
@@ -45,34 +48,47 @@ static const engine_t ENG_GONE = {
     .poly = 1,
 };
 
-typedef union {
-    uint32_t phys[PHYS_ARENA / 4u];      /* eng_phys.c: two SYMP slots or three small ones; ELEMENTS: or one solo */
-    prism_slot_t prism[NVOICE];          /* eng_prism.c: the state of SWARM and WAVE, a slot a voice */
-    acid_slot_t acid;                    /* eng_acid.c: the 303 */
-    juno_slot_t juno;                    /* eng_juno.c: the voices' DCO and filter, the chorus */
-} eng_arena_t;
-static eng_arena_t eng_arena[NPART] __attribute__((section(".pool")));
+/* each part's arena, as big as its engines need (2026-10-20): track 1 ACID / JUNO, track 2 ELEMENTS, track 3
+ * PLAITS, whose biggest model (PARTICLE: Plaits' reverb) takes what is left of the pool */
+#define PRISM_ARENA (sizeof(void *) == 8u ? 16704u : 16640u)   /* (a 64-bit host: the pointers in Plaits' objects) */
+typedef union { acid_slot_t acid; juno_slot_t juno; } eng_arena0_t;
+typedef union { uint32_t phys[PHYS_ARENA / 4u]; } eng_arena1_t;
+typedef union { prism_slot_t prism[NVOICE]; uint64_t plx[(sizeof(void *) == 8u ? 16704u : 16640u) / 8u]; } eng_arena2_t;
+static eng_arena0_t eng_arena0 __attribute__((section(".pool")));
+static eng_arena1_t eng_arena1 __attribute__((section(".pool")));
+static eng_arena2_t eng_arena2 __attribute__((section(".pool")));
+static void *const ENG_ARENA[NPART] = {&eng_arena0, &eng_arena1, &eng_arena2};
+static const uint32_t ENG_ARENA_N[NPART] = {sizeof eng_arena0, sizeof eng_arena1, sizeof eng_arena2};
 static uint8_t eng_arena_own[NPART];            /* the engine + 1 whose state is in it, 0 = none */
 #ifdef ARENA_STATS
 static uint32_t eng_arena_claims, eng_arena_bad;   /* host tests: claims, accesses by an engine the part does not play */
 #endif
-static void *eng_arena_of(const track_t *t, uint32_t eng)
+static uint32_t eng_arena_size(const track_t *t) { uint32_t p = (uint32_t)(t - trk); return p < NPART ? ENG_ARENA_N[p] : 0u; }
+/* part t's arena for engine eng, which needs `need` bytes (0: none, the part's is smaller) */
+static void *eng_arena_need(const track_t *t, uint32_t eng, uint32_t need)
 {
     uint32_t p = (uint32_t)(t - trk);
-    if (p >= NPART)
+    if (p >= NPART || need > ENG_ARENA_N[p])
         return 0;
 #ifdef ARENA_STATS
     if (t->engine != eng)
         eng_arena_bad++;
 #endif
     if (eng_arena_own[p] != eng + 1u) {
-        memset(&eng_arena[p], 0, sizeof eng_arena[p]);
+        memset(ENG_ARENA[p], 0, ENG_ARENA_N[p]);
         eng_arena_own[p] = (uint8_t)(eng + 1u);
+        eng_arena_gen[p]++;
 #ifdef ARENA_STATS
         eng_arena_claims++;
 #endif
     }
-    return &eng_arena[p];
+    return ENG_ARENA[p];
+}
+static void *eng_arena_of(const track_t *t, uint32_t eng)
+{
+    uint32_t need = eng == ENGI_ACID ? sizeof(acid_slot_t) : eng == ENGI_JUNO ? sizeof(juno_slot_t)
+                  : eng == ENGI_PRISM ? sizeof(prism_slot_t) : PHYS_ARENA;
+    return eng_arena_need(t, eng, need);
 }
 #if FELUCCA_SLICE
 #include "eng_slice.c"
