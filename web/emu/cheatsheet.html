@@ -224,7 +224,7 @@ td:first-child { font-family: var(--mono); font-size: 12.5px; white-space: nowra
   <h2>MIDI keyboard <small>e.g. Akai MPK mini</small></h2>
   <ul>
     <li>Keys on channel 1 play the <b>selected</b> track (GLO › MIDI 2 › IN = CH 1). Channels 2, 3 still play tracks 2, 3; channel 10 (the pads) the drums.</li>
-    <li>Knobs 1–8 are the selected track's EDIT knobs: 1–4 page 1, 5–8 page 2 (KNOBS = AUTO takes CC 70–77 and CC 1–8, both MPK mini kinds). PLAITS: MODEL HARM TIMB MRPH · ENV SUB. GLO › MIDI 3 › KNOBS = GM for the old map.</li>
+    <li>Knobs 1–8 are the FM-1's eight rotaries (GLO › MIDI 3 › KNOBS = PANEL): K1 PRESETS (the sounds), K2 SELECT (pages), K3 ALGORITHM (tracks), K4 MASTER, K5–K8 KNOB 1–4 (whatever the screen shows). KNOBS = AUTO / 1-8 / 70-77: the EDIT knobs instead; GM: the old map.</li>
     <li>Any other CC: MIDI LEARN (hold GLO + F#3, touch a knob, move the controller).</li>
     <li>In the browser: Chrome, the simulator on your Mac (localhost); the shared claude.ai page cannot use MIDI.</li>
   </ul>

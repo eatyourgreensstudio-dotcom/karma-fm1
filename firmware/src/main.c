@@ -189,12 +189,17 @@ static void fm1_main(void)
                 song.batt_raw = song.batt_raw ? song.batt_raw + (b - song.batt_raw) / 32 : b;
         }
         {
+            static int32_t applied = -100;
             int32_t a = fm1_adc_read(FM1_ADC_MASTER);
             if (a >= 0) {
                 uint32_t k10;
                 knob += (a * 16 - knob) / 8;
                 k10 = (uint32_t)(knob / 16);
-                song.master_q12 = (k10 * k10) >> 8;            /* 0 .. ~4096 */
+                if ((int32_t)k10 - applied > 6 || applied - (int32_t)k10 > 6) {   /* (moved: a MIDI controller's
+                                                         * MASTER, KNOBS = PANEL, holds until the pot turns) */
+                    applied = (int32_t)k10;
+                    song.master_q12 = (k10 * k10) >> 8;        /* 0 .. ~4096 */
+                }
             }
         }
         {   /* OCT- + OCT+ held 5 s, stopped: enter UBOOT with RAM intact (debug / update); a countdown

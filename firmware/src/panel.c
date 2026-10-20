@@ -63,6 +63,12 @@ static int32_t panel_enc(uint32_t role)
     if ((enc_hold >> role) & 1u)
         return 0;
     s = fm1_enc_take(panel.enc[role]) * panel.dir[role];
+    if (role < NE && midi_enc[role]) {                  /* a MIDI controller's knob as this rotary (seq.c, KNOBS PANEL) */
+        fm1_irq_off();
+        s += midi_enc[role];
+        midi_enc[role] = 0;
+        fm1_irq_on();
+    }
     if (s)
         ui_input_ms = fm1_ms;                      /* a knob turning is not idle either: autosave waits */
     return s;
@@ -83,8 +89,8 @@ static uint8_t lights_sync;                    /* GLO > SYSTEM > SYNC (G_SYNC), 
 static uint8_t lights_mout;                    /* GLO > SYSTEM > MIDI (G_MIDI): 1 = the sequencer goes to MIDI OUT too */
 static uint8_t lights_min = 2;                 /* GLO > SYSTEM > IN (G_ROUTE): 0 NOTES, 1 CLOCK only, 2..17 (2.6) CH 1..16
                                                 * (2026-10-20: that channel follows the selected track; the default) */
-static uint8_t midi_knobs = 3;                 /* GLO > MIDI 3 > KNOBS (G_KNOBS): 0 GM, 1 CC 70-77, 2 CC 1-8, 3 AUTO (both)
-                                                * = the EDIT knobs */
+static uint8_t midi_knobs = 4;                 /* GLO > MIDI 3 > KNOBS (G_KNOBS): 0 GM, 1 CC 70-77, 2 CC 1-8, 3 AUTO (both)
+                                                * = the EDIT knobs, 4 PANEL (both: the panel's rotaries) */
 /* 2.6: GLO > MIDI CH1 CH2 CH3, GLO > DRUMS > CH, GLO > MIDI > OTHER: settings of the FM-1 (kept with the MIDI LEARN map
  * after the SYN kits: project.c midi_part), mirrored in song.g (felucca_init) */
 #define MIDI_SET_DEF {1, 2, 3, 10, 0, 2}            /* CH1 CH2 CH3, drums, OTHER, (2.6) BEND */
@@ -100,7 +106,7 @@ static uint32_t lights_word(void)
            (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
            (uint32_t)(usb_serial != 0u) << 16 | (uint32_t)(vis_style % 12u) << 17 |
            (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |  /* 2.6: CH n (n 1..16; 0 none) */
-           (uint32_t)((midi_knobs ^ 3u) & 3u) << 26;                                   /* KNOBS (2026-10-20; 0: AUTO) */
+           (uint32_t)((midi_knobs ^ 4u) & 7u) << 26;                                   /* KNOBS (2026-10-20; 0: PANEL) */
 }
 static void lights_from_word(uint32_t w)
 {
@@ -115,7 +121,9 @@ static void lights_from_word(uint32_t w)
     lights_min = (uint8_t)((w >> 15) & 1u);     /* GLO > SYSTEM > IN (seq.c) */
     if (((w >> 21) & 31u) >= 1u && ((w >> 21) & 31u) <= 16u)
         lights_min = (uint8_t)(((w >> 21) & 31u) + 1u);   /* 2.6: CH n (an older SLOOP reads NOTES) */
-    midi_knobs = (uint8_t)(((w >> 26) & 3u) ^ 3u);
+    midi_knobs = (uint8_t)(((w >> 26) & 7u) ^ 4u);
+    if (midi_knobs > 4u)
+        midi_knobs = 4u;
     usb_serial = (uint8_t)((w >> 16) & 1u);
     vis_style = (uint8_t)(((w >> 17) & 15u) % 12u);   /* the visualiser (ui_vis.c); 0 in 2.3 = OSCILLOSCOPE */     /* menu USB SERIAL (usb.c usb_cdc_on, at the next start); 0 in 2.3 = OFF */
 }

@@ -1509,6 +1509,18 @@ static void t_midicc(void)
             ok &= d->max <= d->min || b->p[P_E0 + k] == d->min;
         }
         check(ok, "KNOBS AUTO: CC 1..8 set them as well (each to its bottom)");
+        song.g[G_KNOBS] = 4;                              /* PANEL: the rotaries */
+        memset((void *)midi_enc, 0, sizeof midi_enc);
+        for (k = 0; k < 8u; k++)
+            midi_knob_last[k] = -1, midi_knob_acc[k] = 0;
+        cc_push(1, 1, 0); cc_push(1, 5, 10); cc_push(1, 3, 0); run_block();     /* (where they are) */
+        cc_push(1, 1, 12); cc_push(1, 5, 15); cc_push(1, 3, 32); run_block();   /* K1 +12, K5 +5, K3 +32 */
+
+        cc_push(1, 4, 127); run_block();
+        check(midi_enc[2] == 3 && midi_enc[3] == 5 && midi_enc[1] == 2 && song.master_q12 > 4000,
+              "KNOBS PANEL: K1 = PRESETS (12 CC: 3 steps), K5 = KNOB 1 (5 steps), K3 = ALGORITHM (32: 2), K4 = MASTER (top)");
+        memset((void *)midi_enc, 0, sizeof midi_enc);
+        song.g[G_KNOBS] = 0;
         song.g[G_KNOBS] = 0;
         song.g[G_ROUTE] = 2;                              /* IN = CH 1 */
         song.sel = 2;

@@ -2307,12 +2307,44 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
     return hit;
 }
 
+/* KNOBS PANEL (2026-10-20): a controller's 8 knobs (CC 1-8 or 70-77) are the FM-1's rotaries: 1 PRESETS, 2 SELECT,
+ * 3 ALGORITHM, 4 MASTER (the level, at once), 5..8 KNOB 1..4. The others turn in detents: a knob's travel becomes
+ * their steps (panel.c panel_enc adds them): KNOB 1..4 a step a CC unit, PRESETS one in 4, SELECT in 8, ALGORITHM
+ * in 16. midi_enc in panel.c's order: SELECT, ALGORITHM, PRESETS, KNOB 1..4 */
+static volatile int16_t midi_enc[7];
+static int16_t midi_knob_last[8] = {-1, -1, -1, -1, -1, -1, -1, -1}, midi_knob_acc[8];
+static int midi_panel_knob(uint32_t cc, uint32_t value)
+{
+    static const uint8_t ROLE[8] = {2, 0, 1, 0xFF, 3, 4, 5, 6}, UNITS[8] = {4, 8, 16, 1, 1, 1, 1, 1};
+    uint32_t k;
+    int32_t d;
+    if (song.g[G_KNOBS] != 4 || !((cc >= 1u && cc <= 8u) || (cc >= 70u && cc <= 77u)))
+        return 0;
+    k = cc >= 70u ? cc - 70u : cc - 1u;
+    if (k == 3u) {                                    /* MASTER: the level, as the pot (main.c: squared) */
+        uint32_t k10 = value * 1023u / 127u;
+        song.master_q12 = (k10 * k10) >> 8;
+        return 1;
+    }
+    if (midi_knob_last[k] < 0) {                      /* (the first word from it: where it is, no step) */
+        midi_knob_last[k] = (int16_t)value;
+        return 1;
+    }
+    d = midi_knob_acc[k] + (int32_t)value - midi_knob_last[k];
+    midi_knob_last[k] = (int16_t)value;
+    midi_enc[ROLE[k]] = (int16_t)(midi_enc[ROLE[k]] + d / UNITS[k]);
+    midi_knob_acc[k] = (int16_t)(d % UNITS[k]);
+    return 1;
+}
+
 static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t value)
 {
     const param_desc_t *d = 0;
     int16_t *slot = 0;
     uint32_t i, id = 0xFFFFu;
     if (midi_learned(cc, value))                       /* (a learned CC is the user's: not the map's) */
+        return;
+    if (midi_panel_knob(cc, value))                    /* KNOBS PANEL: the FM-1's rotaries */
         return;
     if (cc == 64u) {                                   /* the sustain pedal (2.6): >= 64 down */
         sus_set(t, value >= 64u);

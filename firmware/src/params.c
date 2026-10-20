@@ -58,7 +58,7 @@ static const char *const N_SYNC[] = {"INT", "USB", "TRS"};   /* G_SYNC: the temp
 static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_DGMODE[] = {"OFF", "MAP", "EUCL"};
 static const char *const N_PLDIR[] = {"FWD", "REV", "PEND", "RAND", "WALK"};
-static const char *const N_KNOBS[] = {"GM", "70-77", "1-8", "AUTO"};
+static const char *const N_KNOBS[] = {"GM", "70-77", "1-8", "AUTO", "PANEL"};
 static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};   /* HEX (hex_drums.c) */
 static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
 static const char *const N_HXCLICK[] = {"OFF", "TICK", "NOIS", "POP", "BLIP", "ZAP"};
@@ -263,8 +263,9 @@ static const param_desc_t GP[G_COUNT] = {
     [G_PLCHN] = PD("CHANCE", F_PCT, 0, 127, 64),
     [G_PLJMP] = PD("JUMP", F_PCT, 0, 127, 0),
     [G_PLSTR] = PD("STRIDE", F_INT, 1, 7, 1),
-    [G_KNOBS] = PE("KNOBS", N_KNOBS, 3),            /* a controller's 8 knobs = EDIT's two pages: CC 70-77 (Akai MPK mini
-                                                     * mk3), CC 1-8 (the older MPK minis), AUTO both; GM: the GM map */
+    [G_KNOBS] = PE("KNOBS", N_KNOBS, 4),            /* a controller's 8 knobs (CC 1-8 or 70-77: the Akai MPK minis):
+                                                     * PANEL the FM-1's eight rotaries (PRESETS SELECT ALGORITHM MASTER,
+                                                     * KNOB 1..4); 70-77, 1-8, AUTO: EDIT's two pages; GM: the GM map */
     [G_BEND] = PD("BEND", F_SEMI, 1, 12, 2),      /* 2.6, GLO > MIDI 2: MIDI pitch bend's range (a setting of the FM-1) */
 };
 
