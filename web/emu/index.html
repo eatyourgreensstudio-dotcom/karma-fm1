@@ -90,7 +90,7 @@ footer small { font-size: 11px; opacity: .8; }
 
 <p class="keys" id="midistat" aria-live="polite">MIDI: switch on first</p>
 <p class="keys"><button id="rec" type="button">● Record</button> <span id="recstat">the screen and the sound, as a video file</span></p>
-<p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin" hidden> <span id="pstat">your pattern is kept in this browser (it comes back after a reload)</span></p>
+<p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin,.json" hidden> <span id="pstat">your pattern is kept in this browser (it comes back after a reload)</span></p>
 <p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="#" id="csopen" style="color:inherit">Cheat sheet: where everything is</a></p>
 
 <footer>
@@ -521,6 +521,25 @@ async function switchOn() {
 // ------------------------------------------------------------------ the pattern kept (2026-10-20)
 // The firmware's own project (web_proj_get: what plays, as the FM-1 saves it) every few seconds into this browser's
 // storage, back after a reload; SAVE PATTERN downloads it, OPEN PATTERN loads one (the FM-1's formats).
+// Files out: on the claude.ai page through its save (the viewer confirms; plain downloads are blocked there), else
+// a plain download. claude.ai takes no .fm1p: there the pattern goes as .json ({"fm1p": base64}), OPEN reads both.
+let dl = null;
+if (window.claude && window.claude.use) window.claude.use("downloads").then((d) => { dl = d; }, () => {});
+function stamp() { return new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-"); }
+async function offerFile(blob, name, say) {
+  if (!dl && window.claude && window.claude.use) dl = await window.claude.use("downloads").catch(() => null);
+  if (dl) {
+    try { await dl.save({ filename: name, data: blob }); say("saved: " + name); }
+    catch (e) { say(e && e.code === "declined" ? "not saved" : "could not save (" + ((e && e.code) || "error") + ")"); }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  say("saved: " + name + " (in your Downloads)");
+}
 const PKEY = "fm1-sim-project";
 let lastProj = null;
 function pstat(t) { const e = document.getElementById("pstat"); if (e) e.textContent = t; }
@@ -530,12 +549,8 @@ function projGot(m) {
   lastProj = m.bytes;
   try { localStorage.setItem(PKEY, toB64(m.bytes)); } catch { /* (private mode, full: the file still works) */ }
   if (m.why === "file") {
-    const a = document.createElement("a"), d = new Date();
-    a.href = URL.createObjectURL(new Blob([m.bytes], { type: "application/octet-stream" }));
-    a.download = `fm1-pattern-${d.toISOString().slice(0, 16).replace(/[:T]/g, "-")}.fm1p`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    pstat("saved: " + a.download + " (in your Downloads)");
+    if (dl) offerFile(new Blob([JSON.stringify({ fm1p: toB64(m.bytes) })]), `fm1-pattern-${stamp()}.json`, pstat);
+    else offerFile(new Blob([m.bytes]), `fm1-pattern-${stamp()}.fm1p`, pstat);
   }
 }
 function projLoaded(m) {
@@ -553,7 +568,9 @@ document.getElementById("popen").addEventListener("click", () => document.getEle
 document.getElementById("pfile").addEventListener("change", async (e) => {
   const f = e.target.files && e.target.files[0];
   if (!f || !node) return;
-  send({ type: "proj_put", bytes: new Uint8Array(await f.arrayBuffer()), why: "file" });
+  let bytes = new Uint8Array(await f.arrayBuffer());
+  if (bytes[0] === 0x7B) { try { bytes = fromB64(JSON.parse(new TextDecoder().decode(bytes)).fm1p); } catch { pstat("that file is not an FM-1 pattern"); return; } }
+  send({ type: "proj_put", bytes, why: "file" });
   e.target.value = "";
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden && node) send({ type: "proj_get", why: "keep" }); });
@@ -581,13 +598,8 @@ function recStart() {
   recorder.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
   recorder.onstop = () => {
     node.disconnect(dest);
-    const ext = type.startsWith("video/mp4") ? "mp4" : "webm", d = new Date();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob(parts, { type: type.split(";")[0] }));
-    a.download = `fm1-recording-${d.toISOString().slice(0, 16).replace(/[:T]/g, "-")}.${ext}`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    recSay("saved: " + a.download + " (in your Downloads)");
+    const ext = type.startsWith("video/mp4") ? "mp4" : "webm";
+    offerFile(new Blob(parts, { type: type.split(";")[0] }), `fm1-recording-${stamp()}.${ext}`, recSay);
   };
   recorder.start(1000);
   draw();
