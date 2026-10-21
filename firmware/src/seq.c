@@ -148,6 +148,9 @@ static uint32_t dyn_bit[2];              /* OCT- / OCT+: ghost / hard on the dru
 /* a layer locked open (its button held + HOME tapped: ui_input.c), LY_PLAY = none: the keys and knobs
  * stay in it with the button let go, as if it were held */
 static volatile uint8_t ly_lock = LY_PLAY;
+/* SEQ > GEN shown (the UI sets it every frame): a note played on the selected synth track (its keys, MIDI) is
+ * gen_seed (note + 1), and the UI rolls a new loop starting on it (ui_studio.c gen_ui_sync) */
+static volatile uint8_t gen_keys, gen_seed;
 static uint32_t layer_buttons(void) { return fm1_in.buttons | (ly_lock != LY_PLAY ? ly_bit[ly_lock % LY_COUNT] : 0u); }
 /* the layer the keys are in: the held function button (FX, EDIT, ARP, SEQ, SEL, GLO in that order),
  * else the locked one */
@@ -1587,6 +1590,8 @@ static void key_down(uint32_t k)
             return;
         }
         kb_kind[k] = KS_NOTE;
+        if (gen_keys && sel < NPART && n < 127u)
+            gen_seed = (uint8_t)(n + 1u);           /* SEQ > GEN: the loop starts on this note */
         kb_root[k] = (uint8_t)n;
         kb_oct[k] = (int8_t)song.octave;
         if (t->p[P_CHORD]) {
@@ -2692,6 +2697,8 @@ static void events_block(uint32_t n)
             if (st == 0x90u && d2)
                 drum_input(lane_of_note(d1), vel_lvl(d2), 0, 1);
         } else if (st == 0x90u && d2) {
+            if (t == TSEL && gen_keys && trk_index(t) < NPART && d1 < 127u)
+                gen_seed = (uint8_t)(d1 + 1u);       /* SEQ > GEN: the loop starts on this note */
             if (t == TSEL) {                          /* the SEQ layer's pen: this note, or the chord held (2.6) */
                 if (!(mi_pen[0] | mi_pen[1] | mi_pen[2] | mi_pen[3]) || pen_n >= 4u)
                     pen_n = 0;

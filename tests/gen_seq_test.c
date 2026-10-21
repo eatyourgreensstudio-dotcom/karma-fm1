@@ -84,6 +84,23 @@ int main(void)
         memcpy(was, trk[1].step, sizeof(step_t) * trk_len(&trk[1]));
         song.g[G_GNNEW] = 1; frames(2);
         ck(!same(&trk[1], was, trk_len(&trk[1])) && !song.g[G_GNNEW], "page: NEW rolls track 2's loop, the knob back to --");
+        {                                                 /* a key on the GEN page: GEN on, the loop from that note */
+            uint32_t pg = ui.page, kk;
+            go_home(); song.sel = 2; ly_lock = LY_PLAY; frames(2);
+            gen_on = 0; memset(trk[2].step, 0, sizeof(step_t) * trk_len(&trk[2]));
+            key(4); frames(2);
+            ck(gen_on == 0u && !trk[2].step[0].n, "a key off the GEN page: GEN untouched");
+            open_family(FAM_SEQ); frames(2);
+            for (kk = 0; kk < NPAGES; kk++)
+                if (!strcmp(PAGES[kk].title, "GEN"))
+                    ui.page = (uint8_t)kk;
+            frames(2);
+            key(4); frames(2);
+            ck(gen_on == 4u && song.g[G_GNON] == 1, "a key on the GEN page (track 3): GEN ON");
+            ck(trk[2].step[0].time == ST_NOTE && trk[2].step[0].note[0] == last_note, "... the loop starts on the note played");
+            ck(song.g[G_GNOCT] == clamp((int32_t)last_note / 12 - 1, 1, 5), "... OCT moved to its octave");
+            gen_on = 2u; song.sel = 1; ui.page = (uint8_t)pg; frames(2);
+        }
         song.sel = NPART; frames(2);
         song.g[G_GNON] = 1; frames(2);
         ck(song.g[G_GNON] == 0 && gen_on == 2u, "the drum track: GEN stays OFF");

@@ -245,7 +245,8 @@ static uint8_t op_note = 60, op_hit;                    /* the selected synth tr
 
 /* FX > CLOUD's SEND (G_CLSEND) is the selected track's send, on the drum track the selected sound's: the value on
  * the page follows the selection, and what the knob (or the editor) sets goes to that track / sound. Once a frame */
-/* SEQ > GEN: ON shows and sets the selected synth track's (gen_on) and rolls a new loop at once; NEW rolls one.
+/* SEQ > GEN: ON shows and sets the selected synth track's (gen_on) and rolls a new loop at once; NEW rolls one; a
+ * key played on the page (or an MPK key) turns it on with a new loop that starts on that note.
  * Turned on, and NEW, keep the pattern before for UNDO. Once a frame */
 /* SEQ > PLAY: its four values are the selected track's (seq.c pl_*), shown and set here. Once a frame */
 static void play_ui_sync(void)
@@ -273,6 +274,19 @@ static void gen_ui_sync(void)
         sel_was = (uint8_t)s;
         song.g[G_GNON] = (int16_t)((gen_on & bit) != 0u);
         on_was = song.g[G_GNON];
+    }
+    gen_keys = (uint8_t)(!strcmp(cur_page()->title, "GEN") && !ui.menu);
+    if (gen_seed) {                                  /* a key on the GEN page: GEN on, a new loop from that note */
+        uint32_t n = gen_seed - 1u;
+        gen_seed = 0;
+        if (bit && gen_keys) {
+            undo_sess++;
+            undo_mark(TSEL, undo_sess);
+            gen_on |= (uint8_t)bit;
+            song.g[G_GNON] = on_was = 1;
+            gen_new_from(TSEL, n);
+            ui.force = 1;
+        }
     }
     if (song.g[G_GNON] != on_was) {
         on_was = song.g[G_GNON];

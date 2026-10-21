@@ -65,6 +65,18 @@ static void gen_new(track_t *t)
     }
     t->seq_active = 1;
 }
+/* a key played on the GEN page: a new loop that starts on that note, OCT moved to its octave (the rest of the
+ * loop around it) */
+static void gen_new_from(track_t *t, uint32_t note)
+{
+    step_t *s = &t->step[0];
+    song.g[G_GNOCT] = (int16_t)clamp((int32_t)note / 12 - 1, 1, 5);
+    gen_new(t);
+    memset(s, 0, sizeof *s);
+    s->time = ST_NOTE;
+    s->n = 1;
+    s->note[0] = (uint8_t)note;
+}
 /* seq_tick: step idx of a synth track about to play. CHANGE squared: fine near locked */
 static void gen_tick(track_t *t, uint32_t idx)
 {
