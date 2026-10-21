@@ -24,6 +24,7 @@ int main(void)
     t->p[P_SLEN] = 16;
     t->p[P_ROOT] = 9;                                    /* A minor */
     t->p[P_SCALE] = 2;
+    t->p[P_ATK] = 0; t->p[P_REL] = 10;                   /* a short sound: GEN's line (not PHRASE) */
     len = trk_len(t);
     song.g[G_GNDENS] = 127; song.g[G_GNRANGE] = 2; song.g[G_GNOCT] = 2;
     gen_new(t);
@@ -69,6 +70,37 @@ int main(void)
     for (i = 0, notes = 0; i < len; i++)
         notes += t->step[i].time == ST_NOTE;
     ck(notes >= 1u, "NEW at DENS 0: a note at least");
+    {                                                     /* PHRASE: a slow sound (or ELEMENTS) */
+        uint32_t r, ok_beat = 1, ok_chord = 1, ok_held = 1, ok_one = 1;
+        int32_t lo = 127, hi = 0;
+        t->p[P_REL] = 60;
+        song.g[G_GNDENS] = 45; song.g[G_GNOCT] = 3;
+        for (r = 0; r < 40u; r++) {
+            gen_new(t);
+            for (i = 0; i < len; i++) {
+                const step_t *s = &t->step[i];
+                int32_t rel = (int32_t)s->note[0] - (12 * 4 + 9);
+                if (i % 8u == 0u)
+                    ok_beat &= s->time == ST_NOTE && s->n == 1u;
+                if (s->time == ST_NOTE && s->n) {
+                    if (i % 4u == 0u)
+                        ok_chord &= rel == 0 || rel == 3 || rel == 7 || rel == 12;   /* A minor: A, C, E, A */
+                    else
+                        ok_held &= i % 4u == 2u;
+                    ok_one &= !(s->flags & (SF_ACCENT | SF_SLIDE));
+                    lo = rel < lo ? rel : lo;
+                    hi = rel > hi ? rel : hi;
+                }
+                if (i % 2u)
+                    ok_held &= s->time == ST_TIE;
+            }
+        }
+        ck(ok_beat, "PHRASE: a note on the first beat of each half bar");
+        ck(ok_chord, "PHRASE: on the beats, chord tones (root, third, fifth, octave)");
+        ck(ok_held, "PHRASE: notes held (TIE) between, a passing note only half way");
+        ck(ok_one && lo >= -2 && hi <= 14, "PHRASE: about an octave, no accent, no slide");
+        t->p[P_REL] = 10;
+    }
     song.g[G_GNDENS] = 64;
     {                                                     /* the page: ON follows the selected track */
         song.sel = 1; frames(2);

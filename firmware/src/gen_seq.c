@@ -18,6 +18,72 @@ static uint32_t gen_scale(const track_t *t, uint8_t *deg)   /* the scale's pitch
         deg[n++] = 0;
     return n;
 }
+/* PHRASE: how GEN writes for ELEMENTS and for any slow sound (a soft attack, a long release), where a 16th line
+ * smears: notes on the beats, chord tones of the scale (root, third, fifth, the octave), each held (TIE) to the
+ * next; now and then a passing note, a degree from the one held, half way between beats; one octave, moving
+ * to the nearer of two chord tones; no accent, no slide. The other sounds: the line below */
+static int gen_phrase(const track_t *t)
+{
+    return t->engine == ENGI_ELEM || t->p[P_ATK] >= 12 || t->p[P_REL] >= 40;
+}
+static uint32_t gen_near_deg(const uint8_t *deg, uint32_t n, uint32_t want)   /* the degree nearest want semitones */
+{
+    uint32_t k, best = 0, bd = 99;
+    for (k = 0; k < n; k++) {
+        uint32_t d = deg[k] > want ? deg[k] - want : want - deg[k];
+        if (d < bd)
+            bd = d, best = k;
+    }
+    return best;
+}
+static int32_t gen_held(const track_t *t, uint32_t i)   /* the note sounding before step i (-1: none) */
+{
+    uint32_t k;
+    for (k = i; k-- > 0;) {
+        if (t->step[k].time == ST_NOTE && t->step[k].n)
+            return t->step[k].note[0];
+        if (t->step[k].time == ST_REST)
+            return -1;
+    }
+    return -1;
+}
+static void gen_roll_phrase(track_t *t, uint32_t i, const uint8_t *deg, uint32_t n, int32_t base)
+{
+    const int16_t *g = song.g;
+    step_t *s = &t->step[i];
+    uint32_t dens = (uint32_t)g[G_GNDENS], held, c, pick[2];
+    int32_t h = gen_held(t, i), note[2];
+    static const uint8_t TONE[8] = {0, 0, 0, 7, 7, 7, 3, 12};   /* root, fifth, third, octave (in semitones) */
+    memset(s, 0, sizeof *s);
+    if (i % 4u) {                                    /* between the beats: held, or a passing note */
+        if (i % 4u == 2u && h >= 0 && rng() % 127u < dens / 3u) {
+            uint32_t k = gen_near_deg(deg, n, (uint32_t)(h - base + 120) % 12u);
+            int32_t oct = (h - base) >= 0 ? (h - base) / 12 : -1, up = rng() & 1u, d;
+            d = up ? (k + 1u < n ? deg[k + 1u] : 12 + deg[0]) : (k ? deg[k - 1u] : (int32_t)deg[n - 1u] - 12);
+            s->time = ST_NOTE;
+            s->n = 1;
+            s->note[0] = (uint8_t)clamp(base + oct * 12 + d, 0, 127);
+        } else {
+            s->time = ST_TIE;
+        }
+        return;
+    }
+    held = dens * 2u > 127u ? 127u : dens * 2u;     /* the beats: mostly a note; the first of each half bar always */
+    if (i % 8u && rng() % 127u >= held) {
+        s->time = (rng() & 1u) || h < 0 ? ST_REST : ST_TIE;   /* a rest to breathe, or the note on */
+        s->note[0] = (uint8_t)clamp(base, 0, 127);
+        return;
+    }
+    for (c = 0; c < 2u; c++) {                       /* two chord tones: the nearer to the note held */
+        uint32_t tone = TONE[rng() % 8u];
+        pick[c] = tone == 12u ? 12u : deg[gen_near_deg(deg, n, tone)];
+        note[c] = base + (int32_t)pick[c];
+    }
+    c = h >= 0 && (note[1] > h ? note[1] - h : h - note[1]) < (note[0] > h ? note[0] - h : h - note[0]);
+    s->time = ST_NOTE;
+    s->n = 1;
+    s->note[0] = (uint8_t)clamp(note[c], 0, 127);
+}
 /* step i rolled again: a rest (DENS), else a note of the scale, near the old one half the time */
 static void gen_roll(track_t *t, uint32_t i, int near)
 {
@@ -30,6 +96,10 @@ static void gen_roll(track_t *t, uint32_t i, int near)
         for (k = 0; k < n && deg[k] < (uint32_t)rel % 12u; k++)
             ;
         pos = (uint32_t)rel / 12u * n + (k < n ? k : n - 1u);
+    }
+    if (gen_phrase(t)) {
+        gen_roll_phrase(t, i, deg, n, base);
+        return;
     }
     memset(s, 0, sizeof *s);
     if (rng() % 127u >= (uint32_t)g[G_GNDENS]) {
