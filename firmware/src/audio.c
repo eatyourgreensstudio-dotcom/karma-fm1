@@ -7,7 +7,18 @@
 #define HALF_WORDS (HALF_FRAMES * 2u)
 #define OUT_SHIFT 7               /* Q15 -> 24-bit, -6 dBFS ceiling */
 
-static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(4)));
+static int32_t abuf[2u * HALF_WORDS] __attribute__((aligned(32)));   /* (DMA: 32-byte lines, as M-VAVE's) */
+#if FM1_AUDIO_RX_CLOCK
+static int32_t abuf_rx[2u * HALF_WORDS] __attribute__((aligned(32)));   /* the RX channel's, unused: its pendings are the clock */
+#endif
+/* before a flash erase or program (fm1_flash.h FL_QUIET): the halves the DMA loops while the interrupts are off,
+ * silent */
+static void audio_dma_silence(void)
+{
+    uint32_t i;
+    for (i = 0; i < 2u * HALF_WORDS; i++)
+        abuf[i] = 0;
+}
 
 /* diagnostics, kept across resets and UBOOT entry: read with `fm1t memr` */
 #define DBG_MAGIC 0x44424731u                       /* "DBG1" */
@@ -99,5 +110,9 @@ static void audio_init(void)                   /* hal/fm1_audio.h */
     uint32_t i;
     for (i = 0; i < 2u * HALF_WORDS; i++)
         abuf[i] = 0;
-    fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);
+#if FM1_AUDIO_RX_CLOCK
+    fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3, abuf_rx);
+#else
+    fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3, 0);
+#endif
 }

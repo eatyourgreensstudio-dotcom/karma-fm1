@@ -70,6 +70,7 @@
 #error "FELUCCA_OTA needs FELUCCA_FLASH"
 #endif
 #if FELUCCA_FLASH
+#define FL_QUIET() audio_dma_silence()     /* (audio.c: the DMA halves silent while the flash is written) */
 #include "fm1_flash.h"
 static uint8_t flash_ok;                 /* JEDEC id matched at boot (persist_boot) */
 static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: audio keeps up */

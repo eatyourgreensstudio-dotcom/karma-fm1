@@ -233,9 +233,16 @@ static void fl_plain_window_init(void)
 static inline uint32_t irq_save(void) { __asm__ volatile("cli" ::: "memory"); return 0; }
 static inline void irq_restore(uint32_t f) { (void)f; __asm__ volatile("csync\n\tsti" ::: "memory"); }
 
+/* FL_QUIET (the app's, optional): called before the interrupts go off for an erase or a program, so the audio
+ * DMA, looping its two halves meanwhile, plays silence, not a stale buzz (as M-VAVE's FM1 Open zeroes them) */
+#ifndef FL_QUIET
+#define FL_QUIET() ((void)0)
+#endif
 static int fl_erase4k(uint32_t off, uint32_t *took_us)
 {
-    uint32_t f = irq_save();
+    uint32_t f;
+    FL_QUIET();
+    f = irq_save();
     int rc = FL_FAR(fl_erase4k_ram)(off, took_us);
     irq_restore(f);
     return rc;
@@ -249,6 +256,7 @@ static int fl_write(uint32_t off, const uint8_t *src_ram, uint32_t n)
         int rc;
         uint32_t f;
         if (chunk > n) chunk = n;
+        FL_QUIET();
         f = irq_save();
         rc = FL_FAR(fl_prog_ram)(off, src_ram, chunk, &took);
         irq_restore(f);

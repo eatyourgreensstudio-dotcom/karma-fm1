@@ -132,7 +132,7 @@ int main(void)
                  P_LPOL + 1 == P_E0 && P_E0 == 63 && P_COUNT == PROJ_NP_V5 + 10u && PROJ_NP_V5 == PROJ_NP_V4 + 3u &&
                  PROJ_NP_V4 == PROJ_NP_V3 + 1u && P_SLDEPTH + 1 == P_CHORD);
     bad += check("format 7 fills one flash object (3840 bytes); 4 slots fit .noinit (with panel, settings, dbg, bootguard)",
-                 sizeof(project_t) <= 3840u && 4u * sizeof(project_t) <= 0x3D50u - 256u && sizeof(project_t) == 3840u);
+                 sizeof(project_t) <= 3840u && 4u * sizeof(project_t) <= 0x3D4Cu - 256u && sizeof(project_t) == 3840u);
     {   /* every 2.6 parameter's range fits its byte */
         uint32_t k, fits = 1;
         for (k = P_ITYPE; k < P_E0; k++) fits &= TP[k].min >= 0 && TP[k].max <= 255;

@@ -2,9 +2,9 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* FM-1 audio out: ALNK0 I2S -> external codec, double-buffered DMA
  * The application owns the buffer: two halves
- * of half_words int32 (L, R, 24-bit left-justified), zeroed before init.
+ * of half_words int32 (L, R, signed 24-bit in the low bits, Q23), zeroed before init.
  *
- *   fm1_audio_init(buf, half_words, isr, prio)  codec and ALNK0 bring-up;
+ *   fm1_audio_init(buf, half_words, isr, prio, rx)  codec and ALNK0 bring-up (rx: FM1_AUDIO_RX_CLOCK's buffer, or 0);
  *                         isr = asm wrapper (fm1_isr.S) for FM1_IRQ_ALNK0
  *   in the ISR:   p = fm1_audio_pending();  fm1_audio_ack_aux(p);
  *                 if (p & FM1_AUDIO_HALF) { fill fm1_audio_free_half();
@@ -27,7 +27,18 @@
 #define FM1_ALNK_LEN (*(volatile uint16_t *)(FM1_ALNK + 0x20u))
 #define FM1_CLK_CON2 (*(volatile uint32_t *)0x10014u)
 #define FM1_IOMAP_CON5 (*(volatile uint32_t *)0x51030u)
+#define FM1_ALNK_ADR0 (*(volatile uint32_t *)(FM1_ALNK + 0x10u))
+/* FM1_AUDIO_RX_CLOCK (2026-10-21, a fallback for the first flash): M-VAVE's FM1 Open (app/board/audio.c) takes the
+ * half-buffer interrupt from ALNK channel 0 as RX (PC3 an input, a receive buffer at ADR0, nothing connected), not
+ * from the TX channel 3 as here. If the hardware gives no sound, build with -DFM1_AUDIO_RX_CLOCK=1 */
+#ifndef FM1_AUDIO_RX_CLOCK
+#define FM1_AUDIO_RX_CLOCK 0
+#endif
+#if FM1_AUDIO_RX_CLOCK
+#define FM1_AUDIO_HALF 0x10u      /* CON2 pending: channel 0 (RX) is at a half: the clock */
+#else
 #define FM1_AUDIO_HALF 0x80u      /* CON2 pending: a half buffer is free */
+#endif
 
 static void fm1__pc_out(uint32_t bit, int v)   /* codec control lines on PC0/1/2/6 */
 {
@@ -40,7 +51,7 @@ static void fm1__pc_out(uint32_t bit, int v)   /* codec control lines on PC0/1/2
     FM1_PR(FM1_PC, FM1_DIR) &= ~m;
 }
 
-FM1_INLINE void fm1_audio_init(int32_t *buf, uint32_t half_words, void (*isr)(void), uint32_t prio)
+FM1_INLINE void fm1_audio_init(int32_t *buf, uint32_t half_words, void (*isr)(void), uint32_t prio, int32_t *rx)
 {
     fm1__pc_out(6, 0);
     fm1_delay_ms(5);
@@ -64,6 +75,14 @@ FM1_INLINE void fm1_audio_init(int32_t *buf, uint32_t half_words, void (*isr)(vo
     FM1_ALNK_CON3 = (uint8_t)((FM1_ALNK_CON3 & 0x1Fu) | 0x80u);
     FM1_ALNK_CON1 |= 1u << 12;
     FM1_ALNK_CON1 |= 1u << 14;
+    if (rx) {                                     /* (FM1_AUDIO_RX_CLOCK) channel 0 RX on PC3: input, pull-up */
+        FM1_PR(FM1_PC, FM1_DIE) |= 1u << 3;
+        FM1_PR(FM1_PC, FM1_DIR) |= 1u << 3;
+        FM1_PR(FM1_PC, FM1_PD) &= ~(1u << 3);
+        FM1_PR(FM1_PC, FM1_PU) |= 1u << 3;
+        FM1_ALNK_ADR0 = (uint32_t)(uintptr_t)rx;
+        FM1_ALNK_CON1 |= 1u | (1u << 2) | (1u << 3);
+    }
     FM1_ALNK_ADR3 = (uint32_t)(uintptr_t)buf;
     fm1__pc_out(6, 1);
     FM1_ALNK_CON1 &= ~(1u << 15);

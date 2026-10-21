@@ -8,7 +8,7 @@
  *                     the core applies to our supervisor-mode main loop is
  *                     not known, so both get the same range.
  *   write limits      CPU0 writes into the two 256-byte stack guard bands and
- *                     into 0x01C7FD50..0x01C7FFFF (boot info, mailbox, vectors)
+ *                     into 0x01C7FD4C..0x01C7FFFF (boot info, mailbox, vectors)
  *                     -> DBG_MSG bit 13. The top window is armed separately
  *                     with fm1_guard_lock_top() once every vector is
  *                     attached; fm1_guard_unlock_top() reopens it.
@@ -84,13 +84,13 @@ static void fm1_guard_enable(uint32_t which)
     fm1__dbg_lock();
 }
 
-/* write-protect 0x01C7FD50..0x01C7FFFF (boot info, mailbox, vectors):
+/* write-protect 0x01C7FD4C..0x01C7FFFF (boot info, mailbox, vectors):
  * call after the last fm1_irq_attach */
 static void fm1_guard_lock_top(void)
 {
     fm1__dbg_unlock();
     FM1_DBG_MSG_CLR = 0xFFFFFFFFu;
-    FM1_WR_LIMIT_L(2) = 0x01C7FD50u;
+    FM1_WR_LIMIT_L(2) = 0x01C7FD4Cu;
     FM1_WR_LIMIT_H(2) = 0x01C7FFFFu;
     FM1_C0_WR_LIMIT_EN |= 4u;
     fm1__dbg_lock();

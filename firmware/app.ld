@@ -7,14 +7,15 @@
  * RAM  : .data/.bss (96 KiB)
  * POOL : big zero-initialised buffers (FX lines, canvases), section .pool
  * STACKS with 256-byte guard bands; NOINIT survives resets and UBOOT entry.
- * 0x01C7FD50.. is reserved: boot_info, boot-state mailbox, vector table. */
+ * 0x01C7FD4C.. is reserved: boot_info, boot-state mailbox, vector table (2026-10-21: the boot_info start of M-VAVE's
+ * FM1 Open linker script, sdk/config/linker.ld.in; it was 0x01C7FD50 here, 4 bytes into it). */
 MEMORY
 {
     XIP    (rx)  : ORIGIN = 0x02000120, LENGTH = 0x8DFBC
     RAMTEXT (rwx): ORIGIN = 0x01C00000, LENGTH = 0x6000
     RAM    (rwx) : ORIGIN = 0x01C08000, LENGTH = 96K
     POOL   (rw)  : ORIGIN = 0x01C20000, LENGTH = 0x54000
-    NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D50
+    NOINIT (rw)  : ORIGIN = 0x01C7C000, LENGTH = 0x3D4C
 }
 SECTIONS
 {
