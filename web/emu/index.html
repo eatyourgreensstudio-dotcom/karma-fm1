@@ -89,6 +89,7 @@ footer small { font-size: 11px; opacity: .8; }
 </p>
 
 <p class="keys" id="midistat" aria-live="polite">MIDI: switch on first</p>
+<p class="keys"><button id="rec" type="button">● Record</button> <span id="recstat">the screen and the sound, as a video file</span></p>
 <p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin" hidden> <span id="pstat">your pattern is kept in this browser (it comes back after a reload)</span></p>
 <p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="#" id="csopen" style="color:inherit">Cheat sheet: where everything is</a></p>
 
@@ -556,6 +557,51 @@ document.getElementById("pfile").addEventListener("change", async (e) => {
   e.target.value = "";
 });
 document.addEventListener("visibilitychange", () => { if (document.hidden && node) send({ type: "proj_get", why: "keep" }); });
+
+// ------------------------------------------------------------------ recording (2026-10-21)
+// The screen (drawn 4x, sharp, into a 960 x 960 canvas) and the device's sound, with MediaRecorder, to a video file:
+// MP4 where the browser makes one, else WebM.
+let recorder = null, recTimer = 0;
+function recSay(t) { const e = document.getElementById("recstat"); if (e) e.textContent = t; }
+function recStart() {
+  if (!node) { recSay("switch on first"); return; }
+  const big = document.createElement("canvas");
+  big.width = big.height = 960;
+  const g = big.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  const draw = () => { if (!recorder) return; g.drawImage(canvas, 0, 0, 960, 960); requestAnimationFrame(draw); };
+  const dest = node.context.createMediaStreamDestination();
+  node.connect(dest);
+  const stream = new MediaStream([...big.captureStream(60).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const types = ["video/mp4;codecs=avc1.640028,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm"];
+  const type = types.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+  if (!type) { recSay("this browser cannot record (use Chrome)"); node.disconnect(dest); return; }
+  const parts = [], t0 = Date.now();
+  recorder = new MediaRecorder(stream, { mimeType: type, videoBitsPerSecond: 8000000, audioBitsPerSecond: 256000 });
+  recorder.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
+  recorder.onstop = () => {
+    node.disconnect(dest);
+    const ext = type.startsWith("video/mp4") ? "mp4" : "webm", d = new Date();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(parts, { type: type.split(";")[0] }));
+    a.download = `fm1-recording-${d.toISOString().slice(0, 16).replace(/[:T]/g, "-")}.${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    recSay("saved: " + a.download + " (in your Downloads)");
+  };
+  recorder.start(1000);
+  draw();
+  document.getElementById("rec").textContent = "■ Stop";
+  recTimer = setInterval(() => recSay("recording " + Math.floor((Date.now() - t0) / 1000) + " s"), 500);
+}
+function recStop() {
+  clearInterval(recTimer);
+  const r = recorder;
+  recorder = null;
+  document.getElementById("rec").textContent = "● Record";
+  if (r) r.stop();
+}
+document.getElementById("rec").addEventListener("click", () => (recorder ? recStop() : recStart()));
 
 document.getElementById("go").addEventListener("click", switchOn);
 document.getElementById("demo").addEventListener("click", () => send({ type: "demo" }));
