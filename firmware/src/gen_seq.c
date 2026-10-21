@@ -4,7 +4,7 @@
  * round (0: locked, the loop as it is; all the way: new every time). Own code. A rolled step is often a
  * neighbour of the note it held (a degree or two of the track's SCALE up or down), else any note of the scale
  * over RANGE octaves from OCT (and ROOT); DENS how many steps play, ACC and SLIDE their flags. NEW: a whole
- * new loop at once. GEN is on per track (gen_on: not kept, off at power on; what it wrote is the track's
+ * new loop at once (as turning GEN on). GEN is on per track (gen_on: not kept, off at power on; what it wrote is the track's
  * pattern and is kept with it). The settings are the FM-1's, shared by the tracks. */
 static volatile uint8_t gen_on;                      /* bit n: GEN changes synth track n's loop */
 

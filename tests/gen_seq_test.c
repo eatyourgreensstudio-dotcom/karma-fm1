@@ -72,8 +72,11 @@ int main(void)
     song.g[G_GNDENS] = 64;
     {                                                     /* the page: ON follows the selected track */
         song.sel = 1; frames(2);
+        memset(trk[1].step, 0, sizeof(step_t) * trk_len(&trk[1]));
+        memcpy(was, trk[1].step, sizeof(step_t) * trk_len(&trk[1]));
         song.g[G_GNON] = 1; frames(2);
         ck(gen_on == 2u, "page: GEN ON on track 2 sets its bit only");
+        ck(!same(&trk[1], was, trk_len(&trk[1])), "page: GEN ON writes a new loop at once (no wait for DRIFT)");
         song.sel = 0; frames(2);
         ck(song.g[G_GNON] == 0, "page: back on track 1 it shows OFF");
         song.sel = 1; frames(2);

@@ -245,8 +245,8 @@ static uint8_t op_note = 60, op_hit;                    /* the selected synth tr
 
 /* FX > CLOUD's SEND (G_CLSEND) is the selected track's send, on the drum track the selected sound's: the value on
  * the page follows the selection, and what the knob (or the editor) sets goes to that track / sound. Once a frame */
-/* SEQ > GEN: ON shows and sets the selected synth track's (gen_on); NEW rolls its loop. Turned on, and NEW,
- * keep the pattern before for UNDO. Once a frame */
+/* SEQ > GEN: ON shows and sets the selected synth track's (gen_on) and rolls a new loop at once; NEW rolls one.
+ * Turned on, and NEW, keep the pattern before for UNDO. Once a frame */
 /* SEQ > PLAY: its four values are the selected track's (seq.c pl_*), shown and set here. Once a frame */
 static void play_ui_sync(void)
 {
@@ -282,7 +282,8 @@ static void gen_ui_sync(void)
             undo_sess++;
             undo_mark(TSEL, undo_sess);
             gen_on |= (uint8_t)bit;
-            TSEL->seq_active = 1;
+            gen_new(TSEL);                           /* (a new loop at once: DRIFT alone took seconds to be heard) */
+            ui.force = 1;
         } else {
             gen_on &= (uint8_t)~bit;
         }
