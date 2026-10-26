@@ -275,7 +275,47 @@ static void gen_ui_sync(void)
         song.g[G_GNON] = (int16_t)((gen_on & bit) != 0u);
         on_was = song.g[G_GNON];
     }
-    gen_keys = (uint8_t)(!strcmp(cur_page()->title, "GEN") && !ui.menu);
+    gen_keys = (uint8_t)((str_eq(cur_page()->title, "GEN") || str_eq(cur_page()->title, "HARMONY")) && !ui.menu);
+    {   /* SEQ > HARMONY: KEY and MODE are track 1's ROOT and SCL (a project loaded shows its key); turned, they set the
+         * three synth tracks and ACID GEN; any of the four turned: every GEN track's part again, the chords said */
+        static int16_t kr = -1, km = -1, kp = -1, kb = -1;
+        int16_t *g = song.g;
+        int changed = 0;
+        if (g[G_GKROOT] != kr || g[G_GKMODE] != km) {
+            if (kr >= 0) {
+                gen_key_set((uint32_t)g[G_GKROOT], (uint32_t)g[G_GKMODE]);
+                changed = 1;
+            }
+        } else {
+            g[G_GKROOT] = (int16_t)(trk[0].p[P_ROOT] % 12);
+            g[G_GKMODE] = (int16_t)gk_mode_of(trk[0].p[P_SCALE]);
+        }
+        if (kp >= 0 && (g[G_GKPROG] != kp || g[G_GKBARS] != kb))
+            changed = 1;
+        kr = g[G_GKROOT], km = g[G_GKMODE], kp = g[G_GKPROG], kb = g[G_GKBARS];
+        gk_load();
+        if (changed) {
+            static const char *const RN[12] = {"I", "bII", "II", "bIII", "III", "IV", "bV", "V", "bVI", "VI", "bVII", "VII"};
+            char m[32];
+            uint32_t i, j = 0, q;
+            undo_sess++;
+            for (i = 0; i < NPART; i++)
+                if ((gen_on >> i) & 1u)
+                    undo_mark(&trk[i], undo_sess);
+            gen_again();
+            for (i = 0; i < gk.n && j < 24u; i++) {   /* the chords: "i bVII", minor in small letters */
+                const char *r = RN[(uint32_t)(gk_note(gk.deg[i]) - gk.root + 12) % 12u];
+                int minor = gk_note(gk.deg[i] + 2) - gk_note(gk.deg[i]) == 3;
+                if (i)
+                    m[j++] = ' ';
+                for (q = 0; r[q] && j < 30u; q++)
+                    m[j++] = (char)(minor && r[q] != 'b' ? r[q] - 'A' + 'a' : r[q]);
+            }
+            m[j] = 0;
+            ui_message(m);
+            ui.force = 1;
+        }
+    }
     if (gen_seed) {                                  /* a key on the GEN page: GEN on, a new loop from that note */
         uint32_t n = gen_seed - 1u;
         gen_seed = 0;

@@ -788,7 +788,7 @@ int main(int argc, char **argv)
         SEL(9);
         check(!strcmp(PT(), "VOICE 2"), "SELECT on EDIT: up to VOICE 2");
         tap(B_SEQ); SEL(9);
-        check(!strcmp(PT(), "GEN 2"), "SELECT on SEQ: STEP .. GEN 2, not into the SONG screen");
+        check(!strcmp(PT(), "HARMONY"), "SELECT on SEQ: STEP .. HARMONY, not into the SONG screen");
         tap(B_ENV);
         check(!strcmp(PT(), "ENV"), "the button still opens its family");
         tap(B_ENV);

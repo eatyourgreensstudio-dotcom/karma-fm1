@@ -20,86 +20,140 @@ int main(void)
     uint32_t i, k, len, inscale = 1, inrange = 1, notes = 0, changed;
     host_tracks_init();
     song.sel = 0;
-    t = &trk[0];
-    t->p[P_SLEN] = 16;
-    t->p[P_ROOT] = 9;                                    /* A minor */
-    t->p[P_SCALE] = 2;
-    t->p[P_ATK] = 0; t->p[P_REL] = 10;                   /* a short sound: GEN's line (not PHRASE) */
-    len = trk_len(t);
-    song.g[G_GNDENS] = 127; song.g[G_GNRANGE] = 2; song.g[G_GNOCT] = 2;
-    gen_new(t);
-    for (i = 0; i < len; i++)
-        if (t->step[i].time == ST_NOTE) {
-            int32_t n = t->step[i].note[0], rel = n - (12 * 3 + 9);
-            notes++;
-            inscale &= (scale_mask(t) >> (uint32_t)((rel % 12 + 12) % 12)) & 1u;
-            inrange &= rel >= 0 && rel < 24;
-        }
-    ck(notes == len, "NEW, DENS 100 %: every step a note");
-    ck(inscale, "... each in the track's SCALE (A minor)");
-    ck(inrange, "... inside OCT 2 .. 2 octaves up");
-    memcpy(was, t->step, sizeof(step_t) * len);
-    gen_on = 1;
-    song.g[G_GNCHG] = 0;
-    for (k = 0; k < 64u; k++)
-        for (i = 0; i < len; i++)
-            gen_tick(t, i);
-    ck(same(t, was, len), "CHANGE 0: 64 passes, the loop as it was (locked)");
-    song.g[G_GNCHG] = 127;
-    for (i = 0; i < len; i++)
-        gen_tick(t, i);
-    for (i = 0, changed = 0; i < len; i++)
-        changed += memcmp(&t->step[i], &was[i], sizeof(step_t)) != 0;
-    ck(changed >= len / 2u, "CHANGE 100 %: one pass, most steps new");
-    song.g[G_GNCHG] = 32;
-    memcpy(was, t->step, sizeof(step_t) * len);
-    for (i = 0, changed = 0; i < 100u * len; i++) {
-        step_t s = t->step[i % len];
-        gen_tick(t, i % len);
-        changed += memcmp(&s, &t->step[i % len], sizeof s) != 0;
+    for (i = 0; i < NPART; i++) {                        /* C minor; PROG SWAY (i bVII), a chord every 2 bars */
+        trk[i].p[P_ROOT] = 0;
+        trk[i].p[P_SCALE] = 2;
     }
-    ck(changed > 50u && changed < 20u * len, "CHANGE 25 %: a few steps a pass change (it drifts)");
-    gen_on = 0;
-    memcpy(was, t->step, sizeof(step_t) * len);
-    song.g[G_GNCHG] = 127;
-    for (i = 0; i < len; i++)
-        gen_tick(t, i);
-    ck(same(t, was, len), "GEN OFF on the track: nothing changes");
-    song.g[G_GNDENS] = 0;
-    gen_new(t);
-    for (i = 0, notes = 0; i < len; i++)
-        notes += t->step[i].time == ST_NOTE;
-    ck(notes >= 1u, "NEW at DENS 0: a note at least");
-    {                                                     /* PHRASE: a slow sound (or ELEMENTS) */
-        uint32_t r, ok_beat = 1, ok_chord = 1, ok_held = 1, ok_one = 1;
-        int32_t lo = 127, hi = 0;
-        t->p[P_REL] = 60;
-        song.g[G_GNDENS] = 45; song.g[G_GNOCT] = 3;
-        for (r = 0; r < 40u; r++) {
+    song.g[G_GKPROG] = 1; song.g[G_GKBARS] = 1;
+    song.g[G_GNDENS] = 45; song.g[G_GNRANGE] = 2; song.g[G_GNOCT] = 3; song.g[G_GNACC] = 25; song.g[G_GNSLD] = 13;
+    gk_load();
+    ck(gk.len == 64u && gk.cst == 32u && gk.n == 2u && gk.deg[1] == 6u, "HARMONY: SWAY, 2 bars: i bVII over 64 steps");
+    {   /* BASS */
+        uint32_t ok_key = 1, ok_root = 1, ok_rh = 1, ok_reg = 1, r;
+        t = &trk[0];
+        for (r = 0; r < 30u; r++) {
+            uint16_t m0 = 0;
             gen_new(t);
-            for (i = 0; i < len; i++) {
-                const step_t *s = &t->step[i];
-                int32_t rel = (int32_t)s->note[0] - (12 * 4 + 9);
-                if (i % 8u == 0u)
-                    ok_beat &= s->time == ST_NOTE && s->n == 1u;
-                if (s->time == ST_NOTE && s->n) {
-                    if (i % 4u == 0u)
-                        ok_chord &= rel == 0 || rel == 3 || rel == 7 || rel == 12;   /* A minor: A, C, E, A */
-                    else
-                        ok_held &= i % 4u == 2u;
-                    ok_one &= !(s->flags & (SF_ACCENT | SF_SLIDE));
-                    lo = rel < lo ? rel : lo;
-                    hi = rel > hi ? rel : hi;
+            len = trk_len(t);
+            ok_rh &= len == 64u;
+            for (k = 0; k < 4u; k++) {
+                uint16_t m = 0;
+                int first = 1;
+                for (i = 0; i < 16u; i++) {
+                    const step_t *s = &t->step[k * 16u + i];
+                    if (s->time != ST_NOTE || !s->n)
+                        continue;
+                    m |= (uint16_t)(1u << i);
+                    ok_key &= (SCALE_MASK[2] >> (s->note[0] % 12u)) & 1u;
+                    ok_reg &= s->note[0] >= 36u && s->note[0] < 36u + 24u;
+                    if (first && k % 2u == 0u)
+                        ok_root &= s->note[0] % 12u == (k ? 10u : 0u);   /* C, then Bb */
+                    first = 0;
                 }
-                if (i % 2u)
-                    ok_held &= s->time == ST_TIE;
+                if (!k)
+                    m0 = m;
+                ok_rh &= m == m0;
             }
         }
-        ck(ok_beat, "PHRASE: a note on the first beat of each half bar");
-        ck(ok_chord, "PHRASE: on the beats, chord tones (root, third, fifth, octave)");
-        ck(ok_held, "PHRASE: notes held (TIE) between, a passing note only half way");
-        ck(ok_one && lo >= -2 && hi <= 14, "PHRASE: about an octave, no accent, no slide");
-        t->p[P_REL] = 10;
+        ck(ok_key, "BASS: every note in the key (C minor)");
+        ck(ok_root, "BASS: a chord's first hit is its root (C, then Bb)");
+        ck(ok_rh, "BASS: one rhythm in every bar; LEN set to the plan (64)");
+        ck(ok_reg, "BASS: from C2, under two octaves");
+    }
+    {   /* LINE: a slow sound held, a short one struck on the beats */
+        uint32_t ok_tone = 1, ok_held = 1, ok_reg = 1, struck = 0, r;
+        t = &trk[1];
+        t->p[P_ATK] = 20; t->p[P_REL] = 60;
+        for (r = 0; r < 30u; r++) {
+            gen_new(t);
+            for (i = 0; i < 64u; i++) {
+                const step_t *s = &t->step[i];
+                if (s->time == ST_NOTE && s->n) {
+                    uint32_t pc = s->note[0] % 12u, c = i < 32u ? 0u : 10u;
+                    uint32_t rel = (pc + 12u - c) % 12u;
+                    ok_tone &= c ? (rel == 0u || rel == 4u || rel == 7u || rel == 10u || rel == 2u)
+                                 : (rel == 0u || rel == 3u || rel == 7u || rel == 10u);
+                    ok_held &= i % 16u == 0u;
+                    ok_reg &= s->note[0] >= 55u && s->note[0] <= 74u;
+                } else {
+                    ok_held &= s->time == ST_TIE;
+                }
+            }
+        }
+        ck(ok_tone, "LINE: chord tones of each chord (i: C Eb G Bb; bVII: Bb D F Ab, C)");
+        ck(ok_held, "LINE: a slow sound: long notes held (TIE), a change at most each bar");
+        ck(ok_reg, "LINE: G3 .. D5");
+        t->p[P_ATK] = 0; t->p[P_REL] = 10;
+        for (r = 0; r < 10u; r++) {
+            gen_new(t);
+            for (i = 0; i < 64u; i++)
+                struck += i % 16u && i % 4u == 0u && t->step[i].time == ST_NOTE;
+        }
+        ck(struck > 40u, "LINE: a short sound struck again on the beats");
+    }
+    {   /* LEAD */
+        uint32_t ok_key = 1, ok_beat = 1, ok_end = 1, ok_rep = 1, ok_reg = 1, r;
+        t = &trk[2];
+        for (r = 0; r < 30u; r++) {
+            uint32_t last = 0, hits0 = 0, hits1 = 0;
+            gen_new(t);
+            for (i = 0; i < 64u; i++) {
+                const step_t *s = &t->step[i];
+                if (s->time != ST_NOTE || !s->n)
+                    continue;
+                last = i;
+                hits0 += i < 16u;
+                hits1 += i >= 16u && i < 32u;
+                ok_key &= (SCALE_MASK[2] >> (s->note[0] % 12u)) & 1u;
+                ok_reg &= s->note[0] >= 58u && s->note[0] <= 79u;
+            }
+            for (i = 0; i < 64u; i++) {
+                const step_t *s = &t->step[i];
+                uint32_t pc, c, rel;
+                if (s->time != ST_NOTE || !s->n || i % 4u || i == last)
+                    continue;
+                pc = s->note[0] % 12u; c = i < 32u ? 0u : 10u; rel = (pc + 12u - c) % 12u;
+                ok_beat &= c ? (rel == 0u || rel == 4u || rel == 7u) : (rel == 0u || rel == 3u || rel == 7u);
+            }
+            ok_end &= t->step[last].note[0] % 12u == 0u;
+            ok_rep &= hits0 == hits1 || gpart[2].form == 2u;   /* (A A ..: the motif again) */
+        }
+        ck(ok_key, "LEAD: every note in the key");
+        ck(ok_beat, "LEAD: on the beats, tones of the bar's chord");
+        ck(ok_end, "LEAD: the phrase ends on the tonic");
+        ck(ok_rep, "LEAD: the motif comes back (the second bar as the first)");
+        ck(ok_reg, "LEAD: Bb3 .. G5");
+    }
+    {   /* DRIFT */
+        t = &trk[0];
+        gen_new(t);
+        len = trk_len(t);
+        memcpy(was, t->step, sizeof(step_t) * len);
+        gen_on = 1;
+        song.g[G_GNCHG] = 0;
+        for (k = 0; k < 64u; k++)
+            for (i = 0; i < len; i++)
+                gen_tick(t, i);
+        ck(same(t, was, len), "DRIFT 0: 64 passes, the loop as it was (locked)");
+        song.g[G_GNCHG] = 64;
+        for (k = 0, changed = 0; k < 8u; k++)
+            for (i = 0; i < len; i++) {
+                step_t s0 = t->step[i];
+                gen_tick(t, i);
+                changed += memcmp(&s0, &t->step[i], sizeof s0) != 0;
+            }
+        for (i = 0, inscale = 1; i < len; i++)
+            if (t->step[i].time == ST_NOTE && t->step[i].n)
+                inscale &= (SCALE_MASK[2] >> (t->step[i].note[0] % 12u)) & 1u;
+        ck(changed > 0u && inscale, "DRIFT: the bass changes, still in the key");
+        for (k = 0, i = 0; i < 16u; i++) {
+            uint32_t j;
+            for (j = 16u; j < len; j += 16u)
+                k += (t->step[i].time == ST_NOTE) != (t->step[i + j].time == ST_NOTE);
+        }
+        ck(k == 0u, "DRIFT: the rhythm still the same in every bar");
+        gen_on = 0;
+        song.g[G_GNCHG] = 32;
     }
     song.g[G_GNDENS] = 64;
     {                                                     /* the page: ON follows the selected track */
@@ -129,9 +183,25 @@ int main(void)
             frames(2);
             key(4); frames(2);
             ck(gen_on == 4u && song.g[G_GNON] == 1, "a key on the GEN page (track 3): GEN ON");
-            ck(trk[2].step[0].time == ST_NOTE && trk[2].step[0].note[0] == last_note, "... the loop starts on the note played");
-            ck(song.g[G_GNOCT] == clamp((int32_t)last_note / 12 - 1, 1, 5), "... OCT moved to its octave");
+            ck(trk[2].step[0].time == ST_NOTE && trk[2].step[0].n, "... the lead written");
+            ck(trk[0].p[P_ROOT] == (int16_t)(last_note % 12u) && trk[2].p[P_ROOT] == trk[0].p[P_ROOT] &&
+               song.g[G_AGROOT] == trk[0].p[P_ROOT], "... its note the KEY of every synth track and ACID GEN");
             gen_on = 2u; song.sel = 1; ui.page = (uint8_t)pg; frames(2);
+        }
+        {                                                 /* HARMONY: KEY turned: every synth track and GEN part in D */
+            uint32_t ok = 1, j;
+            gen_on = 7u; frames(2);
+            song.g[G_GKROOT] = 2; frames(2);
+            for (j = 0; j < NPART; j++) {
+                ok &= trk[j].p[P_ROOT] == 2;
+                for (i = 0; i < trk_len(&trk[j]); i++)
+                    if (trk[j].step[i].time == ST_NOTE && trk[j].step[i].n)
+                        ok &= (SCALE_MASK[2] >> ((trk[j].step[i].note[0] + 10u) % 12u)) & 1u;   /* D minor */
+            }
+            ck(ok && song.g[G_AGROOT] == 2, "HARMONY: KEY D: the three tracks' ROOT, ACID GEN's, every GEN part in D minor");
+            song.g[G_GKPROG] = 0; frames(2);
+            ck(gk.n == 1u && trk_len(&trk[0]) == gk.len, "HARMONY: PROG DRONE: one chord, the parts written again");
+            gen_on = 2u; song.g[G_GKPROG] = 1; song.g[G_GKROOT] = 0; frames(2);
         }
         song.sel = NPART; frames(2);
         song.g[G_GNON] = 1; frames(2);

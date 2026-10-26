@@ -45,6 +45,9 @@ static const char *const N_DLY[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T", "
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
 static const char *const N_ONOFF[] = {"OFF", "ON"};
+static const char *const N_GKMODE[] = {"MIN", "DOR", "PHRY", "MAJ", "MIX"};   /* SEQ > HARMONY (gen_seq.c GK_SC) */
+static const char *const N_GKPROG[] = {"DRONE", "SWAY", "DEEP", "EPIC", "POP", "MOOD"};
+static const char *const N_GKBARS[] = {"1", "2", "4"};
 static const char *const N_QUANT[] = {"OFF", "SNAP", "WHITE"};   /* seq.c kb_map; 1 = SNAP as the old ON */
 static const char *const N_VOICE[] = {"POLY", "MONO", "LEG", "UNI"};   /* V_POLY .. V_UNISON */
 static const char *const N_GLMODE[] = {"RATE", "TIME"};
@@ -219,7 +222,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_AGSEED] = PD("SEED", F_INT, 0, 999, 0),
     [G_AGSCALE] = PE("SCALE", N_AGSCALE, 0),
     [G_AGOCT] = PD("OCT", F_INT, 1, 3, 2),
-    [G_AGROOT] = PD("ROOT", F_NOTE, 0, 11, 9),
+    [G_AGROOT] = PD("ROOT", F_NOTE, 0, 11, 0),   /* (C, as the tracks: SEQ > HARMONY sets it with them) */
     [G_AGMUT] = PE("VARY", N_GO, 0),
     [G_HXMODEL] = PE("MODEL", N_HXMODEL, 0),     /* EDIT on the drum track: the HEX sound (ui_studio.c hex_ui_sync) */
     [G_HXWAVE] = PE("WAVE", N_HXWAVE, 0),
@@ -251,6 +254,10 @@ static const param_desc_t GP[G_COUNT] = {
     [G_GNACC] = PD("ACC", F_PCT, 0, 127, 25),
     [G_GNSLD] = PD("SLIDE", F_PCT, 0, 127, 13),
     [G_GNNEW] = PE("NEW", N_GO, 0),
+    [G_GKROOT] = PD("KEY", F_NOTE, 0, 11, 0),         /* SEQ > HARMONY (gen_seq.c) */
+    [G_GKMODE] = PE("MODE", N_GKMODE, 0),
+    [G_GKPROG] = PE("PROG", N_GKPROG, 1),
+    [G_GKBARS] = PE("BARS", N_GKBARS, 1),
     [G_DGMODE] = PE("MODE", N_DGMODE, 0),           /* SEQ > DRUM GEN (gen_seq.c) */
     [G_DGX] = PD("MAP X", F_INT, 0, 127, 64),
     [G_DGY] = PD("MAP Y", F_INT, 0, 127, 64),
@@ -510,6 +517,7 @@ static const page_t PAGES[] = {
     {"ACID GEN 2", FAM_SEQ, SC_GLOBAL, GR_NONE, {G_AGSCALE, G_AGOCT, G_AGROOT, G_AGMUT}},  /* track (acid_gen.c) */
     {"GEN", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNON, G_GNCHG, G_GNDENS, G_GNRANGE}},   /* a loop that changes as */
     {"GEN 2", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GNOCT, G_GNACC, G_GNSLD, G_GNNEW}},    /* it plays (gen_seq.c) */
+    {"HARMONY", FAM_SEQ, SC_GLOBAL, GR_ROLL, {G_GKROOT, G_GKMODE, G_GKPROG, G_GKBARS}},   /* the key, the chords */
     {"DRUM GEN", FAM_SEQ, SC_GLOBAL, GR_DGEN, {G_DGMODE, G_DGX, G_DGY, G_DGCHAOS}},   /* the drum track's */
     {"DRUM GEN 2", FAM_SEQ, SC_GLOBAL, GR_DGEN, {G_DGK, G_DGS, G_DGH, G_DGROT}},     /* KICK SNARE HAT */
     {"SONG", FAM_SEQ, SC_SONG, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},
@@ -537,7 +545,7 @@ static int page_shown(const page_t *pg)
         return is_drum(TSEL);
     if (pg->fam == FAM_EDIT && is_drum(TSEL))
         return 0;
-    if (pg->scope == SC_GLOBAL && (pg->id[0] == G_GNON || pg->id[0] == G_GNOCT || pg->id[0] == G_AGDENS ||
+    if (pg->scope == SC_GLOBAL && (pg->id[0] == G_GNON || pg->id[0] == G_GNOCT || pg->id[0] == G_GKROOT || pg->id[0] == G_AGDENS ||
                                    pg->id[0] == G_AGSCALE))
         return !is_drum(TSEL);                       /* GEN, ACID GEN: the synth tracks' */
     if (pg->graph == GR_DGEN)
