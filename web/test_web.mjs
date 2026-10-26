@@ -978,62 +978,106 @@ sys.stdout.buffer.write(hd+t1+b'MTrk'+struct.pack('>I',len(tr))+tr)`);
 async function editorDsyn() {
   const { DSYN } = E, C = E.CMD;
   const dsc = readFileSync(join(HERE, "../firmware/src/drum_synth.c"), "utf8");
-  const st = (/typedef struct \{([\s\S]*?)\} dsnd_t;/.exec(dsc) || [, ""])[1].replace(/\/\*[\s\S]*?\*\//g, "");
+  const hx = readFileSync(join(HERE, "../firmware/src/hex_drums.c"), "utf8");
+  const pc = readFileSync(join(HERE, "../firmware/src/params.c"), "utf8");
+  const st = (/typedef struct \{([\s\S]*?)\} hex_snd_t;/.exec(hx) || [, ""])[1].replace(/\/\*[\s\S]*?\*\//g, "");
   const fields = [...st.matchAll(/(?:u?int8_t)\s+([^;]+);/g)].flatMap((m) => m[1].split(",").map((x) => x.trim()));
-  ok(js(fields) === js(DSYN.FIELDS) && DSYN.SIZE === 22, "dsyn: the 22 fields in dsnd_t's order (drum_synth.c)");
+  ok(js(fields) === js(DSYN.FIELDS) && DSYN.SIZE === 22 && /int8_t fine;/.test(st), "dsyn: the 22 fields in hex_snd_t's order (hex_drums.c), fine an int8");
   const ln = ((/DS_LANE_NOTE\[DS_LANES\] = \{([^}]*)\}/.exec(dsc) || [, ""])[1]).split(",").map((x) => +x.trim());
-  ok(js(ln) === js(DSYN.LANE_NOTE) && DSYN.LANES_N.length === 16, "dsyn: the lanes' notes == DS_LANE_NOTE");
-  ok(/sizeof\(dsu_bank_t\) == 1464u/.test(dsc) && /DSU_MAGIC 0x31555344u/.test(dsc) && DSYN.BANK_SIZE === 1464, "dsyn: backup object 9 == dsu_bank_t (1464 bytes, DSU1)");
-  /* the mock's factory kits == the firmware's (when built) */
+  const lw = ((/Lanes:\s*\*?\s*([a-z0-9 \-\n*]+?)\s*\*\//.exec(hx) || [, ""])[1]).replace(/\*/g, " ").trim().split(/\s+/);
+  const LN = { "tom-lo": "LOW TOM", "tom-hi": "HI TOM" };
+  ok(js(ln) === js(DSYN.LANE_NOTE) && js(lw.map((w) => LN[w] || w.toUpperCase().replace("-", " "))) === js(DSYN.LANES_N),
+    "dsyn: the lanes' notes == DS_LANE_NOTE, their names == hex_drums.c's");
+  const list = (n) => [...((new RegExp(`${n}\\[\\] = \\{([^}]*)\\}`).exec(pc) || [, ""])[1]).matchAll(/"([^"]*)"/g)].map((x) => x[1]);
+  ok(js(list("N_HXMODEL")) === js(DSYN.MODELS) && js(list("N_HXWAVE")) === js(DSYN.WAVES) && js(list("N_HXCLICK")) === js(DSYN.CLICKS)
+    && js(list("N_HXFILT")) === js(DSYN.FILTS) && js(list("N_HXMODW")) === js(DSYN.MODW) && js(list("N_HXWAV2")) === js(DSYN.WAV2),
+    "dsyn: the value names == params.c (N_HXMODEL, N_HXWAVE, N_HXCLICK, N_HXFILT, N_HXMODW, N_HXWAV2)");
+  {   /* the labels and ranges: the DRUM model's == GP[G_HX*], the others' == hex_desc */
+    const gp = Object.fromEntries([...pc.matchAll(/\[G_HX(\w+)\] = P[DE]\("([^"]+)", (?:F_INT, (-?\d+), (\d+)|(N_\w+))/g)].map((x) => [x[1], [x[2], x[3], x[4], x[5]]]));
+    const ID = { model: "MODEL", wave: "WAVE", coarse: "TUNE", fine: "FINE", atk: "ATK", dec: "DEC", slope: "SLOPE", level: "LVL", pamt: "PAMT", pdec: "PDEC",
+      fmratio: "RATIO", fmamt: "FM", click: "CLICK", clvl: "CLVL", ctone: "CTONE", ftype: "FTYPE", cut: "CUT", res: "RES", drive: "DRIVE", aux1: "AUX1", aux2: "AUX2", crush: "CRUSH" };
+    const hd = (/static const param_desc_t \*hex_desc[\s\S]*?\n\}/.exec(pc) || [""])[0];
+    const sn = [...((/SN\[\] = \{([\s\S]*?)\};/.exec(hd) || [, ""])[1]).matchAll(/P[DE]\("([^"]+)"/g)].map((x) => x[1]);
+    const cy = [...((/CY\[\] = \{([\s\S]*?)\};/.exec(hd) || [, ""])[1]).matchAll(/P[DE]\("([^"]+)"/g)].map((x) => x[1]);
+    const AT = ["fine", "pamt", "pdec", "fmratio", "fmamt", "aux1"];
+    let good = Object.keys(gp).length === 22;
+    for (const k of DSYN.FIELDS) {
+      const g = gp[ID[k]], d = DSYN.desc(k, 0);
+      if (!g) { good = false; continue; }
+      good = good && d[0] === g[0] && (k === "aux1" ? d[3] === DSYN.MODW : g[3] ? !!d[3] : d[1] === +g[1] && d[2] === +g[2]);
+      for (const m of [1, 2, 3, 4]) {
+        const i = AT.indexOf(k), want = i < 0 ? g[0] : (m <= 2 ? sn : cy)[i];
+        good = good && DSYN.desc(k, m)[0] === want;
+      }
+    }
+    good = good && js(DSYN.PAGES.map((p) => p[0])) === js([...pc.matchAll(/\{"(HEX \w+)", FAM_EDIT/g)].map((x) => x[1]))
+      && DSYN.desc("aux1", 0)[2] === 11 && DSYN.desc("aux1", 1)[0] === "REPT" && DSYN.desc("aux1", 2)[2] === 127 && DSYN.desc("aux1", 3)[2] === 35;
+    ok(good, "dsyn: each model's labels and ranges == the device's EDIT pages (params.c GP[G_HX*], hex_desc; HEX OSC .. HEX MORE)");
+  }
+  ok(/sizeof\(hex_snd_t\) == 22u && sizeof\(dsu_kit_t\) == 364u && sizeof\(dsu_bank_t\) == 1464u/.test(dsc) && /DSU_MAGIC 0x31584548u/.test(dsc)
+    && DSYN.BANK_SIZE === 1464 && js(Array.from(DSYN.bankEncode([]).subarray(0, 8))) === js([0x48, 0x45, 0x58, 0x31, 1, 0, 4, 0]),
+    "dsyn: backup object 9 == dsu_bank_t (1464 bytes, HEX1)");
+  /* the mock's factory kits == hex_drums.c HEX_KITS */
   const raw = E.b64dec(E.DSYN_MOCK_KITS);
-  let hdr = null;
-  try { hdr = readFileSync(join(HERE, "../build/gen/felucca_drumkits.h"), "utf8"); } catch (e) { /* (not built) */ }
-  if (hdr) {
-    const kits = [...hdr.matchAll(/\{"([^"]*)", "[^"]*", (0x[0-9A-Fa-f]+|\d+), \{([\s\S]*?)\}\},/g)];
-    const bytes = kits.flatMap((k) => [Number(k[2]), ...[...k[3].matchAll(/\{([^{}]*)\},/g)].flatMap((r) => r[1].split(",").map((x) => +x & 255))]);
-    ok(kits.length === 32 && js(kits.map((k) => k[1])) === js(E.DSYN_MOCK_NAMES) && js(Array.from(raw)) === js(bytes),
-      "dsyn: the mock's 32 kits == build/gen/felucca_drumkits.h");
+  {
+    const en = {};
+    for (const m of hx.matchAll(/enum \{([^}]*)\};/g)) m[1].split(",").map((x) => x.trim()).filter(Boolean).forEach((n, i) => { en[n] = i; });
+    const kits = [...hx.slice(hx.indexOf("HEX_KITS[5]")).matchAll(/\{"([^"]+)", \{([\s\S]*?)\}\},/g)];
+    const bytes = kits.flatMap((k) => [...k[2].matchAll(/HS\(([^)]*)\)/g)].flatMap((r) => r[1].split(",").map((x) => x.trim()).map((x) => (x in en ? en[x] : +x) & 255)));
+    ok(kits.length === 5 && js(kits.map((k) => k[1])) === js(E.DSYN_MOCK_NAMES) && raw.length === 5 * 16 * 22 && js(Array.from(raw)) === js(bytes),
+      "dsyn: the mock's 5 kits == hex_drums.c HEX_KITS");
   }
-  /* viewing never changes a value: decode / encode give every factory sound back */
+  /* viewing never changes a value: decode / encode (and fix) give every factory sound back */
   let same = true;
-  for (let i = 0; i < 32 * 16; i++) {
-    const at = Math.floor(i / 16) * 353 + 1 + (i % 16) * 22, b = raw.slice(at, at + 22);
-    same = same && js(Array.from(DSYN.encode(DSYN.decode(b)))) === js(Array.from(b));
+  for (let i = 0; i < 5 * 16; i++) {
+    const b = raw.slice(i * 22, i * 22 + 22);
+    same = same && js(Array.from(DSYN.encode(DSYN.decode(b)))) === js(Array.from(b)) && js(Array.from(DSYN.fix(b))) === js(Array.from(b));
   }
-  const wild = DSYN.decode(DSYN.encode({ wave: 9, noise: 7, clap: 1, pitch: 300, fine: 40, bend: 200, btime: 999, hold: 999, decay: -5,
-    tlev: 500, t2: 999, t2lev: 999, click: 999, nlev: 999, nhold: 999, ndec: 999, fmode: 7, fall: 1, res: 99, fcut: 999, fenv: -999, hpf: 999, chip: 999, drive: 999, level: 999 }));
-  ok(same && wild.wave === 5 && wild.noise === 4 && wild.clap === 1 && wild.pitch === 127 && wild.fine === 15 && wild.bend === 96 && wild.decay === 0
-    && wild.fmode === 3 && wild.res === 31 && wild.fenv === -128 && wild.level === 255 && wild.drive === 127,
-    "dsyn: decode / encode: all 512 factory sounds unchanged; out-of-range values into the firmware's ranges");
-  ok(Math.round(DSYN.hz(69)) === 440 && Math.round(DSYN.decayMs(127)) === 4000 && Math.round(DSYN.cutHz(0)) === 30 && DSYN.db(132) === 1,
-    "dsyn: the units (Hz, ms, cutoff, dB) as tools/gen_tables.py");
+  const wild = DSYN.decode(DSYN.encode({ model: 9, wave: 8, coarse: 300, fine: -99, atk: -5, dec: 999, slope: 999, level: 999, pamt: 999, pdec: 999,
+    fmratio: 999, fmamt: 999, click: 14, clvl: 999, ctone: 999, ftype: 9, cut: 999, res: 999, drive: 999, aux1: 40, aux2: 999, crush: 999 }));
+  const cym = DSYN.decode(DSYN.encode({ ...DSYN.decode(raw.slice(7 * 22, 8 * 22)), fine: 99, aux1: 35 }));
+  const fx = DSYN.decode(DSYN.fix(Uint8Array.of(3, 9, 200, 100, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 12, 0, 0, 0, 36, 0, 200)));
+  ok(same && wild.model === 0 && wild.wave === 0 && wild.coarse === 127 && wild.fine === -64 && wild.atk === 0 && wild.dec === 127 && wild.click === 0
+    && wild.ftype === 7 && wild.aux1 === 0 && wild.crush === 126 && cym.model === 3 && cym.fine === 62 && cym.aux1 === 35
+    && fx.wave === 0 && fx.coarse === 72 && fx.fine === 62 && fx.click === 0 && fx.ftype === 7 && fx.aux1 === 0 && fx.crush === 126,
+    "dsyn: decode / encode: all 80 factory sounds unchanged; out-of-range values into the firmware's ranges (dsu_fix_sound)");
+  ok(Math.round(DSYN.hz(69)) === 440 && Math.abs(DSYN.decMs(5) - 60) < 5 && Math.abs(DSYN.decMs(30) - 450) < 30 && Math.abs(DSYN.pdecMs(10) - 13) < 2
+    && Math.round(DSYN.pamtSt(20)) === 10 && Math.round(DSYN.pamtSt(40)) === 25 && Math.abs(DSYN.cutHz(64) - 1000) < 30 && Math.abs(DSYN.cutHz(120) - 9400) < 300
+    && DSYN.decMs(127) === Infinity && DSYN.atkMs(0) === 0 && Math.abs(DSYN.cents(63) - 50) < 1 && Math.abs(DSYN.cents(0)) < 1,
+    "dsyn: the readouts follow the LXR's curves (hex_drums.c: DEC 5 ~60 ms, PDEC 10 ~13 ms, PAMT 20 +10 st, CUT 64 ~1 kHz)");
   /* files and the backup object */
-  const kit = { name: "MY 808", crush: 0x21, src: 0, sounds: Array.from({ length: 16 }, (_, l) => raw.slice(1 + l * 22, 23 + l * 22)) };
-  const back = DSYN.fromFile(JSON.parse(JSON.stringify(DSYN.toFile(kit))));
-  let bad = "";
-  try { DSYN.fromFile({ format: "sloop-drumsynth", sounds: [[1, 2]] }); } catch (e) { bad = e.message; }
-  const bank = DSYN.bankEncode([kit, kit, kit, kit]), dec = DSYN.bankDecode(bank);
-  ok(back.name === "MY 808" && back.crush === 0x21 && js(back.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x))) && /not a KARMA/.test(bad)
-    && bank.length === 1464 && dec && dec[3].name === "MY 808" && dec[2].crush === 0x21 && js(Array.from(dec[1].sounds[15])) === js(Array.from(kit.sounds[15]))
-    && DSYN.bankDecode(bank.slice(1)) === null, "dsyn: a kit file and the backup object, there and back; a wrong file refused");
+  const kit = { name: "MY BOOM", crush: 0, src: 0, sounds: Array.from({ length: 16 }, (_, l) => raw.slice(l * 22, l * 22 + 22)) };
+  const file = JSON.parse(JSON.stringify(DSYN.toFile(kit))), back = DSYN.fromFile(file);
+  const err = (j) => { try { DSYN.fromFile(j); return ""; } catch (e) { return e.code; } };
+  const bank = DSYN.bankEncode([kit, kit, { ...kit, edited: true }, kit]), dec = DSYN.bankDecode(bank);
+  const oldB = Uint8Array.from(bank); oldB.set([0x44, 0x53, 0x55, 0x31]);
+  ok(file.format === "karma-hexkit" && file.version === 2 && back.name === "MY BOOM" && js(back.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x)))
+    && err({ format: "sloop-drumsynth", version: 1, sounds: [] }) === "dsFileOld" && err({ ...file, version: 1 }) === "dsFileBad" && err({ format: "karma-hexkit", version: 2, sounds: [[1, 2]] }) === "dsFileBad"
+    && bank.length === 1464 && dec && dec[3].name === "MY BOOM" && dec[2].edited && !dec[1].edited && js(Array.from(dec[1].sounds[15])) === js(Array.from(kit.sounds[15]))
+    && DSYN.bankDecode(bank.slice(1)) === null && DSYN.bankDecode(oldB) === null && DSYN.bankIsOld(oldB) && !DSYN.bankIsOld(bank),
+    "dsyn: a kit file (karma-hexkit 2) and the backup object (HEX1), there and back; an old file / DSU1 bank refused");
   /* the device (mock): LIST / GET / PUT / STORE / PLAY */
   const { m, rq, done } = attachMock({});
   let L = E.parse[C.DSYN_LIST](await rq(E.req.dsynList()));
   const g0 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(DSYN.USER)));
+  const f2 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(2)));
   const f5 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(5)));
-  ok(L.factory === 32 && L.user === 4 && L.stored && L.names[0] === "808" && L.kits.map((k) => k.name).join() === "808,909,TRAP,TECHNO"
-    && g0.rc === 0 && g0.name === "808" && g0.src === 0 && js(g0.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x)))
-    && f5.rc === 0 && f5.name === "TRAP", "dsyn: LIST (32 + 4, stored), GET SYN1 = the 808, GET a factory kit");
-  const o = DSYN.decode(g0.sounds[0]); o.decay = 20; o.wave = 4;
+  ok(L.factory === 5 && L.user === 4 && L.stored && js(L.names) === js(E.DSYN_MOCK_NAMES) && L.kits.map((k) => k.name).join() === "MY HEX 1,MY HEX 2,MY HEX 3,MY HEX 4"
+    && L.kits.map((k) => k.src).join() === "0,1,2,3"
+    && g0.rc === 0 && g0.name === "MY HEX 1" && g0.src === 0 && js(g0.sounds.map((x) => Array.from(x))) === js(kit.sounds.map((x) => Array.from(x)))
+    && f2.rc === 0 && f2.name === "HEX METAL" && f5.rc === 1, "dsyn: LIST (5 + 4, stored), GET MY HEX 1 = HEX BOOM, GET a factory kit, none past the 5");
+  const o = DSYN.decode(g0.sounds[0]); o.dec = 20; o.model = 3; o.aux1 = 22;
   const p1 = E.parse[C.DSYN_PUT](await rq(E.req.dsynSound(0, 0, DSYN.encode(o))));
-  const p2 = E.parse[C.DSYN_PUT](await rq(E.req.dsynHead(0, "BOOM", 0x10, 0)));
-  const p3 = E.parse[C.DSYN_PUT](await rq(E.req.dsynCopy(3, 25)));
+  const p2 = E.parse[C.DSYN_PUT](await rq(E.req.dsynHead(0, "BOOM", 0, 0)));
+  const p3 = E.parse[C.DSYN_PUT](await rq(E.req.dsynCopy(3, 4)));
+  const p4 = E.parse[C.DSYN_PUT](await rq(E.req.dsynCopy(3, 5)));
   const pl = E.parse[C.DSYN_PLAY](await rq(E.req.dsynPlay(0, 0, 100)));
   const g1 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(DSYN.USER)));
   L = E.parse[C.DSYN_LIST](await rq(E.req.dsynList()));
-  ok(p1.rc === 0 && p2.rc === 0 && p3.rc === 0 && pl.rc === 0 && g1.name === "BOOM" && g1.crush === 0x10 && DSYN.decode(g1.sounds[0]).decay === 20
-    && DSYN.decode(g1.sounds[0]).wave === 4 && L.kits[3].name === "CHIP" && !L.stored && m.state.dsynPlayed.length === 1 && m.state.dsynPlayed[0].sound[7] === 20,
-    "dsyn: PUT a sound, the name and crush, a factory copy; PLAY hears the edit; LIST: not stored");
+  ok(p1.rc === 0 && p2.rc === 0 && p3.rc === 0 && p4.rc === 1 && pl.rc === 0 && g1.name === "BOOM" && DSYN.decode(g1.sounds[0]).dec === 20
+    && DSYN.decode(g1.sounds[0]).model === 3 && DSYN.decode(g1.sounds[0]).aux1 === 22 && L.kits[3].name === "MY HEX 4" && L.kits[3].src === 4 && !L.stored
+    && m.state.dsynPlayed.length === 1 && m.state.dsynPlayed[0].sound[5] === 20,
+    "dsyn: PUT a sound, the name, a factory copy (HEX ROOM; no 6th); PLAY hears the edit; LIST: not stored");
   m.sim.play(true);
   const s3 = E.parse[C.DSYN_STORE](await rq(E.req.dsynStore()));
   m.sim.play(false);
@@ -1041,13 +1085,19 @@ async function editorDsyn() {
   L = E.parse[C.DSYN_LIST](await rq(E.req.dsynList()));
   const bp = E.parse[C.DSYN_PLAY](await rq(E.req.dsynPlay(0, 16)));
   ok(s3.rc === 3 && s0.rc === 0 && L.stored && bp.rc === 1, "dsyn: STORE while playing: rc 3; stopped: stored; PLAY of no lane: rc 1");
-  /* a backup carries the kits, a restore puts them back */
+  /* a backup carries the kits, a restore puts them back; a backup with SLOOP 2.5's DSU1 kits restores without them */
   const info = E.parse[C.INFO](await rq(E.req.info()));
   const A = await E.backupCapture(rq, info);
   await rq(E.req.dsynCopy(0, 1));
-  await E.backupRestore(rq, JSON.parse(JSON.stringify(A)));
+  const said = await E.backupRestore(rq, JSON.parse(JSON.stringify(A)));
   const g2 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(DSYN.USER)));
-  ok(A.objects.some((x) => x.id === 9 && x.len === 1464) && g2.name === "BOOM", "dsyn: a backup holds the SYN kits (object 9); a restore puts them back");
+  const A1 = JSON.parse(JSON.stringify(A)), o9 = A1.objects.find((x) => x.id === 9);
+  { const d = E.b64dec(o9.data); d.set([0x44, 0x53, 0x55, 0x31]); o9.data = E.b64enc(d); o9.crc = E.crc32(d) >>> 0; }
+  await rq(E.req.dsynCopy(0, 1));
+  const said1 = await E.backupRestore(rq, A1);
+  const g3 = E.parse[C.DSYN_GET](await rq(E.req.dsynGet(DSYN.USER)));
+  ok(A.objects.some((x) => x.id === 9 && x.len === 1464) && said === true && g2.name === "BOOM" && said1 === "bkDsynOld" && g3.name === "MY HEX 1" && g3.src === 1,
+    "dsyn: a backup holds the HEX kits (object 9); a restore puts them back; an old DSU1 object 9 is left out (bkDsynOld)");
   /* 2.6: the MIDI LEARN map, object 10, in a backup only while something is learned */
   const ml = new Uint8Array(40);                            /* (2.6: the map, then GLO > MIDI: 2, 11, 8, drums 10, BEND) */
   ml[0] = 21, ml[1] = (1 << 1) | (34 << 1);                 /* CC 21 -> track 1 (bits 7..8), code 34 (bits 9..15) */
@@ -1110,14 +1160,15 @@ async function editorDsyn() {
 /* ------------------------------------------- 2.5: a DX7 cartridge into the bank --- */
 async function editorCart() {
   const C = E.CMD, F = E.FM6;
-  const fc = readFileSync(join(HERE, "../firmware/src/fm6_bank.c"), "utf8");
+  const fcp = join(HERE, "../firmware/src/fm6_bank.c");   /* (FM6 left the firmware: then the editor's own layout only) */
+  const fc = existsSync(fcp) ? readFileSync(fcp, "utf8") : null;
   const voices = Array.from({ length: 32 }, (_, k) => { const v = F.factory(k % F.FACTORY_PK.length); F.setName(v, `CART ${k + 1}`); return v; });
   const pb = F.parseSysex(F.bankSysex(voices));
   const slots = new Array(27).fill(null); slots[0] = F.pack(voices[0]); slots[26] = F.pack(voices[5]);
   const o = F.bankObj(slots), u = F.bankUnobj(o);
   const bad = Uint8Array.from(o); bad[16 + 3] = 200;
   const wrong = Uint8Array.from(o); wrong[6] = 32;
-  ok(/sizeof\(fm6_bank_t\) == 3472u/.test(fc) && /FM6_BANK_MAGIC 0x42364D46u/.test(fc) && o.length === 3472
+  ok((!fc || (/sizeof\(fm6_bank_t\) == 3472u/.test(fc) && /FM6_BANK_MAGIC 0x42364D46u/.test(fc))) && o.length === 3472
     && js(Array.from(o.subarray(0, 12))) === js([0x46, 0x4D, 0x36, 0x42, 1, 0, 27, 0, 1, 0, 0, 4])
     && u[0] && u[26] && !u[1] && js(Array.from(u[26])) === js(Array.from(slots[26])) && F.bankUnobj(new Uint8Array(0)).every((x) => x === null)
     && F.bankUnobj(bad) === null && F.bankUnobj(wrong) === null && F.bankUnobj(o.subarray(1)) === null,
@@ -1200,10 +1251,10 @@ function editorTabs() {
   {   /* 2.4: the device's palette as tokens (:root), used through var(--...); outside them only #000 (text on a colour) */
     const css = html.slice(html.indexOf("<style>"), html.indexOf("</style>")).replace(/:root\s*\{[^}]*\}/g, "");
     const hex = [...css.matchAll(/#[0-9a-f]{3,6}\b/gi)].map((m) => m[0].toLowerCase()).filter((c) => c !== "#000");
-    ok(!hex.length && /--t1: #287cff; --t2: #1ecc70; --t3: #ffc618; --t4: #ff621a;/.test(html),
+    ok(!hex.length && /--t1: #287cff; --t2: #1ecc70; --t3: #ececf0; --t4: #ff621a;/.test(html),
       "editor: the track colours of the device (ui_studio.c TE_COL), colours only as tokens" + (hex.length ? ` (${hex.join(" ")})` : ""));
     const te = readFileSync(join(HERE, "../firmware/src/ui_studio.c"), "utf8");
-    ok(/TE_COL\[4\] = \{RGB\(40, 124, 255\), RGB\(30, 204, 112\), RGB\(255, 198, 24\), RGB\(255, 98, 26\)\}/.test(te),
+    ok(/TE_COL\[4\] = \{RGB\(40, 124, 255\), RGB\(30, 204, 112\), RGB\(236, 236, 240\), RGB\(255, 98, 26\)\}/.test(te),
       "editor: ... the same four as the firmware's TE_COL");
     ok(/SLOOP-FONT\*\/url\(data:font\/ttf;base64,[A-Za-z0-9+\/=]{20000,}\)/.test(html), "editor: the device's Terminus font inlined (tools/gen_webfont.py)");
   }

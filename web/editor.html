@@ -17,7 +17,7 @@
   @font-face { font-family: "Fukiai"; src: url("fukiai.ttf") format("truetype"); font-display: block; unicode-range: U+EA00-EB09; }
   :root {
     --bg: #000; --s1: #0b0b0e; --s2: #1a1a1e; --s3: #36363c; --line: #232329; --dim: #76767e; --fg2: #c4c4cc; --fg: #f2f2f2;
-    --red: #ff2c34; --t1: #287cff; --t2: #1ecc70; --t3: #ffc618; --t4: #ff621a; --trk: var(--t1);
+    --red: #ff2c34; --t1: #287cff; --t2: #1ecc70; --t3: #ececf0; --t4: #ff621a; --warn: #ffc618; --trk: var(--t1);
     --font: "SLOOP Terminus", ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
     color-scheme: dark;
   }
@@ -102,7 +102,7 @@
   .devline { display: flex; align-items: center; gap: 8px; color: var(--fg); }
   .led { width: 10px; height: 10px; background: var(--s3); flex: none; }
   .led.on { background: var(--t2); box-shadow: 0 0 8px var(--t2); }
-  .led.busy { background: var(--t3); }
+  .led.busy { background: var(--warn); }
   #version { color: var(--fg2); overflow-wrap: anywhere; }
   #live, #mock { color: var(--dim); }
   #connect { width: 100%; }
@@ -149,8 +149,6 @@
   .dslanes { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 6px 0 10px; }
   .dslanes button { --c: var(--t4); padding: 8px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .dslanes button[aria-pressed=true] { background: var(--c); border-color: var(--c); color: #000; }
-  .dsrng { display: inline-flex; align-items: center; gap: 6px; }
-  .dsrng input[type=range] { width: 110px; --c: var(--t4); }
   #dsgroups .knob { --c: var(--t4); }
   .knob { --c: var(--t1); position: relative; padding: 8px 10px 10px; min-width: 0; border-left: 1px solid var(--line);
           display: flex; flex-direction: column; gap: 4px; }
@@ -221,7 +219,7 @@
   .rollbox canvas { display: block; touch-action: none; }
   .midiprev { border: 1px solid var(--line); padding: 12px; margin: 8px 0 16px; }
   .midiprev ul { margin: 6px 0; padding-left: 20px; }
-  .midiprev ul.warn li { color: var(--t3); }
+  .midiprev ul.warn li { color: var(--warn); }
   table.song td, table.song th { padding: 4px 8px; text-align: left; }
   table.song input[type=number] { width: 64px; }
   table.song td.acts button { min-width: 34px; padding: 0 6px; margin-right: 4px; }
@@ -349,7 +347,7 @@
   .dest button[aria-checked="true"] b { color: var(--trk); }
   .dest button:disabled { opacity: .35; }
   .destnote { color: var(--fg2); margin: 0 0 10px; }
-  .destnote .warn, .warn-t { color: var(--t3); }
+  .destnote .warn, .warn-t { color: var(--warn); }
 
   /* ---- samples: the slots, files or CHOP, send ---- */
   .dest.slots4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -626,12 +624,10 @@
         <p class="dim" data-t="dsHelp"></p>
         <p class="bad" id="dsold" data-t="dsOld" hidden></p>
         <div id="dsbody" hidden>
-          <p class="bar"><span class="seg" id="dsk"><button type="button" data-v="0">SYN1</button><button type="button" data-v="1">SYN2</button><button type="button" data-v="2">SYN3</button><button type="button" data-v="3">SYN4</button></span>
+          <p class="bar"><span class="seg" id="dsk"><button type="button" data-v="0">MY HEX 1</button><button type="button" data-v="1">MY HEX 2</button><button type="button" data-v="2">MY HEX 3</button><button type="button" data-v="3">MY HEX 4</button></span>
             <span data-t="name"></span> <input id="dsname" type="text" maxlength="8" size="9" spellcheck="false">
             <span class="dim" id="dsstate"></span></p>
-          <p class="bar"><span data-t="dsFrom"></span> <select id="dsfrom"></select> <button type="button" id="dscopy" data-t="dsCopy"></button>
-            <span class="dsrng"><span data-t="dsBits"></span> <input id="dsbits" type="range" min="0" max="15" step="1"> <span class="dim" id="dsbitsv"></span></span>
-            <span class="dsrng"><span data-t="dsHoldS"></span> <input id="dssh" type="range" min="1" max="16" step="1"> <span class="dim" id="dsshv"></span></span></p>
+          <p class="bar"><span data-t="dsFrom"></span> <select id="dsfrom"></select> <button type="button" id="dscopy" data-t="dsCopy"></button></p>
           <p class="bar"><button type="button" id="dsstore" data-t="dsStore" data-ic="symbol_upload"></button>
             <button type="button" id="dsuse" data-t="dsUse" data-ic="symbol_drum"></button>
             <button type="button" id="dssave" data-t="dsSave" data-ic="symbol_download"></button>
@@ -690,7 +686,7 @@ const CMD = { INFO: 1, GET: 2, SET: 3, DUMP: 4, DESC: 5, STEP_GET: 6, STEP_SET: 
   LOCK_GET: 37, LOCK_SET: 38, MICRO_GET: 39, MICRO_SET: 40,     /* v7 (SLOOP 2.4): parameter locks, nudges */
   FILL_GET: 41, FILL_SET: 42,                         /* v8 (SLOOP 2.4): the steps' fill conditions */
   FM6_GET: 68, FM6_PUT: 69, FM6_LIST: 70, FM6_ERASE: 71,    /* v9 (SLOOP 2.4): the FM6 engine's patches (Felucca 1.0's numbers) */
-  DSYN_LIST: 72, DSYN_GET: 73, DSYN_PUT: 74, DSYN_STORE: 75, DSYN_PLAY: 76 };   /* v10 (SLOOP 2.5): the SYN drum kits */
+  DSYN_LIST: 72, DSYN_GET: 73, DSYN_PUT: 74, DSYN_STORE: 75, DSYN_PLAY: 76 };   /* v10 (SLOOP 2.5): the drum synth kits (MY HEX 1..4) */
 /* v7: the parameters a step can lock (firmware seq.c p_lockable: the sound, not the sequencer / arp / key / voice
    mode); ids as core.h: LEVEL .. LFO dests, GATE, the sends, GLIDE, PAN, DETUNE, the SLICER, FILTER, the engine's 8;
    from 2.6 (pe0 63) also the INSERT's A B C and MIX (54..57). pe0: the device's (the newest when none) */
@@ -894,7 +890,7 @@ const parse = {
     return o;
   },
   [CMD.FM6_ERASE](a) { return { index: a[0], rc: a[1] }; },
-  /* v10: the SYN drum kits (editor_dsyn.c) */
+  /* v10: the drum synth kits, MY HEX 1..4 (editor_dsyn.c) */
   [CMD.DSYN_LIST](a) {
     const r = new Reader(a), o = { factory: r.b(), user: r.b(), stored: !!r.b(), names: [], kits: [] };
     for (let i = 0; i < o.factory; i++) o.names.push(r.s());
@@ -988,7 +984,7 @@ const req = {
   fm6Put: (target, i, packed) => [CMD.FM6_PUT, [target & 0x7F, i & 0x7F, ...Array.from(packed, (x) => x & 0x7F)]],
   fm6List: () => [CMD.FM6_LIST, []],
   fm6Erase: (i) => [CMD.FM6_ERASE, [i & 0x7F]],
-  /* v10: the SYN drum kits (firmware proto >= 10). which: a factory kit 0.., or DSYN.USER + k */
+  /* v10: the drum synth kits, MY HEX 1..4 (firmware proto >= 10). which: a factory kit 0.., or DSYN.USER + k */
   dsynList: () => [CMD.DSYN_LIST, []],
   dsynGet: (which) => [CMD.DSYN_GET, [which & 0x7F]],
   dsynSound: (k, lane, bytes22) => [CMD.DSYN_PUT, [k & 0x7F, lane & 0x7F, ...pack7(bytes22)]],
@@ -1688,7 +1684,7 @@ function b64dec(s) {
 /* object ids (firmware editor.c ED_BK_IDS): 0 the working project, 1 the settings, 2..5 projects A..D,
    6..7 the user preset banks, 32..35 the sample slots USR1..4 (35, USR4: SLOOP 2.4) */
 /* RESTORE: the objects in the order they are written back (banks first; 8 = the FM6 patch bank, firmware v9: a
-   file without it restores fine, a v8 device gets no object 8 sent; 9 = the SYN drum kits, firmware v10, likewise) */
+   file without it restores fine, a v8 device gets no object 8 sent; 9 = the drum synth kits (MY HEX), firmware v10, likewise) */
 const BK = { FORMAT: "sloop-backup", VERSION: 1, SAMPLES: [32, 33, 34, 35], RESTORE: [6, 7, 8, 9, 10, 2, 3, 4, 5, 0, 1] };   /* 10: MIDI LEARN (2.6) */
 class BackupError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
 /* read everything; progress(done, total bytes) */
@@ -1753,6 +1749,10 @@ async function backupRestore(rq, file, progress = () => {}) {
     d.set([1, 2, 3, 10, 2], 32);
     m.set(10, d);
   }
+  /* SLOOP 2.5's drum synth kits ("DSU1", the old synthesised sounds): the HEX firmware cannot take them (its MY HEX
+     kits stay as they are); the rest is restored, and the page says so */
+  let said = true;
+  if (m.has(9) && DSYN.bankIsOld(m.get(9))) { m.delete(9); said = "bkDsynOld"; }
   const total = [...m.values()].reduce((s, d) => s + d.length, 0) || 1;
   let done = 0;
   for (const id of BK.RESTORE) {
@@ -1793,7 +1793,7 @@ async function backupRestore(rq, file, progress = () => {}) {
     r = parse[CMD.SMP_END](await rq(req.smpEnd(k, d.subarray(0, SMP.HDR_LEN)), { timeout: 2000, retries: 0 }));
     if (r.rc) throw new BackupError("bkWrite", `USR${k + 1} end rc ${r.rc}`);
   }
-  return true;
+  return said;                                     /* true, or the key of what the page should say instead of "Restored" */
 }
 
 /* 2.5 Store cartridge: packed patches into B1..Bn in one write. The bank (backup object 8) is read whole, slots
@@ -2151,8 +2151,9 @@ function makeMockDevice(opt = {}) {
     E("RATE", ["1BAR", "2BAR", "4BAR", "8BAR", "16BAR"], 2), E("WHEN", ["PLAY", "ALWAYS"], 0), E("DUCK", NONOFF, 0),
     D("BEND", F.SEMI, 1, 12, 2),                    /* GLO > MIDI 2 (2.6): the pitch bend's range */
   ];
-  /* the drum track's P_E0: its kit (drums.c DRUM_KIT_NAMES; 5 = 808, the power-on kit) */
-  const KIT = E("KIT", ["ACOUSTIC", "DEEP", "TIGHT", "BRIGHT", "DUST", "808", "909", "606", "80S", "VINTAGE", "TRAP", "DRILL", "BOOMBAP", "LO-FI", "PHONK", "HOUSE", "D.HOUSE", "TECHNO", "MINIMAL", "ELECTRO", "DISCO", "GARAGE", "JUNGLE", "DUBSTEP", "DEMBOW", "AMAPIANO", "AFRO", "LATIN", "TRIBAL", "SYNTHWV", "CHIP", "ARCADE", "GLITCH", "INDUSTR", "HYPER", "AMBIENT", "JAZZ", "USR1", "USR2", "USR3", "USR4", "USR3+4", "SYN1", "SYN2", "SYN3", "SYN4"], 0);
+  /* the drum track's P_E0: its kit (drums.c DRUM_KIT_NAMES: the 5 HEX kits, the synthesised ones (5 = 808, the
+     power-on kit), the sample slots, MY HEX 1..4) */
+  const KIT = E("KIT", ["HEX BOOM", "HEX ACID", "HEX METAL", "HEX GLITCH", "HEX ROOM", "808", "909", "606", "80S", "VINTAGE", "TRAP", "DRILL", "BOOMBAP", "LO-FI", "PHONK", "HOUSE", "D.HOUSE", "TECHNO", "MINIMAL", "ELECTRO", "DISCO", "GARAGE", "JUNGLE", "DUBSTEP", "DEMBOW", "AMAPIANO", "AFRO", "LATIN", "TRIBAL", "SYNTHWV", "CHIP", "ARCADE", "GLITCH", "INDUSTR", "HYPER", "AMBIENT", "JAZZ", "USR1", "USR2", "USR3", "USR4", "USR3+4", "MY HEX 1", "MY HEX 2", "MY HEX 3", "MY HEX 4"], 0);
   /* a GM note -> its drum lane (drums.c LANE_OF_GM: 35..81) */
   const LANE_OF_GM = [1, 0, 7, 2, 3, 8, 9, 4, 9, 6, 9, 5, 10, 10, 11, 10, 12, 11, 12, 13, 11, 15, 11, 13, 12, 14, 14, 14, 14, 14,
     14, 14, 15, 15, 13, 13, 15, 15, 13, 13, 7, 7, 7, 14, 14, 15, 15];
@@ -2335,7 +2336,7 @@ function makeMockDevice(opt = {}) {
     bank: new Array(opt.slots || 32).fill(null),     /* user presets: {engine, name, p, pattern} */
     fm6bank: new Array(FM6_BANK).fill(null),         /* the FM6 patch bank (fm6_bank.c): packed records */
     settings: mockSettings(),                       /* v6: the settings object (2.5: a PER3 with a song order) */
-    dsyn: null, dsynStored: null, dsynPlayed: [],  /* v10: the SYN kits (RAM, flash), the auditions heard */
+    dsyn: null, dsynStored: null, dsynPlayed: [],  /* v10: the MY HEX kits (RAM, flash), the auditions heard */
     ml: null,                                       /* 2.6: the MIDI LEARN map (seq.c ml_tab, 16 x 2 bytes), null: none */
     bkSnap: null, bkPut: null,
     watch: false, v4: false, lastReq: 0, playing: false,
@@ -2407,15 +2408,17 @@ function makeMockDevice(opt = {}) {
   clearSteps();
   applyPreset(4, true);                             /* WOBBLE, a recorded-looking pattern on track 1 (mock only) */
   const project = () => JSON.parse(JSON.stringify({ tracks: st.tracks, sel: st.sel, g: st.g }));
-  /* v10: a factory synthesised kit (DSYN_MOCK_KITS), SYN1..4 = copies of 808, 909, TRAP, TECHNO */
+  /* v10: a factory HEX kit (DSYN_MOCK_KITS); MY HEX 1..4 = copies of HEX BOOM, ACID, METAL, GLITCH (drum_synth.c
+     DSU_DEF), named MY HEX k (dsu_from_factory) */
   const dsynRaw = b64dec(DSYN_MOCK_KITS);
   function dsynFactory(i) {
-    const at = i * (1 + DSYN.LANES * DSYN.SIZE);
-    return { name: DSYN_MOCK_NAMES[i], crush: dsynRaw[at], src: i,
-      sounds: Array.from({ length: DSYN.LANES }, (_, l) => dsynRaw.slice(at + 1 + l * DSYN.SIZE, at + 1 + (l + 1) * DSYN.SIZE)) };
+    const at = i * DSYN.LANES * DSYN.SIZE;
+    return { name: DSYN_MOCK_NAMES[i], crush: 0, src: i, edited: false,
+      sounds: Array.from({ length: DSYN.LANES }, (_, l) => dsynRaw.slice(at + l * DSYN.SIZE, at + (l + 1) * DSYN.SIZE)) };
   }
+  const dsynMine = (k, src) => ({ ...dsynFactory(src), name: `MY HEX ${k + 1}` });
   function dsynKits() {
-    if (!st.dsyn) { st.dsyn = [0, 1, 5, 12].map(dsynFactory); st.dsynStored = DSYN.bankEncode(st.dsyn); }
+    if (!st.dsyn) { st.dsyn = [0, 1, 2, 3].map((src, k) => dsynMine(k, src)); st.dsynStored = DSYN.bankEncode(st.dsyn); }
     return st.dsyn;
   }
   st.slots[0] = project();
@@ -2766,11 +2769,12 @@ function makeMockDevice(opt = {}) {
               if (st.playing) rc = 3;
               else st.ml = P.buf.slice();
             }
-            else if (id === 9) {                            /* the SYN kits (with the settings: stopped only) */
+            else if (id === 9) {                            /* the HEX kits (with the settings: stopped only; editor.c:
+                                                               another bank, e.g. SLOOP 2.5's "DSU1": rc 2) */
               const k = DSYN.bankDecode(P.buf);
               if (!k) throw 0;
               if (st.playing) rc = 3;
-              else { st.dsyn = k.map((x) => ({ ...x, sounds: x.sounds.map((y) => DSYN.encode(DSYN.decode(y))) })); st.dsynStored = DSYN.bankEncode(st.dsyn); }
+              else { st.dsyn = k.map((x) => ({ ...x, src: x.src % DSYN_MOCK_NAMES.length, sounds: x.sounds.map((y) => DSYN.fix(y)) })); st.dsynStored = DSYN.bankEncode(st.dsyn); }
             }
             else if (id === 8) {                            /* the PTCH bank (fm6_bank_t; editor.c: stopped only) */
               const x = FM6.bankUnobj(P.buf);
@@ -2830,10 +2834,11 @@ function makeMockDevice(opt = {}) {
         } else if (cmd === CMD.DSYN_PUT) {
           const k = a.length >= 2 ? a[0] : 127, part = a.length >= 2 ? a[1] : 127, d = unpack7(a.slice(2));
           let rc = 1;
-          if (k < K.length && part < DSYN.LANES && d.length === DSYN.SIZE) { K[k].sounds[part] = DSYN.encode(DSYN.decode(d)); rc = 0; }
+          if (k < K.length && part < DSYN.LANES && d.length === DSYN.SIZE) { K[k].sounds[part] = DSYN.fix(d); rc = 0; }
           else if (k < K.length && part === 16 && d.length === 10) {
-            K[k].name = String.fromCharCode(...d.subarray(0, 8)).replace(/\0.*$/, ""); K[k].crush = d[8]; K[k].src = d[9] % nf; rc = 0;
-          } else if (k < K.length && part === 17 && d.length === 1 && d[0] < nf) { K[k] = dsynFactory(d[0]); rc = 0; }
+            K[k].name = String.fromCharCode(...d.subarray(0, 8).map((c) => (c && (c < 32 || c > 126) ? 32 : c))).replace(/\0.*$/, "");
+            K[k].crush = d[8]; K[k].src = d[9] % nf; rc = 0;
+          } else if (k < K.length && part === 17 && d.length === 1 && d[0] < nf) { K[k] = dsynMine(k, d[0]); rc = 0; }
           b(k); b(part); b(rc);
         } else if (cmd === CMD.DSYN_STORE) {
           if (a.length) return null;
@@ -3343,81 +3348,154 @@ const ARR = {
 };
 
 
-/* ------------------------------------- v10 (SLOOP 2.5): the SYN drum kits --- */
-/* A synthesised drum sound is the firmware's dsnd_t (drum_synth.c, tools/gen_drumkits.py), 22 bytes in this order.
-   The tone (a wave with a falling pitch, a second partial), the click, the noise (white, the 808's six metallic
-   squares, both, a chip LFSR; the clap's bursts), a resonant filter, drive and level. A kit: 16 of them and its
-   crush (bits dropped in the low nibble, sample-and-hold - 1 in the high one). */
+/* ------------------------------------- v10 (SLOOP 2.5): the HEX drum kits --- */
+/* A drum sound is the firmware's hex_snd_t (hex_drums.c), 22 bytes in this order: one of the LXR-02's drum voices
+   (Erica Synths' open-source firmware, ported in lxr_dsp.c), its MODEL the voice (DRUM, SNARE, CLAP, CYM, HAT), the
+   other bytes the LXR's 0..127 values. Some bytes mean another thing for another model (the device's EDIT pages
+   show each model's own names: params.c hex_desc); DSYN.desc gives them. A kit: 16 sounds (MY HEX 1..4). */
 const DSYN = {
   USER: 64, NUSER: 4, LANES: 16, SIZE: 22,
-  FIELDS: ["wave", "src", "pitch", "fine", "bend", "btime", "hold", "decay", "tlev", "t2", "t2lev", "click",
-    "nlev", "nhold", "ndec", "flt", "fcut", "fenv", "hpf", "chip", "drive", "level"],
-  /* the synthesised lanes (DS_MAP order) and the GM note each plays without an offset (drum_synth.c DS_LANE_NOTE) */
+  FIELDS: ["model", "wave", "coarse", "fine", "atk", "dec", "slope", "level", "pamt", "pdec", "fmratio", "fmamt",
+    "click", "clvl", "ctone", "ftype", "cut", "res", "drive", "aux1", "aux2", "crush"],
+  /* the kits' lanes (hex_drums.c, drum_synth.c DS_LANES) and the GM note each plays without an offset (DS_LANE_NOTE) */
   LANES_N: ["KICK", "SNARE", "CLAP", "HAT", "OPEN HAT", "LOW TOM", "HI TOM", "CRASH", "RIDE", "SHAKER", "CONGA", "RIM",
     "COWBELL", "CLAVE", "KICK 2", "SNARE 2"],
   LANE_NOTE: [36, 38, 39, 42, 46, 43, 48, 49, 51, 70, 63, 37, 56, 75, 35, 40],
-  WAVES: ["OFF", "SINE", "TRI", "SQUARE", "FM", "BELL"],
-  NOISES: ["OFF", "WHITE", "METAL", "CYM", "CHIP"],
-  FMODES: ["OFF", "LP", "BP", "HP"],
-  STEPS_PER_OCT: 127 / Math.log2(16000 / 30),
-  /* 22 bytes -> the values the page edits */
+  /* the value names (params.c N_HXMODEL, N_HXWAVE, N_HXCLICK, N_HXFILT, N_HXMODW, N_HXWAV2) */
+  MODELS: ["DRUM", "SNARE", "CLAP", "CYM", "HAT"],
+  WAVES: ["SIN", "TRI", "SAW", "SQR", "NOIS", "P12", "P25", "P37"],
+  CLICKS: ["SNAP", "OFFS", "CLK", "CK2", "TICK", "KICK", "RIM", "DRIP*", "HAT", "CLAP", "KK2*", "SNR", "TOM", "SP2*"],
+  FILTS: ["LP", "HP", "BP", "UBP", "NTCH", "PEAK", "LP2", "OFF"],
+  MODW: ["FMSIN", "FMTRI", "FMSAW", "FMSQR", "FMNOI", "FMPWM", "MXSIN", "MXTRI", "MXSAW", "MXSQR", "MXNOI", "MXPWM"],
+  WAV2: ["SI", "TR", "SA", "SQ", "NO", "PW"].flatMap((a, _, w) => w.map((b) => `${a}/${b}`)),
+  /* the largest aux1 of a model (hex_drums.c hex_aux_max) */
+  auxMax: (m) => (m === 0 ? 11 : m >= 3 ? 35 : 127),
+  /* 22 bytes -> the values the page edits (fine: int8) */
   decode(b) {
-    const g = (k) => b[DSYN.FIELDS.indexOf(k)] & 255;
-    const f = g("flt"), src = g("src"), fe = g("fenv");
-    return { wave: g("wave"), noise: src & 15, clap: (src >> 4) & 1, pitch: g("pitch"), fine: g("fine"), bend: g("bend"),
-      btime: g("btime"), hold: g("hold"), decay: g("decay"), tlev: g("tlev"), t2: g("t2"), t2lev: g("t2lev"), click: g("click"),
-      nlev: g("nlev"), nhold: g("nhold"), ndec: g("ndec"), fmode: f & 3, fall: (f >> 2) & 1, res: f >> 3, fcut: g("fcut"),
-      fenv: fe > 127 ? fe - 256 : fe, hpf: g("hpf"), chip: g("chip"), drive: g("drive"), level: g("level") };
+    const o = {};
+    DSYN.FIELDS.forEach((k, i) => { o[k] = b[i] & 255; });
+    if (o.fine > 127) o.fine -= 256;
+    return o;
   },
-  /* the values -> 22 bytes, into the ranges the firmware keeps (editor_dsyn.c dsu_fix_sound) */
+  /* the values -> 22 bytes, into the ranges the firmware keeps (drum_synth.c dsu_fix_sound: a name out of its list
+     back to the model's default, the numbers clamped) */
   encode(o) {
     const c = (v, lo, hi) => Math.max(lo, Math.min(hi, Math.round(+v || 0)));
-    const v = { wave: c(o.wave, 0, 5), src: c(o.noise, 0, 4) | (o.clap ? 16 : 0), pitch: c(o.pitch, 0, 127), fine: c(o.fine, 0, 15),
-      bend: c(o.bend, 0, 96), btime: c(o.btime, 0, 127), hold: c(o.hold, 0, 255), decay: c(o.decay, 0, 127), tlev: c(o.tlev, 0, 127),
-      t2: c(o.t2, 0, 255), t2lev: c(o.t2lev, 0, 127), click: c(o.click, 0, 127), nlev: c(o.nlev, 0, 127), nhold: c(o.nhold, 0, 255),
-      ndec: c(o.ndec, 0, 127), flt: c(o.fmode, 0, 3) | (o.fall ? 4 : 0) | (c(o.res, 0, 31) << 3), fcut: c(o.fcut, 0, 127),
-      fenv: c(o.fenv, -128, 127) & 255, hpf: c(o.hpf, 0, 127), chip: c(o.chip, 0, 127), drive: c(o.drive, 0, 127), level: c(o.level, 0, 255) };
+    const e = (v, n, def) => { const x = Math.round(+v || 0); return x >= 0 && x < n ? x : def; };
+    const v = {};
+    for (const k of DSYN.FIELDS) v[k] = c(o[k], 0, 127);
+    v.model = e(o.model, 5, 0);
+    v.wave = e(o.wave, 8, 0);
+    v.click = e(o.click, 14, 0);
+    v.ftype = e(o.ftype, 8, 7);
+    v.aux1 = e(o.aux1, DSYN.auxMax(v.model) + 1, 0);
+    v.fine = c(o.fine, -64, 62) & 255;
+    v.crush = c(o.crush, 0, 126);
     return Uint8Array.from(DSYN.FIELDS.map((k) => v[k]));
   },
-  /* what the numbers mean (tools/gen_tables.py, gen_drumkits.py) */
-  hz: (note, fine = 0) => 440 * 2 ** ((note + fine / 16 - 69) / 12),
-  decayMs: (i) => 5 * 800 ** (i / 127),
-  cutHz: (i) => 30 * (16000 / 30) ** (i / 127),
-  db: (level) => (level - 128) / 4,
+  /* 22 bytes from outside as the firmware takes them (dsu_fix_sound, byte for byte) */
+  fix(b) {
+    const d = Uint8Array.from(b.slice(0, 22));
+    const F = (k) => DSYN.FIELDS.indexOf(k);
+    if (d[0] >= 5) d[0] = 0;
+    if (d[1] >= 8) d[1] = 0;
+    if (d[F("click")] >= 14) d[F("click")] = 0;
+    if (d[F("ftype")] >= 8) d[F("ftype")] = 7;
+    if (d[F("aux1")] > DSYN.auxMax(d[0])) d[F("aux1")] = 0;
+    if (d[3] < 128 && d[3] > 62) d[3] = 62;
+    if (d[21] > 126) d[21] = 126;
+    for (const k of ["coarse", "atk", "dec", "slope", "level", "pamt", "pdec", "fmratio", "fmamt", "clvl", "ctone", "cut", "res", "drive", "aux2"]) d[F(k)] &= 127;
+    return d;
+  },
+  /* what the numbers do (lxr_dsp.c: the LXR's curves, 44.1 kHz, the envelopes stepped every 64 samples) */
+  hz: (note) => 8.1757989156 * 2 ** (Math.max(0, Math.min(127, note)) / 12),
+  cents: (fine) => 1200 * Math.log2(1 + (Math.max(0, Math.min(126, fine + 64)) / 127 - 0.5) * 0.0594630943592953),
+  egMs(v, k) {                                          /* slopeEg2_calcTime / DecayEg_calcTime: one block's step */
+    const x = v / 127, r = Math.min(1, (1 - ((1 + k) * x) / (1 + k * x)) * 2);
+    return r > 1e-9 ? ((1 / r) * 64 * 1000) / 44100 : Infinity;
+  },
+  atkMs: (v) => (v ? DSYN.egMs(v, (2 * 0.99) / 0.01) : 0),
+  decMs: (v) => DSYN.egMs(v, (2 * 0.999) / 0.001),
+  pdecMs: (v) => DSYN.egMs(v, (2 * 0.99) / 0.01),
+  pamtSt: (v) => 12 * Math.log2(1 + 32 * (v / 127) ** 2),   /* calcPitchModAmount: the start of the fall */
+  cutHz(v) {                                            /* FILTER_SHAPER */
+    const x = v / 127, k = (2 * -0.9) / (1.0001 + 0.9);
+    return (((1 + k) * x) / (1 + k * x)) * 0.45 * 44100;
+  },
+  noiseHz: (v) => (v / 127) * 22000,                    /* SNARE_NOISE_F */
+  /* a byte as a model reads it: [label, min, max, names | null] (params.c GP[G_HX*], hex_desc) */
+  desc(key, model) {
+    const sn = model === 1 || model === 2, cy = model >= 3;
+    switch (key) {
+      case "model": return ["MODEL", 0, 4, DSYN.MODELS];
+      case "wave": return ["WAVE", 0, 7, DSYN.WAVES];
+      case "coarse": return ["TUNE", 0, 127, null];
+      case "fine": return [cy ? "FINE" : "P.SLP", -64, 62, null];
+      case "atk": return ["ATK", 0, 127, null];
+      case "dec": return ["DEC", 0, 127, null];
+      case "slope": return ["SLOPE", 0, 127, null];
+      case "level": return ["LEVEL", 0, 127, null];
+      case "pamt": return [cy ? "MOD2" : "P.AMT", 0, 127, null];
+      case "pdec": return [cy ? "PIT2" : "P.DEC", 0, 127, null];
+      case "fmratio": return [cy ? "PIT1" : sn ? "N.FRQ" : "M.PIT", 0, 127, null];
+      case "fmamt": return [cy ? "MOD1" : sn ? "MIX" : "FM", 0, 127, null];
+      case "click": return ["TRANS", 0, 13, DSYN.CLICKS];
+      case "clvl": return ["T.LVL", 0, 127, null];
+      case "ctone": return ["T.PIT", 0, 127, null];
+      case "crush": return ["CRUSH", 0, 126, null];
+      case "ftype": return ["FILT", 0, 7, DSYN.FILTS];
+      case "cut": return ["CUT", 0, 127, null];
+      case "res": return ["RES", 0, 127, null];
+      case "drive": return ["DRIVE", 0, 127, null];
+      case "aux1": return cy ? ["WAVES", 0, 35, DSYN.WAV2] : sn ? ["REPT", 0, 127, null] : ["MOD", 0, 11, DSYN.MODW];
+      case "aux2": return ["DIST", 0, 127, null];
+    }
+    return null;
+  },
+  /* the device's EDIT pages (params.c: HEX OSC .. HEX MORE) */
+  PAGES: [["HEX OSC", ["model", "wave", "coarse", "fine"]], ["HEX AEG", ["atk", "dec", "slope", "level"]],
+    ["HEX MOD", ["pamt", "pdec", "fmratio", "fmamt"]], ["HEX CLICK", ["click", "clvl", "ctone", "crush"]],
+    ["HEX FILT", ["ftype", "cut", "res", "drive"]], ["HEX MORE", ["aux1", "aux2"]]],
   name8: (s) => { const b = new Uint8Array(8); String(s || "").replace(/[^\x20-\x7E]/g, "").slice(0, 8).split("").forEach((ch, i) => { b[i] = ch.charCodeAt(0); }); return b; },
-  /* a kit as a file: {format, version, name, crush, sounds: [22 numbers] x 16} */
-  FORMAT: "sloop-drumsynth",
-  toFile: (k) => ({ format: DSYN.FORMAT, version: 1, name: k.name, crush: k.crush, sounds: k.sounds.map((x) => Array.from(x)) }),
-  /* backup object 9: the firmware's dsu_bank_t ("DSU1", 1, 4, then per kit: name 8, crush, src, 2 reserved, 16 x 22) */
+  /* a kit as a file: {format, version, name, crush, sounds: [22 numbers] x 16} (version 2: the HEX sounds; the
+     SLOOP 2.5 files, "sloop-drumsynth" 1, held the old synthesised sounds and do not open) */
+  FORMAT: "karma-hexkit", VERSION: 2, OLD_FORMAT: "sloop-drumsynth",
+  toFile: (k) => ({ format: DSYN.FORMAT, version: DSYN.VERSION, name: k.name, crush: k.crush | 0, sounds: k.sounds.map((x) => Array.from(x)) }),
+  fromFile(j) {
+    if (j && j.format === DSYN.OLD_FORMAT) throw Object.assign(new Error("an old drum synth kit (SLOOP 2.5's SYN sounds), not a HEX kit"), { code: "dsFileOld" });
+    if (!j || j.format !== DSYN.FORMAT || j.version !== DSYN.VERSION || !Array.isArray(j.sounds) || j.sounds.length !== DSYN.LANES
+      || j.sounds.some((x) => !Array.isArray(x) || x.length !== DSYN.SIZE)) throw Object.assign(new Error("not a KARMA HEX kit"), { code: "dsFileBad" });
+    return { name: String(j.name || "KIT").replace(/[^\x20-\x7E]/g, "").slice(0, 8), crush: (j.crush | 0) & 255,
+      sounds: j.sounds.map((x) => DSYN.fix(Uint8Array.from(x, (v) => v & 255))) };
+  },
+  /* backup object 9: the firmware's dsu_bank_t ("HEX1", 1, 4, then per kit: name 8, crush, src, rsv[0] (1: edited
+     on the device), rsv[1], 16 x 22) */
   BANK_SIZE: 8 + 4 * 364,
+  MAGIC: [0x48, 0x45, 0x58, 0x31],                      /* "HEX1" (DSU_MAGIC 0x31584548) */
   bankEncode(kits) {
     const o = new Uint8Array(DSYN.BANK_SIZE);
-    o.set([0x44, 0x53, 0x55, 0x31, 1, 0, 4, 0]);
+    o.set([...DSYN.MAGIC, 1, 0, 4, 0]);
     kits.forEach((k, i) => {
       const at = 8 + i * 364;
-      o.set(DSYN.name8(k.name), at); o[at + 8] = k.crush & 255; o[at + 9] = k.src & 255;
+      o.set(DSYN.name8(k.name), at); o[at + 8] = k.crush & 255; o[at + 9] = k.src & 255; o[at + 10] = k.edited ? 1 : 0;
       k.sounds.forEach((x, l) => o.set(x, at + 12 + l * DSYN.SIZE));
     });
     return o;
   },
+  /* SLOOP 2.5's bank of the old synthesised sounds ("DSU1"): the HEX firmware refuses it */
+  bankIsOld: (b) => !!b && b.length >= 4 && b[0] === 0x44 && b[1] === 0x53 && b[2] === 0x55 && b[3] === 0x31,
   bankDecode(b) {
-    if (!b || b.length !== DSYN.BANK_SIZE || b[0] !== 0x44 || b[1] !== 0x53 || b[2] !== 0x55 || b[3] !== 0x31 || b[4] !== 1 || b[6] !== 4) return null;
+    if (!b || b.length !== DSYN.BANK_SIZE || DSYN.MAGIC.some((x, i) => b[i] !== x) || b[4] !== 1 || b[5] || b[6] !== 4 || b[7]) return null;
     return Array.from({ length: 4 }, (_, i) => {
       const at = 8 + i * 364;
-      return { name: String.fromCharCode(...b.subarray(at, at + 8)).replace(/\0.*$/, ""), crush: b[at + 8], src: b[at + 9],
+      return { name: String.fromCharCode(...b.subarray(at, at + 8)).replace(/\0.*$/, ""), crush: b[at + 8], src: b[at + 9], edited: !!(b[at + 10] & 1),
         sounds: Array.from({ length: DSYN.LANES }, (_, l) => b.slice(at + 12 + l * DSYN.SIZE, at + 12 + (l + 1) * DSYN.SIZE)) };
     });
   },
-  fromFile(j) {
-    if (!j || j.format !== DSYN.FORMAT || !Array.isArray(j.sounds) || j.sounds.length !== DSYN.LANES
-      || j.sounds.some((x) => !Array.isArray(x) || x.length !== DSYN.SIZE)) throw new Error("not a KARMA drum synth kit");
-    return { name: String(j.name || "KIT").replace(/[^\x20-\x7E]/g, "").slice(0, 8), crush: (j.crush | 0) & 255,
-      sounds: j.sounds.map((x) => DSYN.encode(DSYN.decode(Uint8Array.from(x, (v) => v & 255)))) };
-  },
 };
-/* the device's 32 synthesised kits (build/gen/felucca_drumkits.h), for the mock: per kit its crush, then 16 x 22 */
-const DSYN_MOCK_NAMES = ["808", "909", "606", "80S", "VINTAGE", "TRAP", "DRILL", "BOOMBAP", "LO-FI", "PHONK", "HOUSE", "D.HOUSE", "TECHNO", "MINIMAL", "ELECTRO", "DISCO", "GARAGE", "JUNGLE", "DUBSTEP", "DEMBOW", "AMAPIANO", "AFRO", "LATIN", "TRIBAL", "SYNTHWV", "CHIP", "ARCADE", "GLITCH", "INDUSTR", "HYPER", "AMBIENT", "JAZZ"];
-const DSYN_MOCK_KITS = "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";
+/* the device's 5 factory HEX kits (firmware/src/hex_drums.c HEX_KITS), for the mock: per kit 16 x 22 */
+const DSYN_MOCK_NAMES = ["HEX BOOM", "HEX ACID", "HEX METAL", "HEX GLITCH", "HEX ROOM"];
+const DSYN_MOCK_KITS = "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";
 
 /* SET coalescing (userSet), per control key: last = when the user last changed it (touched()), sent = the value last
    requested. A value equal to the last request is skipped only while that request is still pending (queued or in
@@ -3653,16 +3731,16 @@ const TEXT = {
     chopSendBelow: "送信は下の 3 で。",
     /* SLOOP 2.5: DRUM SYNTH */
     tabDrumSynth: "ドラムシンセ", dsTitle: "ドラムシンセ",
-    dsHelp: "自分のシンセドラムキット SYN1〜SYN4（ドラムトラックの KIT の最後）。音を選び、値を変えると FM-1 ですぐ鳴ります。「FM-1 に保存」でフラッシュに残ります（ソングを止めて）。値をダブルクリック: 元のキットの値に戻す。",
+    dsHelp: "自分の HEX ドラムキット MY HEX 1〜4（ドラムトラックの KIT の最後）。各音は LXR-02 のドラムボイス（DRUM, SNARE, CLAP, CYM, HAT）の一つで、値と名前は FM-1 の EDIT ページ（HEX OSC〜HEX MORE）と同じです。音を選び、値を変えると FM-1 ですぐ鳴ります。「FM-1 に保存」でフラッシュに残ります（ソングを止めて）。値をダブルクリック: 元のキットの値に戻す。",
     dsOld: "この FM-1 のファームウェアにはドラムシンセがありません（SLOOP 2.5 以降）。",
-    dsFrom: "元のキット:", dsCopy: "コピー", dsBits: "CRUSH", dsHoldS: "S&H", dsOff: "OFF",
+    dsFrom: "元のキット:", dsCopy: "コピー",
     dsStore: "FM-1 に保存", dsUse: "ドラムトラックで使う", dsSave: "ファイルに保存", dsOpen: "ファイルを開く",
     dsPlay: "鳴らす", dsAuto: "変えたら鳴らす",
-    dsTone: "トーン", dsNoise: "ノイズ", dsFilter: "フィルター", dsOut: "出力",
     dsNotStored: "まだ保存していません", dsStored: "保存済み",
     dsBad: "FM-1 が受け付けませんでした", dsCopyAsk: "{k} を {x} のコピーにします。よろしいですか？", dsCopied: "コピーしました:",
     dsStop: "ソングを止めてから保存してください", dsFlash: "フラッシュに書けませんでした", dsSaved: "FM-1 に保存しました",
-    dsFileBad: "KARMA のドラムシンセキットではありません", dsOpenAsk: "{x} を {k} に読み込みます。よろしいですか？", dsOpened: "読み込みました:",
+    dsFileBad: "KARMA の HEX キットではありません", dsFileOld: "古いドラムシンセキット（SLOOP 2.5 の SYN の音）です。HEX キットには読み込めません",
+    bkDsynOld: "復元しました。このバックアップのドラムシンセキットは古い SYN キット（HEX 以前）なので、MY HEX キットはそのままです", dsOpenAsk: "{x} を {k} に読み込みます。よろしいですか？", dsOpened: "読み込みました:",
     /* SLOOP 2.5: length, piano roll, MIDI files, song */
     lenLabel: "長さ（ステップ）", viewGrid: "グリッド", viewRoll: "ピアノロール",
     midiExport: "MIDI 書き出し", midiImportBtn: "MIDI 読み込み",
@@ -3853,16 +3931,16 @@ const TEXT = {
     chopSendBelow: "Sending: step 3 below.",
     /* SLOOP 2.5: DRUM SYNTH */
     tabDrumSynth: "Drum synth", dsTitle: "Drum synth",
-    dsHelp: "Your own synthesised drum kits, SYN1 to SYN4 (the last kits of the drum track's KIT). Pick a sound, change its values: the FM-1 plays it at once. Store on the FM-1 keeps them in flash (stop the song first). Double-click a value: back to the kit it started from.",
+    dsHelp: "Your own HEX drum kits, MY HEX 1 to MY HEX 4 (the last kits of the drum track's KIT). Each sound is one of the LXR-02's drum voices (DRUM, SNARE, CLAP, CYM, HAT), with the values and names of the FM-1's EDIT pages (HEX OSC to HEX MORE). Pick a sound, change its values: the FM-1 plays it at once. Store on the FM-1 keeps them in flash (stop the song first). Double-click a value: back to the kit it started from.",
     dsOld: "This FM-1's firmware has no drum synth (SLOOP 2.5 or later).",
-    dsFrom: "Start from:", dsCopy: "Copy", dsBits: "CRUSH", dsHoldS: "S&H", dsOff: "OFF",
+    dsFrom: "Start from:", dsCopy: "Copy",
     dsStore: "Store on the FM-1", dsUse: "Use on the drum track", dsSave: "Save file", dsOpen: "Open file",
     dsPlay: "Play", dsAuto: "Play on change",
-    dsTone: "Tone", dsNoise: "Noise", dsFilter: "Filter", dsOut: "Out",
     dsNotStored: "not stored yet", dsStored: "stored",
     dsBad: "The FM-1 refused it", dsCopyAsk: "Make {k} a copy of {x}?", dsCopied: "Copied:",
     dsStop: "Stop the song first, then store", dsFlash: "Could not write the flash", dsSaved: "Stored on the FM-1",
-    dsFileBad: "Not a KARMA drum synth kit", dsOpenAsk: "Load {x} into {k}?", dsOpened: "Loaded:",
+    dsFileBad: "Not a KARMA HEX kit", dsFileOld: "An old drum synth kit (SLOOP 2.5's SYN sounds): it does not open as a HEX kit",
+    bkDsynOld: "Restored. This backup's drum synth kits are the old SYN kits (before HEX): the MY HEX kits stay as they are", dsOpenAsk: "Load {x} into {k}?", dsOpened: "Loaded:",
     /* SLOOP 2.5: length, piano roll, MIDI files, song */
     lenLabel: "Length (steps)", viewGrid: "Grid", viewRoll: "Piano roll",
     midiExport: "Export MIDI", midiImportBtn: "Import MIDI",
@@ -4926,52 +5004,38 @@ $("midifile").addEventListener("change", async (e) => {
   } catch (err) { MI = null; renderMidiPrev(); sayK("midiBad", err.message); }
 });
 
-/* ---- SLOOP 2.5: the DRUM SYNTH page (firmware v10, editor_dsyn.c): SYN1..SYN4, your synthesised kits ----
+/* ---- SLOOP 2.5: the DRUM SYNTH page (firmware v10, editor_dsyn.c): MY HEX 1..4, your HEX kits ----
    Every change goes to the FM-1's RAM at once (the drum voices play from there); STORE keeps the four kits in flash
-   (with the settings, the song stopped). A sound's values as the firmware's dsnd_t (DSYN.decode / encode). */
+   (with the settings, the song stopped). A sound's values as the firmware's hex_snd_t (DSYN.decode / encode), in the
+   groups and with the names of the device's EDIT pages (HEX OSC .. HEX MORE), each model its own (DSYN.desc). */
 const DS = { dev: null, list: null, k: 0, kit: null, lane: 0, src: null, err: "", timer: 0, pend: new Set() };
 const dsOk = () => !!dev && !!dev.info && dev.info.proto >= 10;
-const dsKitName = (k = DS.k) => `SYN${k + 1}`;
-const dsMs = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10000 ? 0 : 1)}` : `${Math.round(ms)}`);
+const dsKitName = (k = DS.k) => `MY HEX ${k + 1}`;
+const dsMs = (ms) => (ms === Infinity ? ["∞"] : ms >= 1000 ? [(ms / 1000).toFixed(ms >= 10000 ? 0 : 1), "s"] : [ms >= 10 || !ms ? Math.round(ms) : ms.toFixed(1), "ms"]);
 const dsHz = (hz) => (hz >= 1000 ? `${(hz / 1000).toFixed(hz >= 10000 ? 0 : 1)}k` : `${Math.round(hz)}`);
 const NOTE12 = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 const dsNote = (n) => `${NOTE12[n % 12]}${Math.floor(n / 12) - 1}`;
-/* the page's values: [key, label, min, max, format -> [value, unit]] by group */
-const DS_GROUPS = [
-  ["dsTone", [
-    ["wave", "WAVE", 0, 5, (v) => [DSYN.WAVES[v]], DSYN.WAVES],
-    ["pitch", "PITCH", 0, 127, (v, o) => [dsNote(v), `${dsHz(DSYN.hz(v, o.fine))} Hz`]],
-    ["fine", "FINE", 0, 15, (v) => [`+${v}`, "/16"]],
-    ["bend", "BEND", 0, 96, (v) => [v, "st"]],
-    ["btime", "B.TIME", 0, 127, (v) => [dsMs(DSYN.decayMs(v)), DSYN.decayMs(v) >= 1000 ? "s" : "ms"]],
-    ["hold", "HOLD", 0, 255, (v) => [v * 2, "ms"]],
-    ["decay", "DECAY", 0, 127, (v) => [dsMs(DSYN.decayMs(v)), DSYN.decayMs(v) >= 1000 ? "s" : "ms"]],
-    ["tlev", "LEVEL", 0, 127, (v) => [v]],
-    ["t2", "2ND", 0, 255, (v) => (v ? [`×${(v / 32).toFixed(2)}`] : ["OFF"])],
-    ["t2lev", "2ND LVL", 0, 127, (v) => [v]],
-    ["click", "CLICK", 0, 127, (v) => [v]]]],
-  ["dsNoise", [
-    ["noise", "NOISE", 0, 4, (v) => [DSYN.NOISES[v]], DSYN.NOISES],
-    ["clap", "CLAP", 0, 1, (v) => [v ? "ON" : "OFF"], ["OFF", "ON"]],
-    ["nlev", "LEVEL", 0, 127, (v) => [v]],
-    ["nhold", "HOLD", 0, 255, (v) => [v * 2, "ms"]],
-    ["ndec", "DECAY", 0, 127, (v) => [dsMs(DSYN.decayMs(v)), DSYN.decayMs(v) >= 1000 ? "s" : "ms"]],
-    ["hpf", "HPF", 0, 127, (v) => (v ? [dsHz(DSYN.cutHz(v)), "Hz"] : ["OFF"])],
-    ["chip", "CHIP", 0, 127, (v) => (v ? [dsHz(DSYN.hz(v) * 8), "Hz"] : ["-"])]]],
-  ["dsFilter", [
-    ["fmode", "FILTER", 0, 3, (v) => [DSYN.FMODES[v]], DSYN.FMODES],
-    ["fall", "ON", 0, 1, (v) => [v ? "ALL" : "NOISE"], ["NOISE", "ALL"]],
-    ["fcut", "CUTOFF", 0, 127, (v) => [dsHz(DSYN.cutHz(v)), "Hz"]],
-    ["res", "RES", 0, 31, (v) => [Math.round((v * 100) / 31), "%"]],
-    ["fenv", "ENV", -128, 127, (v) => [`${v > 0 ? "+" : ""}${(v / DSYN.STEPS_PER_OCT).toFixed(1)}`, "oct"]]]],
-  ["dsOut", [
-    ["drive", "DRIVE", 0, 127, (v) => [v]],
-    ["level", "LEVEL", 0, 255, (v) => [`${v >= 128 ? "+" : ""}${DSYN.db(v).toFixed(1)}`, "dB"]]]],
-];
-const dsCtl = new Map();                 /* key -> {input, out, def, fmt, sel} */
+const dsSigned = (v) => `${v > 0 ? "+" : ""}${v}`;
+/* what a value means, as the LXR's curves have it (DSYN.hz, decMs ..): [value, unit] */
+function dsFmt(key, model) {
+  const cy = model >= 3, sn = model === 1 || model === 2, note = (v) => [dsNote(v), `${dsHz(DSYN.hz(v))} Hz`];
+  switch (key) {
+    case "coarse": return note;
+    case "fine": return cy ? (v) => [dsSigned(Math.round(DSYN.cents(v))), "ct"] : (v) => [dsSigned(v)];
+    case "atk": return (v) => dsMs(DSYN.atkMs(v));
+    case "dec": return (v) => dsMs(DSYN.decMs(v));
+    case "pamt": return cy ? (v) => [v] : (v) => [`+${DSYN.pamtSt(v).toFixed(DSYN.pamtSt(v) < 10 ? 1 : 0)}`, "st"];
+    case "pdec": return cy ? note : (v) => dsMs(DSYN.pdecMs(v));
+    case "fmratio": return sn ? (v) => [dsHz(DSYN.noiseHz(v)), "Hz"] : note;
+    case "cut": return (v) => [dsHz(DSYN.cutHz(v)), "Hz"];
+    case "crush": case "aux1": return (v) => [v || "OFF"];
+  }
+  return (v) => [v];
+}
+const dsCtl = new Map();                 /* key -> {input, out, fmt, names, min, max} */
 function dsSound() { return DSYN.decode(DS.kit.sounds[DS.lane]); }
-function dsKnob([key, label, min, max, fmt, names]) {
-  const o = dsSound();
+function dsKnob(key) {
+  const o = dsSound(), [label, min, max, names] = DSYN.desc(key, o.model), fmt = names ? (v) => [names[v]] : dsFmt(key, o.model);
   let input, out = el("span", { class: "v", title: label });
   if (names) {
     input = el("select", { title: label, onchange: () => dsSet(key, +input.value, true) },
@@ -4995,7 +5059,7 @@ function dsKnob([key, label, min, max, fmt, names]) {
     out.addEventListener("dblclick", () => dsSet(key, dsDefault(key), true));
   }
   const row = el("div", { class: "knob" + (names ? " enum" : "") }, el("span", { class: "kl", text: label }), out, input);
-  dsCtl.set(key, { input, out, fmt, names, min, max });
+  dsCtl.set(key, { input, out, label, fmt, names, min, max });
   dsShowValue(key, o[key], o);
   return row;
 }
@@ -5007,6 +5071,7 @@ function dsShowValue(key, v, o) {
   c.out.replaceChildren(String(txt), ...(unit ? [el("small", { text: unit })] : []));
   c.out.classList.toggle("long", String(txt).length + (unit ? Math.ceil(unit.length / 2) : 0) > 6);
   if (!c.names) {
+    c.out.title = c.input.title = `${c.label} ${v}`;   /* (the number the FM-1 shows) */
     const pc = (x) => ((x - c.min) / (c.max - c.min)) * 100, p = pc(v), z = c.min < 0 ? pc(0) : 0;
     c.input.style.setProperty("--a", Math.min(p, z).toFixed(1) + "%");
     c.input.style.setProperty("--p", Math.max(p, z).toFixed(1) + "%");
@@ -5018,11 +5083,12 @@ function dsDefault(key) {
   return f ? DSYN.decode(f)[key] : dsSound()[key];
 }
 function dsSet(key, v, done) {
-  const o = dsSound();
+  const o = dsSound(), model = o.model;
   o[key] = v;
   DS.kit.sounds[DS.lane] = DSYN.encode(o);
   const n = DSYN.decode(DS.kit.sounds[DS.lane]);
-  for (const k of dsCtl.keys()) dsShowValue(k, n[k], n);
+  if (n.model !== model) renderDsSound();             /* another model: other names, other ranges (as the device) */
+  else for (const k of dsCtl.keys()) dsShowValue(k, n[k], n);
   DS.pend.add(DS.lane);
   dsDirty(true);
   clearTimeout(DS.timer);
@@ -5055,6 +5121,7 @@ async function dsLoad(k = DS.k) {
   DS.kit = { name: r.name, crush: r.crush, src: r.src, sounds: r.sounds };
   const f = parse[CMD.DSYN_GET](await rq(req.dsynGet(r.src)));   /* the kit it started from: double-click resets to it */
   DS.src = f.rc ? null : { sounds: f.sounds };
+  $("dsfrom").value = "";                             /* (another kit: "Start from" shows the one it started from) */
   renderDs();
 }
 function renderDs() {
@@ -5066,15 +5133,7 @@ function renderDs() {
   $("dsname").value = DS.kit.name;
   const from = $("dsfrom"), keep = from.value;
   from.replaceChildren(...DS.list.names.map((n, i) => el("option", { value: i, text: n })));
-  from.value = keep !== "" ? keep : String(DS.kit.src);
-  $("dsbits").value = String(DS.kit.crush & 15);
-  $("dssh").value = String((DS.kit.crush >> 4) + 1);
-  $("dsbitsv").textContent = (DS.kit.crush & 15) ? `-${DS.kit.crush & 15} bits` : t("dsOff");
-  $("dsshv").textContent = (DS.kit.crush >> 4) ? `1/${(DS.kit.crush >> 4) + 1}` : t("dsOff");
-  for (const id of ["dsbits", "dssh"]) {
-    const i = $(id), p = ((+i.value - +i.min) / (+i.max - +i.min)) * 100;
-    i.style.setProperty("--a", "0%"); i.style.setProperty("--p", p.toFixed(1) + "%");
-  }
+  from.value = keep !== "" && +keep < DS.list.names.length ? keep : String(DS.kit.src);
   $("dslanes").replaceChildren(...DSYN.LANES_N.map((n, l) => el("button", { type: "button", "data-l": l,
     "aria-pressed": l === DS.lane ? "true" : "false", onclick: () => { DS.lane = l; renderDsSound(); dsLaneMarks(); op(() => dsPlay(l)); } }, n)));
   renderDsSound();
@@ -5083,10 +5142,11 @@ function renderDs() {
 function dsLaneMarks() { for (const b of $("dslanes").children) b.setAttribute("aria-pressed", +b.dataset.l === DS.lane ? "true" : "false"); }
 function renderDsSound() {
   dsCtl.clear();
-  $("dslane").textContent = `${dsKitName()} · ${DSYN.LANES_N[DS.lane]}`;
-  $("dsgroups").replaceChildren(...DS_GROUPS.map(([title, ks]) => el("div", { class: "group" },
-    el("h3", { text: t(title) }), el("div", { class: "knobs" }, ...ks.map(dsKnob)))));
+  $("dslane").textContent = `${dsKitName()} · ${DSYN.LANES_N[DS.lane]} · ${DSYN.MODELS[dsSound().model]}`;
+  $("dsgroups").replaceChildren(...DSYN.PAGES.map(([title, ks]) => el("div", { class: "group" },
+    el("h3", { text: title }), el("div", { class: "knobs" }, ...ks.map(dsKnob)))));
 }
+
 async function dsHead() {
   const r = parse[CMD.DSYN_PUT](await rq(req.dsynHead(DS.k, DS.kit.name, DS.kit.crush, DS.kit.src)));
   if (r.rc) sayK("dsBad");
@@ -5101,14 +5161,6 @@ $("dsname").addEventListener("change", (e) => {
   e.target.value = DS.kit.name;
   dsDirty(true);
   op(dsHead);
-});
-for (const id of ["dsbits", "dssh"]) $(id).addEventListener("input", () => {
-  if (!DS.kit) return;
-  DS.kit.crush = (+$("dsbits").value & 15) | ((+$("dssh").value - 1) & 15) << 4;
-  renderDs();
-  dsDirty(true);
-  clearTimeout(DS.timer);
-  DS.timer = setTimeout(() => op(dsHead), 80);
 });
 $("dscopy").addEventListener("click", () => {
   if (!DS.kit) return;
@@ -5144,7 +5196,7 @@ $("dsuse").addEventListener("click", () => {
 });
 $("dssave").addEventListener("click", () => {
   if (!DS.kit) return;
-  downloadBytes(`${fileSlug(DS.kit.name || dsKitName())}.karmadrums.json`, new TextEncoder().encode(JSON.stringify(DSYN.toFile(DS.kit))));
+  downloadBytes(`${fileSlug(DS.kit.name || dsKitName())}.karmahex.json`, new TextEncoder().encode(JSON.stringify(DSYN.toFile(DS.kit))));
 });
 $("dsopen").addEventListener("click", () => $("dsfile").click());
 $("dsfile").addEventListener("change", async (e) => {
@@ -5152,7 +5204,7 @@ $("dsfile").addEventListener("change", async (e) => {
   e.target.value = "";
   if (!f || !DS.kit) return;
   let kit;
-  try { kit = DSYN.fromFile(JSON.parse(await f.text())); } catch (err) { sayK("dsFileBad"); return; }
+  try { kit = DSYN.fromFile(JSON.parse(await f.text())); } catch (err) { sayK(err.code === "dsFileOld" ? "dsFileOld" : "dsFileBad"); return; }
   if (!confirm(t("dsOpenAsk").replace("{x}", kit.name).replace("{k}", dsKitName()))) return;
   op(async () => {
     DS.kit.name = kit.name;
@@ -7478,11 +7530,11 @@ $("bk-file").addEventListener("change", async () => {
   await op(async () => {
     try {
       selfLoad();
-      await backupRestore(rq, file, bkProgress("bkRestoring"));
+      const said = await backupRestore(rq, file, bkProgress("bkRestoring"));
       dev.slotUsed = [null, null, null, null];
       renderSlots();
       try { await smpInfo(); renderSamples(); } catch (e) { /* shown by the next action */ }
-      await afterSoundChange("bkRestored");
+      await afterSoundChange(said === "bkDsynOld" ? "bkDsynOld" : "bkRestored");
     } catch (e) { bkReport(e); } finally { $("bk-prog").hidden = true; }
   });
 });
