@@ -1,0 +1,259 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FM-1 OS Cheat Sheet</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;700&family=Barlow:wght@400;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* layout: one dark panel like the FM-1's screen; sections as cards in a responsive grid; knob values in the four knob colours */
+:root {
+  --bg: #0b0b0d;
+  --panel: #151519;
+  --line: #2a2933;
+  --fg: #ecebf1;
+  --dim: #9a98a8;
+  --purple: #8e86c9;
+  --k1: #287cff;   /* KNOB 1 blue */
+  --k2: #1ecc70;   /* KNOB 2 green */
+  --k3: #ececf0;   /* KNOB 3 white */
+  --k4: #ff621a;   /* KNOB 4 orange */
+  --display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html { background: var(--bg); }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; padding-inline: 16px; padding-block: 24px 48px; }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 16px; }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(30px, 5vw, 44px); letter-spacing: .02em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--purple); }
+header p { margin: 0; color: var(--dim); max-width: 70ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+.legend b { font-weight: 500; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; min-width: 0; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: .04em; text-transform: uppercase; margin: 0; display: flex; align-items: baseline; gap: 10px; }
+h2 small { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--dim); text-transform: none; letter-spacing: 0; }
+h3 { font-family: var(--display); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: var(--purple); margin: 6px 0 0; }
+ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+li { padding-left: 2px; }
+.how { font-family: var(--mono); font-size: 13px; color: var(--fg); background: #1e1d25; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; }
+.btn { font-family: var(--mono); font-size: 12.5px; font-weight: 500; border: 1px solid #4a4858; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+.knobs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.knobs div { border-top: 2px solid currentColor; padding-top: 3px; font-family: var(--display); font-weight: 700; font-size: 14px; letter-spacing: .03em; overflow-wrap: anywhere; }
+.knobs div span { display: block; font-family: var(--body); font-weight: 400; font-size: 12px; color: var(--dim); letter-spacing: 0; }
+.c1 { color: var(--k1); } .c2 { color: var(--k2); } .c3 { color: var(--k3); } .c4 { color: var(--k4); }
+.pg { font-family: var(--mono); font-size: 12px; color: var(--dim); margin-bottom: -4px; }
+.note { font-size: 13px; color: var(--dim); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+td { border-top: 1px solid var(--line); padding: 5px 6px 5px 0; vertical-align: top; }
+td:first-child { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; color: var(--fg); width: 1%; padding-right: 12px; }
+.wide { grid-column: 1 / -1; }
+@media (max-width: 420px) { .knobs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header>
+  <h1>FM-1 OS <span>Cheat Sheet</span></h1>
+  <p>Where everything we built lives and how to reach it. Tap a button to open its pages (tap again or turn SELECT for the next one); hold a button for what it does with the keys and knobs.</p>
+  <div class="legend"><span>Knob colours on the screen:</span><b class="c1">KNOB 1</b><b class="c2">KNOB 2</b><b class="c3">KNOB 3</b><b class="c4">KNOB 4</b></div>
+</header>
+
+<div class="grid">
+
+<section>
+  <h2>Getting around</h2>
+  <table>
+    <tr><td><span class="btn">HOME</span></td><td>The tape reels and the four lanes of the song</td></tr>
+    <tr><td>ALGORITHM</td><td>Choose the track: 1 bass, 2, 3, DRUM (the boxes at the bottom)</td></tr>
+    <tr><td>PRESETS</td><td>Browse the sounds of the selected track</td></tr>
+    <tr><td>SELECT</td><td>Next / previous page of the button you tapped (tempo where there are no pages)</td></tr>
+    <tr><td><span class="btn">EDIT</span> + <span class="btn">OCT−</span></td><td>Undo a pattern change (also after ACID GEN)</td></tr>
+  </table>
+  <p class="note">Track characters: bass = Buddha, track 2 = gorilla, track 3 = flying saucer, drums = drummer, effects = wizard.</p>
+</section>
+
+<section>
+  <h2>Bass: ACID <small>the 303, track 1</small></h2>
+  <div class="pg">EDIT pages</div>
+  <div class="knobs"><div class="c1">WAVE<span>saw / square</span></div><div class="c2">CUT<span>cutoff</span></div><div class="c3">RES<span>resonance</span></div><div class="c4">ENV<span>env amount</span></div></div>
+  <div class="knobs"><div class="c1">DEC<span>decay</span></div><div class="c2">ACC<span>accent</span></div><div class="c3">DRV<span>drive</span></div><div class="c4">SLIDE<span>slide time</span></div></div>
+  <h3>Accent and slide on a step</h3>
+  <div class="how">SEQ → STEP page: KNOB 1 picks the step, KNOB 4 FLAG = − / ACC / SLD / A+S · in the boxes: white bar = ACC, arrow = SLD, +2 = chord</div>
+  <p class="note">Presets: TB ACID, TB SQUARE, TB DIRTY, TB DEEP, TB SQUELCH, TB RUBBER (PRESETS knob).</p>
+</section>
+
+<section>
+  <h2>JUNO <small>Juno-106 voice, up to 6 notes</small></h2>
+  <div class="how">PRESETS knob → JUNO BRASS, STRING, PAD, BASS, SUB 106, KEYS, STAB, LEAD, SWEEP, ORGAN, HOOVER · EDIT = its pages</div>
+  <div class="pg">DCO</div>
+  <div class="knobs"><div class="c1">WAVE<span>SAW · PLS · S+P</span></div><div class="c2">PW<span>pulse width</span></div><div class="c3">SUB<span>octave down</span></div><div class="c4">NOISE<span>noise</span></div></div>
+  <div class="pg">VCF</div>
+  <div class="knobs"><div class="c1">CUT<span>cutoff</span></div><div class="c2">RES<span>resonance</span></div><div class="c3">ENV<span>envelope → filter</span></div><div class="c4">CHOR<span>OFF · I · II · I+II</span></div></div>
+  <p class="note">The track's ENV page is the Juno's envelope; LFO → PIT is vibrato, → FLT the filter, → SHP the PWM.</p>
+</section>
+
+<section>
+  <h2>ACID GEN <small>acid lines, any synth track</small></h2>
+  <div class="how">SEQ → turn SELECT past STEP and PATTERN</div>
+  <div class="pg">ACID GEN</div>
+  <div class="knobs"><div class="c1">DENS<span>notes that play</span></div><div class="c2">ACC<span>accents</span></div><div class="c3">SLIDE<span>slides</span></div><div class="c4">SEED<span>a new line each step</span></div></div>
+  <div class="pg">ACID GEN 2</div>
+  <div class="knobs"><div class="c1">SCALE<span>MIN PHRY HARM MPEN DOR MAJ</span></div><div class="c2">OCT<span>1–3 octaves</span></div><div class="c3">ROOT<span>key</span></div><div class="c4">VARY<span>GO: reroll ¼</span></div></div>
+  <p class="note">Turning any knob rewrites the track's pattern at once. EDIT + OCT− brings your old one back. The knob settings are not saved; the line is (it is the pattern).</p>
+</section>
+
+<section>
+  <h2>PLAY <small>how a track's steps play, any track</small></h2>
+  <div class="how">SEQ → turn SELECT past PATTERN</div>
+  <div class="pg">PLAY</div>
+  <div class="knobs"><div class="c1">DIR<span>FWD REV PEND RAND WALK</span></div><div class="c2">CHANCE<span>how often ? steps play</span></div><div class="c3">JUMP<span>random octave up</span></div><div class="c4">STRIDE<span>steps moved: 1–7</span></div></div>
+  <h3>Chance steps</h3>
+  <div class="how">Hold SEQ + hold step keys + OCT+ → NORMAL → FILL ONLY → NO FILL → CHANCE (a ? on the step)</div>
+  <p class="note">CHANCE steps are saved in the project; the PLAY knobs belong to the FM-1. While recording, steps go forward.</p>
+</section>
+
+<section>
+  <h2>GEN <small>a loop that changes as it plays, synth tracks</small></h2>
+  <div class="how">SEQ → turn SELECT past ACID GEN 2 · the boxes show the loop as it changes</div>
+  <div class="pg">GEN</div>
+  <div class="knobs"><div class="c1">GEN<span>ON / OFF, this track</span></div><div class="c2">DRIFT<span>0 = locked … all new</span></div><div class="c3">DENS<span>notes that play</span></div><div class="c4">RANGE<span>1–3 octaves</span></div></div>
+  <div class="pg">GEN 2</div>
+  <div class="knobs"><div class="c1">OCT<span>lowest octave</span></div><div class="c2">ACC<span>accents</span></div><div class="c3">SLIDE<span>slides</span></div><div class="c4">NEW<span>GO: a fresh loop</span></div></div>
+  <p class="note">Notes stay in the track's SCALE and ROOT. Like what you hear? DRIFT to 0 and it stays; it's a normal pattern. EDIT + OCT− goes back to before GEN was turned on. GEN is OFF again after power off.</p>
+</section>
+
+<section>
+  <h2>Arpeggiator <small>tap ARP</small></h2>
+  <div class="pg">ARP</div>
+  <div class="knobs"><div class="c1">MODE<span>OFF UP DN UPDN RND ORD</span></div><div class="c2">RATE<span>1/4 … 16T</span></div><div class="c3">OCT<span>1–4</span></div><div class="c4">GATE<span>note length</span></div></div>
+  <div class="pg">ARP 2</div>
+  <div class="knobs"><div class="c1">SWG<span>swing</span></div><div class="c2">PROB<span>chance</span></div><div class="c3">HOLD<span>keeps playing</span></div><div class="c4">ORD<span>pitch / played</span></div></div>
+  <p class="note">MODE starts at OFF: turn it, then hold keys. The character hops on the stepping stones.</p>
+  <h3>Note repeat</h3>
+  <div class="how">Hold ARP + hold a key · ARP + KNOB 1 = repeat speed</div>
+</section>
+
+<section>
+  <h2>Drums: HEX kits</h2>
+  <div class="how">Select DRUM → drum screen · SEQ = GRID → KIT → DRUM GEN · SELECT = GRID ↔ KIT</div>
+  <div class="pg">KIT page</div>
+  <div class="knobs"><div class="c1">SOUND<span>which drum</span></div><div class="c2">KIT<span>HEX BOOM … ROOM</span></div><div class="c3">REVERB<span>this sound</span></div><div class="c4">DELAY<span>this sound</span></div></div>
+  <ul>
+    <li>GRID: KNOB 1 picks the sound, the white keys switch its 16 steps on and off.</li>
+    <li>While playing: hold OCT− / OCT+ for ghost / hard hits.</li>
+    <li>Kits 1–5 are HEX BOOM, ACID, METAL, GLITCH, ROOM; then 808, 909 and the others; MY HEX 1–4 at the end.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>DRUM GEN <small>generated KICK, SNARE, HATS</small></h2>
+  <div class="how">Drum screen → SEQ twice (GRID → KIT → DRUM GEN) · SEQ again = back to the GRID</div>
+  <div class="pg">DRUM GEN</div>
+  <div class="knobs"><div class="c1">MODE<span>OFF · MAP · EUCL</span></div><div class="c2">MAP X<span>move over the map</span></div><div class="c3">MAP Y<span>of 25 grooves</span></div><div class="c4">CHAOS<span>random extra hits</span></div></div>
+  <div class="pg">DRUM GEN 2</div>
+  <div class="knobs"><div class="c1">KICK<span>how busy</span></div><div class="c2">SNARE<span>how busy</span></div><div class="c3">HATS<span>how busy</span></div><div class="c4">ROT<span>EUCL: shifts snare/hats</span></div></div>
+  <p class="note">MAP: grooves from Grids' drum map, blended as you turn X / Y. EUCL: hits spread evenly (KICK 25 % = 4 on the beats). Only KICK, SNARE and HAT lanes are written; the rest stay yours. MODE OFF keeps what's there; EDIT + OCT− goes back to before.</p>
+</section>
+
+<section>
+  <h2>Drums: edit a sound <small>EDIT on the drum screen</small></h2>
+  <div class="how">EDIT → sound pages · press a key to pick the sound · SEQ = back</div>
+  <div class="pg">HEX OSC · HEX AEG · HEX MOD</div>
+  <div class="knobs"><div class="c1">MODEL<span>DRUM SNARE CLAP CYM HAT</span></div><div class="c2">WAVE<span>SIN TRI SAW SQR NOIS</span></div><div class="c3">TUNE<span>note</span></div><div class="c4">FINE<span>cents</span></div></div>
+  <div class="knobs"><div class="c1">ATK</div><div class="c2">DEC</div><div class="c3">SLOPE<span>tail ↔ punch</span></div><div class="c4">LEVEL</div></div>
+  <div class="knobs"><div class="c1">P.AMT<span>pitch drop</span></div><div class="c2">P.DEC<span>its speed</span></div><div class="c3">RATIO<span>FM</span></div><div class="c4">FM<span>depth</span></div></div>
+  <div class="pg">HEX CLICK · HEX FILT · HEX NOISE</div>
+  <div class="knobs"><div class="c1">CLICK<span>TICK NOIS POP BLIP ZAP</span></div><div class="c2">C.LVL</div><div class="c3">TONE</div><div class="c4">CRUSH</div></div>
+  <div class="knobs"><div class="c1">FILT<span>LP HP BP NOTCH</span></div><div class="c2">CUT</div><div class="c3">RES</div><div class="c4">DRIVE</div></div>
+  <div class="knobs"><div class="c1">AUX A<span>snare noise · clap spread · hat noise</span></div><div class="c2">AUX B<span>snare noise decay · clap tail · hat spread</span></div><div class="c3"></div><div class="c4"></div></div>
+  <p class="note">The built-in kits never change: your first edit copies the kit into MY HEX 1–4 and switches to it. Saved on the FM-1 by itself.</p>
+</section>
+
+<section>
+  <h2>Track 2 and 3 engines</h2>
+  <h3>ELEMENTS (track 2)</h3>
+  <ul>
+    <li>MODEL: BOUNC (bouncing hits), PICK (plectrum), BOW (bowed, holds while you hold), BLOW (breath, a reed pipe above ⅔), OMIN (the hidden Ominous Voice: RATIO FM FDBK DTUNE BRIT SHAPE SPACE; one note).</li>
+    <li>BOW: the BOW knob is pressure, TONE the bow noise. Play harder for a rougher bow that speaks sooner.</li>
+  </ul>
+  <h3>PLAITS (track 3)</h3>
+  <ul>
+    <li>MODEL (24): FOLD, SWARM, WAVE, HARM, CHORD, VA, VCF, PHDIS, FM, 6OP A/B/C (DX banks: HARM picks the patch), GRAIN, TERRN, STRMC, CHIP, STRNG, MODAL, NOISE, SPECH, PARTC, KICK, SNARE, HIHAT.</li>
+    <li>Knobs HARM, TIMB, MRPH (as on the module), ENV, SUB. CHORD: the chord name shows on the knob.</li>
+    <li>Big models (6OP, STRMC, STRNG, SPECH, PARTC) play one note at a time; the small ones up to four.</li>
+  </ul>
+  <p class="note">Track 1 plays ACID or JUNO, track 2 ELEMENTS, track 3 PLAITS: PRESETS shows each track's own sounds.</p>
+</section>
+
+<section>
+  <h2>Effects <small>tap FX</small></h2>
+  <ul>
+    <li>Pages: FX (DST CHO DLY REV) · FILTER · SLICER · INSERT · INSERT 2 · DLY · REV/CHO · CLOUD · CLOUD 2.</li>
+    <li>Hold FX + a key: punch-in effects on the whole mix while the key is held.</li>
+  </ul>
+  <h3>CLOUD (Clouds grains)</h3>
+  <div class="knobs"><div class="c1">SEND<span>this track / drum sound</span></div><div class="c2">POS<span>how far back</span></div><div class="c3">SIZE<span>grain length</span></div><div class="c4">PITCH<span>±24</span></div></div>
+  <div class="knobs"><div class="c1">DENS<span>noon = none</span></div><div class="c2">TEXT<span>click ↔ smooth</span></div><div class="c3">FDBK<span>feedback</span></div><div class="c4">FRZ<span>freeze</span></div></div>
+  <p class="note">Per drum sound: pick the sound on the drum screen first (KNOB 1), then set SEND. Saved with the project.</p>
+</section>
+
+<section>
+  <h2>Mixer <small>hold GLO</small></h2>
+  <table>
+    <tr><td>KNOB 1–4</td><td>Levels of track 1, 2, 3, drums</td></tr>
+    <tr><td>Keys 1–4</td><td>Mute a track</td></tr>
+    <tr><td>Keys 5–8</td><td>Solo a track</td></tr>
+    <tr><td>Key 9 (hold)</td><td>Fill while held</td></tr>
+    <tr><td>Key 10</td><td>Fill on the next bar</td></tr>
+    <tr><td>Last key</td><td>Tap tempo</td></tr>
+  </table>
+  <h3>Envelope page</h3>
+  <div class="how">Tap ENV: ATK · DEC · SUS · REL</div>
+  <p class="note">The character behind the curve grows and shrinks with the sound.</p>
+</section>
+
+<section>
+  <h2>MIDI keyboard <small>e.g. Akai MPK mini</small></h2>
+  <ul>
+    <li>Keys on channel 1 play the <b>selected</b> track (GLO › MIDI 2 › IN = CH 1). Channels 2, 3 still play tracks 2, 3; channel 10 (the pads) the drums.</li>
+    <li>Knobs 1–8 are the FM-1's eight rotaries (GLO › MIDI 3 › KNOBS = PANEL): K1 PRESETS (the sounds), K2 SELECT (pages), K3 ALGORITHM (tracks), K4 MASTER, K5–K8 KNOB 1–4 (whatever the screen shows). KNOBS = AUTO / 1-8 / 70-77: the EDIT knobs instead; GM: the old map.</li>
+    <li>Any other CC: MIDI LEARN (hold GLO + F#3, touch a knob, move the controller).</li>
+    <li>In the browser: Chrome, the simulator on your Mac (localhost); the shared claude.ai page cannot use MIDI.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Simulator</h2>
+  <table>
+    <tr><td>Double-click</td><td>Hold a button down (blue outline); click again to let go. Shift-click does the same.</td></tr>
+    <tr><td>1 2 3 4 5 6</td><td>FX · SEL · ENV · LFO · EDIT · GLO</td></tr>
+    <tr><td>7 8 9 0 - =</td><td>HOME · SAVE · ARP · SEQ · PLAY · REC</td></tr>
+    <tr><td>Z … ' · Q … O</td><td>The keyboard's notes</td></tr>
+    <tr><td>[ ]</td><td>OCT− / OCT+</td></tr>
+    <tr><td>↑ ↓ / ← →</td><td>SELECT / ALGORITHM</td></tr>
+  </table>
+  <p class="note">The simulator keeps nothing: a reload starts fresh.</p>
+</section>
+
+<section>
+  <h2>What is saved</h2>
+  <ul>
+    <li>Project (SAVE → PROJECT): patterns, sounds, CLOUD settings and sends, each drum sound's reverb and delay.</li>
+    <li>MY HEX 1–4 drum kits: saved on the FM-1 by themselves, for every project.</li>
+    <li>Not saved: ACID GEN knob settings (the line they wrote is).</li>
+  </ul>
+</section>
+
+</div>
+</div>
+
+</body>
+</html>

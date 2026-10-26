@@ -7,7 +7,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SLOOP Editor</title>
+<title>KARMA Editor</title>
 <style>
   /* SLOOP 2.4 editor: the FM-1's screen on a big display. Black, the four track colours, the device's own
      Terminus pixel font (tools/gen_webfont.py, inlined: the editor also runs from file://), 16 px and 32 px only
@@ -429,7 +429,7 @@
 <body>
 <div class="app">
   <aside class="side">
-    <a class="brand" href="#sound" aria-label="SLOOP">
+    <a class="brand" href="#sound" aria-label="KARMA">
       <svg viewBox="44 24 572 186" role="img" aria-hidden="true">
         <path d="M59.29 200.71 A100.00 100.00 0 1 1 200.71 200.71" fill="none" stroke="#F2F2F2" stroke-width="12" stroke-linecap="round"/>
         <rect x="95" y="46" width="10" height="136" rx="5" fill="#F2F2F2"/>
@@ -684,7 +684,7 @@
       </div>
     </section>
 
-    <footer>SLOOP, based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
+    <footer>KARMA, based on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>. GPL-3.0.<br>
       <span data-t="foot"></span> M-VAVE and FM-1 are trademarks of their respective owners.<br>
       <a href="FUKIAI-LICENSE.txt" data-t="iconsCredit"></a> · <span data-t="fontCredit"></span></footer>
   </main>
@@ -1730,7 +1730,7 @@ async function backupCapture(rq, info, progress = () => {}) {
 }
 /* a backup file -> {id: Uint8Array}; every object checked against its length and CRC */
 function backupObjects(file) {
-  if (!file || file.format !== BK.FORMAT || !(file.version >= 1) || !Array.isArray(file.objects)) throw new BackupError("bkBad", "not a SLOOP backup");
+  if (!file || file.format !== BK.FORMAT || !(file.version >= 1) || !Array.isArray(file.objects)) throw new BackupError("bkBad", "not a KARMA backup");
   const m = new Map();
   for (const o of file.objects) {
     const d = b64dec(o.data || "");
@@ -3425,7 +3425,7 @@ const DSYN = {
   },
   fromFile(j) {
     if (!j || j.format !== DSYN.FORMAT || !Array.isArray(j.sounds) || j.sounds.length !== DSYN.LANES
-      || j.sounds.some((x) => !Array.isArray(x) || x.length !== DSYN.SIZE)) throw new Error("not a SLOOP drum synth kit");
+      || j.sounds.some((x) => !Array.isArray(x) || x.length !== DSYN.SIZE)) throw new Error("not a KARMA drum synth kit");
     return { name: String(j.name || "KIT").replace(/[^\x20-\x7E]/g, "").slice(0, 8), crush: (j.crush | 0) & 255,
       sounds: j.sounds.map((x) => DSYN.encode(DSYN.decode(Uint8Array.from(x, (v) => v & 255)))) };
   },
@@ -3518,7 +3518,7 @@ const TEXT = {
     foot: "Chrome か Edge で使えます。", iconsCredit: "アイコン: Fukiai（MIT）Hügelton Instruments",
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。",
     denied: "MIDI（SysEx）の使用が許可されませんでした。",
-    nodevice: "SLOOP が見つかりません。USB で接続して、もう一度押してください。",
+    nodevice: "KARMA が見つかりません。USB で接続して、もう一度押してください。",
     connecting: "接続中", reading: "読み込み中 ", steploading: "ステップを読み込み中 ",
     ready: "接続しました", disconnected: "切断されました", lost: "FM-1 が外されました",
     noreply: "応答がありません", error: "エラー: ", busy: "処理中",
@@ -3566,7 +3566,7 @@ const TEXT = {
     putDone: "本体に書き込みました: スロット ", storedSlot: "本体に保存しました: スロット ", erasedSlot: "消去しました: スロット ",
     loadedUser: "読み込みました: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
-    installer: "SLOOP インストーラー",
+    installer: "KARMA インストーラー",
     offline: "エディタをダウンロード（オフライン用：Chrome / Edge で開く）",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
     navTrack: "トラック", navSounds: "サウンド", navDevice: "本体", tabKits: "ドラムキット", fm1: "FM-1",
@@ -3598,9 +3598,9 @@ const TEXT = {
     bkTitle: "バックアップ", bkHelp: "FM-1 の中身をすべて 1 つのファイルに保存します: 今の曲、プロジェクト 1〜4（ソングのセクション A〜D）、ユーザープリセット、FM6 の音色バンク、サンプル USR1〜4、設定（色、キャリブレーション、ソング、ライト）。復元すると、本体はファイルの状態に戻ります（今の内容は上書きされます）。",
     bkSave: "バックアップを保存", bkLoad: "ファイルから復元", bkSaving: "バックアップ中 ", bkSaved: "バックアップを保存しました",
     bkRestoring: "復元中 ", bkRestored: "復元しました", bkConfirm: "FM-1 の今の内容をすべてこのバックアップで置き換えます。続けますか？",
-    bkBad: "SLOOP のバックアップファイルではないか、壊れています: ", bkStop: "FM-1 の再生を止めてから、もう一度復元してください。",
+    bkBad: "KARMA のバックアップファイルではないか、壊れています: ", bkStop: "FM-1 の再生を止めてから、もう一度復元してください。",
     bkStale: "本体の内容が途中で変わりました。もう一度バックアップしてください: ", bkRead: "読み取りエラー: ", bkWrite: "書き込みエラー: ", bkRc4: "フラッシュがありません",
-    bkNewer: "新しい SLOOP のバックアップです。先に FM-1 をアップデートしてから復元してください（何も変更していません）: ",
+    bkNewer: "新しい KARMA のバックアップです。先に FM-1 をアップデートしてから復元してください（何も変更していません）: ",
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
     fm6Title: "FM6 の音色（6 オペレーター）", fm6Help: "FM6 エンジンの音色をまるごと編集します。本体のノブ（EDIT の 8 つ）はこの音色の上にかかるマクロです。トラックへ送るとすぐ鳴り、PTCH を回すか別の音を読み込むまでそのトラックの音色になります（プロジェクトは PTCH だけを保存します）。バンク（B1〜B27）に保存すると PTCH で呼び出せます（本体を停止してから）。",
@@ -3677,7 +3677,7 @@ const TEXT = {
     dsNotStored: "まだ保存していません", dsStored: "保存済み",
     dsBad: "FM-1 が受け付けませんでした", dsCopyAsk: "{k} を {x} のコピーにします。よろしいですか？", dsCopied: "コピーしました:",
     dsStop: "ソングを止めてから保存してください", dsFlash: "フラッシュに書けませんでした", dsSaved: "FM-1 に保存しました",
-    dsFileBad: "SLOOP のドラムシンセキットではありません", dsOpenAsk: "{x} を {k} に読み込みます。よろしいですか？", dsOpened: "読み込みました:",
+    dsFileBad: "KARMA のドラムシンセキットではありません", dsOpenAsk: "{x} を {k} に読み込みます。よろしいですか？", dsOpened: "読み込みました:",
     /* SLOOP 2.5: length, piano roll, MIDI files, song */
     lenLabel: "長さ（ステップ）", viewGrid: "グリッド", viewRoll: "ピアノロール",
     midiExport: "MIDI 書き出し", midiImportBtn: "MIDI 読み込み",
@@ -3718,7 +3718,7 @@ const TEXT = {
     foot: "Works in Chrome or Edge.", iconsCredit: "Icons: Fukiai (MIT), Hügelton Instruments",
     nomidi: "This browser cannot do it. Open the page in Chrome or Edge.",
     denied: "MIDI (SysEx) access was not allowed.",
-    nodevice: "SLOOP not found. Connect the FM-1 by USB and press Connect again.",
+    nodevice: "KARMA not found. Connect the FM-1 by USB and press Connect again.",
     connecting: "Connecting", reading: "Reading ", steploading: "Reading steps ",
     ready: "Connected", disconnected: "Disconnected", lost: "The FM-1 was unplugged",
     noreply: "No reply from the device", error: "Error: ", busy: "Busy",
@@ -3766,7 +3766,7 @@ const TEXT = {
     putDone: "Written to the device: slot ", storedSlot: "Stored on the device: slot ", erasedSlot: "Erased slot ",
     loadedUser: "Loaded ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
-    installer: "SLOOP installer",
+    installer: "KARMA installer",
     offline: "Download the editor (offline: open it in Chrome or Edge)",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
     navTrack: "Track", navSounds: "Sounds", navDevice: "Device", tabKits: "Drum kit", fm1: "FM-1",
@@ -3798,9 +3798,9 @@ const TEXT = {
     bkTitle: "Backup", bkHelp: "Everything on the FM-1 in one file: the music you are working on, the projects 1–4 (the song sections A–D), the user presets, the FM6 patch bank, the samples USR1–USR4 and the settings (colours, calibration, the song, the lights). Restoring puts the FM-1 back as it was in the file (what is on it now is replaced).",
     bkSave: "Save a backup", bkLoad: "Restore from a file", bkSaving: "Backing up ", bkSaved: "Backup saved",
     bkRestoring: "Restoring ", bkRestored: "Restored", bkConfirm: "Replace everything on the FM-1 with this backup?",
-    bkBad: "Not a SLOOP backup, or damaged: ", bkStop: "Stop the FM-1 (PLAY), then restore again.",
+    bkBad: "Not a KARMA backup, or damaged: ", bkStop: "Stop the FM-1 (PLAY), then restore again.",
     bkStale: "The FM-1 changed during the backup; back up again: ", bkRead: "Read error: ", bkWrite: "Write error: ", bkRc4: "No flash",
-    bkNewer: "This backup comes from a newer SLOOP: update the FM-1 first, then restore. Nothing was changed: ",
+    bkNewer: "This backup comes from a newer KARMA: update the FM-1 first, then restore. Nothing was changed: ",
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
     fm6Title: "FM6 patch (six operators)", fm6Help: "Edit the whole patch of the FM6 engine. The device's knobs (the eight EDIT values) are macros on top of it. Sent to a track it plays at once and stays that track's patch until PTCH turns or another sound loads (a project keeps PTCH only); stored in the bank (B1..B27) it is a PTCH value (stop the device first).",
@@ -3877,7 +3877,7 @@ const TEXT = {
     dsNotStored: "not stored yet", dsStored: "stored",
     dsBad: "The FM-1 refused it", dsCopyAsk: "Make {k} a copy of {x}?", dsCopied: "Copied:",
     dsStop: "Stop the song first, then store", dsFlash: "Could not write the flash", dsSaved: "Stored on the FM-1",
-    dsFileBad: "Not a SLOOP drum synth kit", dsOpenAsk: "Load {x} into {k}?", dsOpened: "Loaded:",
+    dsFileBad: "Not a KARMA drum synth kit", dsOpenAsk: "Load {x} into {k}?", dsOpened: "Loaded:",
     /* SLOOP 2.5: length, piano roll, MIDI files, song */
     lenLabel: "Length (steps)", viewGrid: "Grid", viewRoll: "Piano roll",
     midiExport: "Export MIDI", midiImportBtn: "Import MIDI",
@@ -4863,7 +4863,7 @@ function midiExport() {
   const len = stepLen(), div = curDiv(), tr = dev.sel || 0, drum = isDrum();
   const notes = drum && drumGrid() && dev.dstepsOk ? SMF.fromDrums(dev.dsteps, len, div) : SMF.fromSteps(dev.steps, len, div);
   if (!notes.length) { sayK("midiEmpty"); return; }
-  downloadBytes(`sloop-track${tr + 1}.mid`, SMF.write(notes, { bpm: gBpm(), ch: drum ? 9 : tr, name: `SLOOP track ${tr + 1}` }));
+  downloadBytes(`sloop-track${tr + 1}.mid`, SMF.write(notes, { bpm: gBpm(), ch: drum ? 9 : tr, name: `KARMA track ${tr + 1}` }));
   sayK("midiSaved", String(notes.length));
 }
 let MI = null;                                           /* the file being imported: {name, smf, src} */
@@ -7477,7 +7477,7 @@ function bkReport(e) {
 $("bk-save").addEventListener("click", () => op(async () => {
   try {
     const arc = await backupCapture(rq, dev.info, bkProgress("bkSaving"));
-    download(`SLOOP-backup-${today()}.json`, arc);
+    download(`KARMA-backup-${today()}.json`, arc);
     sayK("bkSaved");
   } catch (e) { bkReport(e); } finally { $("bk-prog").hidden = true; }
 }));

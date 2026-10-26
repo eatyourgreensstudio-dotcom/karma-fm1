@@ -26,8 +26,8 @@ static void sloop_splash(void)
     lcd_fill(0, 0, 240, 240, C_BLACK);
     sloop_logo_draw(10);
     const char *v = FELUCCA_VERSION;
-    if (v[0] == 'S' && v[1] == 'L' && v[5] == ' ')
-        v += 6;                                         /* "SLOOP 1.0" -> "1.0" under the wordmark */
+    if (v[0] == 'K' && v[1] == 'A' && v[5] == ' ')
+        v += 6;                                         /* "KARMA 3.0" -> "3.0" under the wordmark */
     cv_begin(240, 36, C_BLACK);
     cv_text(120 - text_w(&FONT_S, v) / 2, 0, &FONT_S, v, RGB(196, 196, 204));
     cv_text(120 - text_w(&FONT_S, "based on felucca") / 2, 18, &FONT_S, "based on felucca", RGB(96, 96, 104));

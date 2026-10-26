@@ -1,1 +1,537 @@
-<!doctype html><meta charset="utf-8"><title>SLOOP</title><meta http-equiv="refresh" content="0; url=webapp/installer/"><a href="webapp/installer/">SLOOP installer</a>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KARMA for FM-1</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="KARMA is free, open-source custom firmware for the M-VAVE FM-1: four engines, a drum synth, a 64-step sequencer, generators and a cast of pixel characters. Try it in your browser.">
+<link rel="icon" href="img/acid.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;800;900&family=Chivo+Mono:wght@400;500&display=swap">
+<style>
+/* DotGothic16 (SIL OFL 1.1, fonts/OFL.txt), cut to printable ASCII: the small pixel labels */
+@font-face { font-family: "DotGothic16"; src: url("fonts/DotGothic16-subset.woff") format("woff"); font-display: swap; }
+
+/* Layout: the page is the FM-1's screen grammar blown up. Each section opens with a boxed
+   track label like the one top-left on the device, track colours carry meaning (1 blue, 2 green,
+   3 silver, DRUM orange), the black hardware body is a constant in both themes. */
+:root {
+  --bg: #0c0c11;          /* the FM-1 body, a touch of violet */
+  --panel: #14141b;
+  --line: #2a2a36;
+  --fg: #ecebf3;
+  --muted: #a09eb3;
+  --t1: #4590ff;          /* track 1: ACID / JUNO */
+  --t2: #2fd27e;          /* track 2: ELEMENTS */
+  --t3: #e4e4ec;          /* track 3: PLAITS */
+  --t4: #ff6b1f;          /* track 4: DRUM */
+  --lav: #8d82ec;         /* the characters' purple */
+  --on-accent: #0c0c11;
+  --dev: #08080b;         /* hardware: stays black in every theme */
+  --dev-edge: #24242c;
+  --f-display: "Chivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Chivo", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "Chivo Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --f-pixel: "DotGothic16", "Chivo Mono", ui-monospace, monospace;
+  --s-1: .8125rem; --s0: 1rem; --s1: 1.25rem; --s2: 1.625rem; --s3: clamp(1.9rem, 4.2vw, 2.75rem);
+  --wrap: 72rem;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f2f1f6; --panel: #ffffff; --line: #d9d7e4; --fg: #15141c; --muted: #5d5b6e;
+    --t1: #1c5ed8; --t2: #0f7f46; --t3: #4a4a58; --t4: #c64a07; --lav: #5a4ec6; --on-accent: #ffffff;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f2f1f6; --panel: #ffffff; --line: #d9d7e4; --fg: #15141c; --muted: #5d5b6e;
+  --t1: #1c5ed8; --t2: #0f7f46; --t3: #4a4a58; --t4: #c64a07; --lav: #5a4ec6; --on-accent: #ffffff;
+  color-scheme: light;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--f-body); font-size: var(--s0); line-height: 1.6;
+  overflow-x: hidden;
+}
+img { max-width: 100%; display: block; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--lav); outline-offset: 3px; }
+
+.wrap {
+  max-width: var(--wrap); margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+section { padding-block: clamp(3.5rem, 8vw, 6rem); border-top: 1px solid var(--line); }
+h1, h2, h3 { font-family: var(--f-display); line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: var(--s3); font-weight: 900; letter-spacing: -.01em; }
+h3 { font-size: var(--s1); font-weight: 800; }
+p { margin: 0; }
+.lede { color: var(--muted); max-width: 60ch; font-size: var(--s1); line-height: 1.5; }
+
+/* the boxed label from the top-left of every FM-1 screen */
+.tag {
+  display: inline-block; font-family: var(--f-pixel); font-size: .95rem; letter-spacing: .06em;
+  line-height: 1; padding: .3em .45em .25em; border: 2px solid currentColor; text-transform: uppercase;
+}
+.c1 { color: var(--t1); } .c2 { color: var(--t2); } .c3 { color: var(--t3); } .c4 { color: var(--t4); } .cl { color: var(--lav); }
+.head { display: grid; gap: .9rem; margin-bottom: 2.5rem; justify-items: start; }
+.eng .tag { justify-self: start; }
+
+/* ---------- top bar ---------- */
+.bar { border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: .8rem; flex-wrap: wrap; }
+.bar .id { font-family: var(--f-pixel); letter-spacing: .08em; font-size: 1rem; display: flex; gap: .6rem; align-items: center; }
+.bar nav { display: flex; gap: 1.1rem; flex-wrap: wrap; font-size: var(--s-1); font-family: var(--f-mono); }
+.bar nav a { text-decoration: none; color: var(--muted); }
+.bar nav a:hover { color: var(--fg); }
+.dot { width: .55rem; height: .55rem; background: var(--t4); display: inline-block; }
+
+/* ---------- hero ---------- */
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: clamp(2rem, 5vw, 4.5rem); align-items: center; padding-block: clamp(2.5rem, 6vw, 5rem); }
+.hero-copy { display: grid; gap: 1.6rem; min-width: 0; }
+.mark { width: min(100%, 30rem); height: auto; display: block; }
+.mark .k1 { fill: var(--t1); } .mark .k2 { fill: var(--t2); } .mark .k3 { fill: var(--t3); } .mark .k4 { fill: var(--t4); } .mark .k5 { fill: var(--lav); }
+.hero h1 { font-size: clamp(1.5rem, 3.2vw, 2.2rem); font-weight: 800; max-width: 24ch; }
+.hero .sub { color: var(--muted); max-width: 52ch; }
+.meta { font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; }
+.meta span::before { content: "■ "; color: var(--lav); }
+
+.ctas { display: flex; flex-wrap: wrap; gap: .75rem; }
+.btn {
+  display: inline-flex; flex-direction: column; gap: .15rem; text-decoration: none;
+  padding: .8rem 1.1rem .7rem; border: 2px solid var(--fg); min-width: 0;
+  font-family: var(--f-pixel); letter-spacing: .06em; font-size: 1.05rem; line-height: 1.1;
+  transition: transform .12s ease, background .12s ease;
+}
+.btn small { font-family: var(--f-mono); font-size: .72rem; letter-spacing: 0; opacity: .8; }
+.btn:hover { transform: translateY(-2px); }
+.btn.go { background: var(--t4); border-color: var(--t4); color: var(--on-accent); }
+.btn.soon { border-style: dashed; border-color: var(--muted); color: var(--muted); }
+.btn.soon:hover { color: var(--fg); }
+.btn.plain { border-color: var(--t1); color: var(--t1); }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:hover { transform: none; } }
+
+/* ---------- the drawn FM-1 ---------- */
+.device {
+  background: var(--dev); border: 1px solid var(--dev-edge); border-radius: 18px;
+  padding: clamp(14px, 3vw, 22px); display: grid; gap: 14px; max-width: 30rem; width: 100%; justify-self: center;
+  box-shadow: 0 1px 0 #2e2e38 inset, 0 30px 60px -30px rgba(0,0,0,.6);
+}
+.device .top { display: flex; justify-content: space-between; align-items: center; font-family: var(--f-pixel); font-size: .75rem; letter-spacing: .12em; color: #6c6a7c; }
+.knobs { display: flex; gap: 8px; }
+.knobs i { width: 14px; height: 14px; border-radius: 50%; background: #1b1b22; border: 1px solid #34343f; position: relative; }
+.knobs i::after { content: ""; position: absolute; left: 6px; top: 1px; width: 1px; height: 5px; background: #8a889a; }
+.screen { aspect-ratio: 1; width: 100%; max-width: 100%; background: #000; border: 6px solid #111116; border-radius: 4px; overflow: hidden; }
+.screen img { width: 100%; height: 100%; image-rendering: auto; }
+.tracks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tracks button {
+  font: inherit; font-family: var(--f-pixel); font-size: .85rem; letter-spacing: .05em; cursor: pointer;
+  background: #121218; color: #8c8a9c; border: 2px solid #2b2b35; padding: .45rem 0 .35rem; border-radius: 3px;
+}
+.tracks button[data-k="acid"][aria-pressed="true"] { background: #3f8cff; border-color: #3f8cff; color: #08080b; }
+.tracks button[data-k="elements"][aria-pressed="true"] { background: #2fd27e; border-color: #2fd27e; color: #08080b; }
+.tracks button[data-k="plaits"][aria-pressed="true"] { background: #e4e4ec; border-color: #e4e4ec; color: #08080b; }
+.tracks button[data-k="drums"][aria-pressed="true"] { background: #ff6b1f; border-color: #ff6b1f; color: #08080b; }
+.device figcaption { font-family: var(--f-mono); font-size: .75rem; color: #8c8a9c; min-height: 2.4em; }
+
+/* ---------- status strip ---------- */
+.status { background: var(--panel); border-block: 1px solid var(--line); }
+.status .wrap { display: flex; gap: 1rem 2rem; flex-wrap: wrap; align-items: baseline; padding-block: 1.1rem; font-size: .95rem; }
+.status b { font-family: var(--f-pixel); font-weight: 400; letter-spacing: .06em; color: var(--t4); }
+.status p { flex: 1 1 28rem; min-width: 0; color: var(--muted); }
+.status p strong { color: var(--fg); font-weight: 600; }
+
+/* ---------- steps ---------- */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.25rem; counter-reset: s; }
+.steps li { border-top: 3px solid var(--line); padding-top: 1.2rem; display: grid; gap: .6rem; align-content: start; }
+.steps li:nth-child(1) { border-color: var(--t4); } .steps li:nth-child(2) { border-color: var(--muted); } .steps li:nth-child(3) { border-color: var(--t1); }
+.steps .n { font-family: var(--f-pixel); font-size: 2.2rem; line-height: 1; }
+.steps p { color: var(--muted); }
+.steps a.more { font-family: var(--f-mono); font-size: var(--s-1); }
+.pill { font-family: var(--f-mono); font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; padding: .1rem .45rem; border: 1px solid currentColor; vertical-align: middle; margin-left: .4rem; }
+
+/* ---------- inside: four tracks ---------- */
+.engines { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.25rem; }
+.eng { display: grid; gap: .8rem; align-content: start; min-width: 0; }
+.eng .shot { aspect-ratio: 1; background: #000; border: 2px solid currentColor; }
+.eng .shot img { width: 100%; height: 100%; image-rendering: auto; }
+.eng h3 { color: var(--fg); }
+.eng .who { font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); }
+.eng p { color: var(--muted); font-size: .95rem; }
+
+.feats { margin-top: 3.5rem; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.feat { padding: 1.5rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: grid; gap: .6rem; align-content: start; min-width: 0; }
+.feat .lbl { font-family: var(--f-pixel); font-size: .85rem; letter-spacing: .08em; color: var(--lav); }
+.feat ul { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: .95rem; display: grid; gap: .3rem; }
+.feat ul b { color: var(--fg); font-weight: 600; }
+
+/* ---------- cast ---------- */
+.cast { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.5rem 1.25rem; }
+.cast figure { margin: 0; display: grid; gap: .6rem; min-width: 0; }
+.cast .scr { background: var(--dev); padding: 8px; border-radius: 8px; border: 1px solid var(--dev-edge); }
+.cast img { aspect-ratio: 1; width: 100%; height: auto; image-rendering: auto; background: #000; }
+.cast figcaption { font-size: .9rem; color: var(--muted); }
+.cast figcaption b { display: block; color: var(--fg); font-family: var(--f-pixel); font-weight: 400; letter-spacing: .06em; font-size: .9rem; }
+
+/* ---------- FAQ ---------- */
+.faq { display: grid; gap: 0; max-width: 52rem; border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary { cursor: pointer; list-style: none; padding: 1.1rem 2.2rem 1.1rem 0; font-weight: 600; font-size: 1.08rem; position: relative; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; position: absolute; right: .2rem; top: .9rem; font-family: var(--f-pixel); font-size: 1.4rem; color: var(--lav); }
+.faq details[open] summary::after { content: "-"; }
+.faq .a { padding: 0 0 1.3rem; color: var(--muted); max-width: 64ch; display: grid; gap: .7rem; }
+.faq .a strong { color: var(--fg); }
+
+/* ---------- credits ---------- */
+.credits-wrap { overflow-x: auto; }
+.credits { width: 100%; border-collapse: collapse; font-size: .95rem; min-width: 36rem; }
+.credits th, .credits td { text-align: left; padding: .75rem .9rem .75rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.credits th { font-family: var(--f-pixel); font-weight: 400; letter-spacing: .06em; font-size: .8rem; color: var(--muted); }
+.credits td:first-child { font-weight: 600; white-space: nowrap; }
+.credits td:last-child { font-family: var(--f-mono); font-size: .85rem; white-space: nowrap; color: var(--lav); }
+.credits td { color: var(--muted); }
+.credits td:first-child a { color: var(--fg); }
+.legal { margin-top: 2rem; display: grid; gap: .8rem; color: var(--muted); font-size: .9rem; max-width: 70ch; }
+.free { font-family: var(--f-pixel); letter-spacing: .06em; font-size: 1.1rem; color: var(--fg); }
+
+/* ---------- footer ---------- */
+footer { border-top: 1px solid var(--line); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; padding-block: 2rem 2.5rem; font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); }
+footer .mark { width: 7rem; }
+footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+
+/* ---------- narrow ---------- */
+@media (max-width: 64rem) {
+  .engines, .cast { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .feats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 48rem) {
+  .hero .wrap { grid-template-columns: minmax(0, 1fr); }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .feats { grid-template-columns: minmax(0, 1fr); }
+  .bar nav { display: none; }
+}
+@media (max-width: 40rem) {
+  .credits { min-width: 0; }
+  .credits thead { display: none; }
+  .credits tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .2rem 1rem; padding-block: .8rem; border-bottom: 1px solid var(--line); }
+  .credits td { border: 0; padding: 0; }
+  .credits td:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+  .credits td:first-child { white-space: normal; }
+}
+@media (max-width: 30rem) {
+  .engines { grid-template-columns: minmax(0, 1fr); }
+  .cast { gap: 1.25rem .75rem; }
+  .btn { flex: 1 1 100%; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <div class="id"><span class="dot" aria-hidden="true"></span>KARMA / FM-1</div>
+    <nav aria-label="Sections">
+      <a href="#start">Start</a><a href="#inside">Inside</a><a href="#cast">Characters</a><a href="#faq">FAQ</a><a href="#credits">Credits</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="hero">
+  <div class="wrap">
+    <div class="hero-copy">
+      <svg class="mark" viewBox="0 0 29 7" role="img" aria-labelledby="mark-t"><title id="mark-t">KARMA</title><g class="k1"><rect x="0" y="0" width=".86" height=".86"/><rect x="4" y="0" width=".86" height=".86"/><rect x="0" y="1" width=".86" height=".86"/><rect x="3" y="1" width=".86" height=".86"/><rect x="0" y="2" width=".86" height=".86"/><rect x="2" y="2" width=".86" height=".86"/><rect x="0" y="3" width=".86" height=".86"/><rect x="1" y="3" width=".86" height=".86"/><rect x="0" y="4" width=".86" height=".86"/><rect x="2" y="4" width=".86" height=".86"/><rect x="0" y="5" width=".86" height=".86"/><rect x="3" y="5" width=".86" height=".86"/><rect x="0" y="6" width=".86" height=".86"/><rect x="4" y="6" width=".86" height=".86"/></g><g class="k2"><rect x="7" y="0" width=".86" height=".86"/><rect x="8" y="0" width=".86" height=".86"/><rect x="9" y="0" width=".86" height=".86"/><rect x="6" y="1" width=".86" height=".86"/><rect x="10" y="1" width=".86" height=".86"/><rect x="6" y="2" width=".86" height=".86"/><rect x="10" y="2" width=".86" height=".86"/><rect x="6" y="3" width=".86" height=".86"/><rect x="7" y="3" width=".86" height=".86"/><rect x="8" y="3" width=".86" height=".86"/><rect x="9" y="3" width=".86" height=".86"/><rect x="10" y="3" width=".86" height=".86"/><rect x="6" y="4" width=".86" height=".86"/><rect x="10" y="4" width=".86" height=".86"/><rect x="6" y="5" width=".86" height=".86"/><rect x="10" y="5" width=".86" height=".86"/><rect x="6" y="6" width=".86" height=".86"/><rect x="10" y="6" width=".86" height=".86"/></g><g class="k3"><rect x="12" y="0" width=".86" height=".86"/><rect x="13" y="0" width=".86" height=".86"/><rect x="14" y="0" width=".86" height=".86"/><rect x="15" y="0" width=".86" height=".86"/><rect x="12" y="1" width=".86" height=".86"/><rect x="16" y="1" width=".86" height=".86"/><rect x="12" y="2" width=".86" height=".86"/><rect x="16" y="2" width=".86" height=".86"/><rect x="12" y="3" width=".86" height=".86"/><rect x="13" y="3" width=".86" height=".86"/><rect x="14" y="3" width=".86" height=".86"/><rect x="15" y="3" width=".86" height=".86"/><rect x="12" y="4" width=".86" height=".86"/><rect x="14" y="4" width=".86" height=".86"/><rect x="12" y="5" width=".86" height=".86"/><rect x="15" y="5" width=".86" height=".86"/><rect x="12" y="6" width=".86" height=".86"/><rect x="16" y="6" width=".86" height=".86"/></g><g class="k4"><rect x="18" y="0" width=".86" height=".86"/><rect x="22" y="0" width=".86" height=".86"/><rect x="18" y="1" width=".86" height=".86"/><rect x="19" y="1" width=".86" height=".86"/><rect x="21" y="1" width=".86" height=".86"/><rect x="22" y="1" width=".86" height=".86"/><rect x="18" y="2" width=".86" height=".86"/><rect x="20" y="2" width=".86" height=".86"/><rect x="22" y="2" width=".86" height=".86"/><rect x="18" y="3" width=".86" height=".86"/><rect x="20" y="3" width=".86" height=".86"/><rect x="22" y="3" width=".86" height=".86"/><rect x="18" y="4" width=".86" height=".86"/><rect x="22" y="4" width=".86" height=".86"/><rect x="18" y="5" width=".86" height=".86"/><rect x="22" y="5" width=".86" height=".86"/><rect x="18" y="6" width=".86" height=".86"/><rect x="22" y="6" width=".86" height=".86"/></g><g class="k5"><rect x="25" y="0" width=".86" height=".86"/><rect x="26" y="0" width=".86" height=".86"/><rect x="27" y="0" width=".86" height=".86"/><rect x="24" y="1" width=".86" height=".86"/><rect x="28" y="1" width=".86" height=".86"/><rect x="24" y="2" width=".86" height=".86"/><rect x="28" y="2" width=".86" height=".86"/><rect x="24" y="3" width=".86" height=".86"/><rect x="25" y="3" width=".86" height=".86"/><rect x="26" y="3" width=".86" height=".86"/><rect x="27" y="3" width=".86" height=".86"/><rect x="28" y="3" width=".86" height=".86"/><rect x="24" y="4" width=".86" height=".86"/><rect x="28" y="4" width=".86" height=".86"/><rect x="24" y="5" width=".86" height=".86"/><rect x="28" y="5" width=".86" height=".86"/><rect x="24" y="6" width=".86" height=".86"/><rect x="28" y="6" width=".86" height=".86"/></g></svg>
+      <h1>Four tracks, a drum synth and a small cast of characters for your FM-1.</h1>
+      <p class="sub">KARMA is free custom firmware for the M-VAVE FM-1. An acid bass or a Juno, physical modelling, two dozen synthesis models, a drum synthesizer, a 64-step sequencer and generators that keep writing while you play. It runs in your browser today.</p>
+      <div class="ctas">
+        <a class="btn go" href="emu/">TRY IN THE BROWSER<small>Live now · the real firmware</small></a>
+        <a class="btn soon" href="webapp/installer/" aria-describedby="soon-note">INSTALL<small id="soon-note">Soon · after hardware testing</small></a>
+        <a class="btn plain" href="webapp/editor/">EDITOR<small>Sounds, kits, projects</small></a>
+      </div>
+      <div class="meta"><span>Free forever</span><span>GPL-3.0-only</span><span>Not for sale</span></div>
+    </div>
+
+    <figure class="device" aria-label="An FM-1 showing KARMA's screens">
+      <div class="top"><span>FM-1 · KARMA</span><span class="knobs" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
+      <div class="screen"><img id="hero-shot" src="img/acid.png" width="720" height="720" alt="Track 1, ACID: the laughing Buddha sits on the bass line, with the WAVE, CUT, RES and ENV knobs below."></div>
+      <div class="tracks" role="group" aria-label="Show a track">
+        <button type="button" data-k="acid" aria-pressed="true">1</button>
+        <button type="button" data-k="elements" aria-pressed="false">2</button>
+        <button type="button" data-k="plaits" aria-pressed="false">3</button>
+        <button type="button" data-k="drums" aria-pressed="false">DRUM</button>
+      </div>
+      <figcaption id="hero-cap">Track 1 · ACID. The Buddha laughs along with the bass line.</figcaption>
+    </figure>
+  </div>
+</div>
+
+<div class="status">
+  <div class="wrap">
+    <b>STATUS</b>
+    <p><strong>Hardware testing starts this week</strong>, when the first FM-1 unit arrives. Until it passes, the installer stays closed. The browser simulator runs the same firmware and is open now.</p>
+  </div>
+</div>
+
+<section id="start">
+  <div class="wrap">
+    <div class="head">
+      <span class="tag c4">START</span>
+      <h2>Three steps, in this order</h2>
+    </div>
+    <ol class="steps">
+      <li>
+        <span class="n c4">1</span>
+        <h3>Try it in the browser</h3>
+        <p>The simulator runs the actual KARMA firmware on a drawn FM-1. Play it with your keyboard, plug in a MIDI controller, record a video of the screen with sound, and save your patterns to open later.</p>
+        <a class="more" href="emu/">Open the simulator →</a>
+      </li>
+      <li>
+        <span class="n" style="color:var(--muted)">2</span>
+        <h3>Install it on your FM-1 <span class="pill">soon</span></h3>
+        <p>A web installer flashes KARMA over USB from Chrome or Edge, with no tools to download. It opens once the firmware has been tested on real hardware. The same page will put the official firmware back.</p>
+        <a class="more" href="webapp/installer/">Installer page (not available yet) →</a>
+      </li>
+      <li>
+        <span class="n c1">3</span>
+        <h3>Edit and back up</h3>
+        <p>The web editor connects to the FM-1 over USB to edit sounds, sequences, songs, drum kits and settings, and saves your projects to files on the computer.</p>
+        <a class="more" href="webapp/editor/">Open the editor →</a>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="inside">
+  <div class="wrap">
+    <div class="head">
+      <span class="tag cl">INSIDE</span>
+      <h2>Four tracks, each with its own engine</h2>
+      <p class="lede">Every track plays at once from the same 64-step sequencer. Each one keeps its colour across the screens, the LEDs and this page.</p>
+    </div>
+
+    <div class="engines">
+      <article class="eng c1">
+        <div class="shot"><img src="img/acid.png" width="720" height="720" loading="lazy" alt="ACID edit page: WAVE SAW, CUT 31, RES 79, ENV 63, with the Buddha."></div>
+        <span class="tag c1">TRACK 1</span>
+        <h3>ACID or JUNO</h3>
+        <span class="who">303 voice from X0X · Juno voice from FM-106</span>
+        <p>ACID is a TB-303 voice with accents and slides. JUNO is a Juno-106 style polysynth: DCO, an IR3109-style ladder filter and BBD chorus, up to six voices.</p>
+      </article>
+      <article class="eng c2">
+        <div class="shot"><img src="img/elements.png" width="720" height="720" loading="lazy" alt="ELEMENTS body page: model PICK, strike 91, brightness 55, damping 63, with the gorilla on congas."></div>
+        <span class="tag c2">TRACK 2</span>
+        <h3>ELEMENTS</h3>
+        <span class="who">Built on Mutable Instruments' open-source Elements code</span>
+        <p>Physical modelling. Strike, pluck, bow or blow a modal resonator and shape its body. The Ominous Voice is in here too.</p>
+      </article>
+      <article class="eng c3">
+        <div class="shot"><img src="img/plaits.png" width="720" height="720" loading="lazy" alt="PLAITS tone page: model FOLD, with the flying saucer beaming down."></div>
+        <span class="tag c3">TRACK 3</span>
+        <h3>PLAITS</h3>
+        <span class="who">Built on Mutable Instruments' open-source Plaits code</span>
+        <p>24 synthesis models: virtual analog, waveshaping, FM and 6-op FM, grain, wave terrain, string machine, chiptune, strings, modal, speech, particle and analog drums.</p>
+      </article>
+      <article class="eng c4">
+        <div class="shot"><img src="img/hex.png" width="720" height="720" loading="lazy" alt="HEX drum synth page: a kick's decaying waveform with P.AMT, P.DEC, RATIO and FM knobs."></div>
+        <span class="tag c4">DRUM</span>
+        <h3>HEX drum synth</h3>
+        <span class="who">An LXR-style drum synthesizer, no samples</span>
+        <p>Kick, snare, clap, cymbal and hat models, synthesised as they play. Several kits ship with it, plus four user kits for your own.</p>
+      </article>
+    </div>
+
+    <div class="feats">
+      <div class="feat">
+        <span class="lbl">SEQUENCER</span>
+        <h3>64 steps per track</h3>
+        <ul>
+          <li>Chords of up to <b>4 notes</b> on a step</li>
+          <li>Ratchets, accents, slides</li>
+          <li>A chance condition per step</li>
+          <li>PLAY modes: forward, reverse, pendulum, random, walk, chance, jump, stride</li>
+          <li>A song arranger to chain sections</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <span class="lbl">GENERATORS</span>
+        <h3>Loops that write themselves</h3>
+        <ul>
+          <li><b>GEN</b> writes each synth track's part and keeps it evolving as it plays. Press a key on its page and the whole band moves to that key.</li>
+          <li><b>ACID GEN</b> writes acid lines with the TB-3PO generator.</li>
+          <li><b>DRUM GEN</b> reads a Grids-style drum map with X/Y and a density per lane, or makes Euclidean rhythms.</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <span class="lbl">HARMONY</span>
+        <h3>One key for the whole band</h3>
+        <ul>
+          <li>Set a <b>KEY</b>, a <b>MODE</b> and a chord <b>PROGRESSION</b>, and every GEN track follows it.</li>
+          <li>Each track plays its role: an acid <b>bass</b> on the roots, a voice-led <b>line</b> of chord tones, a <b>lead</b> motif that develops over four bars.</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <span class="lbl">EFFECTS</span>
+        <h3>CLOUD, reverb, delay, punch-in</h3>
+        <ul>
+          <li><b>CLOUD</b>, a granular effect built on the open-source code of Mutable Instruments' Clouds, as a send from each track and each drum sound</li>
+          <li>Reverb and delay</li>
+          <li>Punch-in performance effects held on the keys: loops, stutter, filters, freeze and more</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <span class="lbl">USB</span>
+        <h3>Audio interface and MIDI</h3>
+        <ul>
+          <li>Class-compliant stereo USB audio at 44.1 or 48 kHz</li>
+          <li>USB MIDI in and out</li>
+          <li>Per-track <b>STEMS</b> over USB: coming next, in progress</li>
+        </ul>
+      </div>
+      <div class="feat">
+        <span class="lbl">CONTROLLERS</span>
+        <h3>Bring your own knobs</h3>
+        <ul>
+          <li>Map a MIDI controller to the FM-1's eight rotaries. An Akai MPK mini's eight knobs line up one to one.</li>
+          <li>In the simulator, Web MIDI works when you run it from your own computer.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="cast">
+  <div class="wrap">
+    <div class="head">
+      <span class="tag c2">CHARACTERS</span>
+      <h2>Every screen has somebody on it</h2>
+      <p class="lede">The pixel art is drawn for KARMA, in the spirit of the OP-1's playful screens. The characters react to the notes you play. These are real screens, rendered from the firmware.</p>
+    </div>
+    <div class="cast">
+      <figure><div class="scr"><img src="img/home.png" width="720" height="720" loading="lazy" alt="HOME page with two tape reels and the four tracks listed."></div><figcaption><b>HOME</b>Tape reels turn while the song plays.</figcaption></figure>
+      <figure><div class="scr"><img src="img/acid.png" width="720" height="720" loading="lazy" alt="The laughing Buddha on the ACID page."></div><figcaption><b>THE BUDDHA</b>Laughs with the acid bass on track 1.</figcaption></figure>
+      <figure><div class="scr"><img src="img/elements.png" width="720" height="720" loading="lazy" alt="A gorilla playing two congas on the ELEMENTS page."></div><figcaption><b>THE GORILLA</b>Plays congas for ELEMENTS.</figcaption></figure>
+      <figure><div class="scr"><img src="img/plaits.png" width="720" height="720" loading="lazy" alt="A flying saucer with a light beam on the PLAITS page."></div><figcaption><b>THE SAUCER</b>Hovers over PLAITS and beams down each note.</figcaption></figure>
+      <figure><div class="scr"><img src="img/drums.png" width="720" height="720" loading="lazy" alt="A drummer with headphones behind a full kit, above the step row."></div><figcaption><b>THE DRUMMER</b>Hits what the drum track plays.</figcaption></figure>
+      <figure><div class="scr"><img src="img/cloud.png" width="720" height="720" loading="lazy" alt="A wizard casting a spell on the CLOUD send page."></div><figcaption><b>THE WIZARD</b>Casts the effects on the FX and CLOUD pages.</figcaption></figure>
+      <figure><div class="scr"><img src="img/mixer.png" width="720" height="720" loading="lazy" alt="The mixer: four characters on podiums above their level meters."></div><figcaption><b>THE MIXER</b>The whole band on podiums, one per track.</figcaption></figure>
+      <figure><div class="scr"><img src="img/steps.png" width="720" height="720" loading="lazy" alt="The step page with chords written on several steps."></div><figcaption><b>STEPS</b>Notes and chords, 16 steps to a page.</figcaption></figure>
+      <figure><div class="scr"><img src="img/punch.png" width="720" height="720" loading="lazy" alt="The PUNCH layer: every white key labelled with an effect, like LOOP 4, STUTT, FREEZE."></div><figcaption><b>PUNCH</b>Hold FX and every key is a performance effect.</figcaption></figure>
+      <figure><div class="scr"><img src="img/drumgen.png" width="720" height="720" loading="lazy" alt="DRUM GEN page: kick, snare and hats lanes with MAP X, MAP Y and CHAOS."></div><figcaption><b>DRUM GEN</b>Move through the drum map with X and Y.</figcaption></figure>
+      <figure><div class="scr"><img src="img/gen.png" width="720" height="720" loading="lazy" alt="GEN page on the JUNO track: generated notes with DRIFT, DENS and RANGE."></div><figcaption><b>GEN</b>A loop that rewrites itself as it plays.</figcaption></figure>
+      <figure><div class="scr"><img src="img/hex.png" width="720" height="720" loading="lazy" alt="HEX drum synth page showing the kick waveform."></div><figcaption><b>HEX</b>Shape every drum sound from its synth parameters.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="head">
+      <span class="tag c1">FAQ</span>
+      <h2>Before you install</h2>
+    </div>
+    <div class="faq">
+      <details open>
+        <summary>Can I go back to the official firmware?</summary>
+        <div class="a"><p>Yes. The installer will offer M-VAVE's official V15 firmware alongside KARMA, so going back is the same few clicks as going forward.</p></div>
+      </details>
+      <details>
+        <summary>What do I need to install it?</summary>
+        <div class="a"><p><strong>Chrome or Edge</strong> on a computer (the installer uses WebUSB, which other browsers do not offer), and a <strong>USB cable that carries data</strong>. Many cables that come with chargers only carry power, and the FM-1 will not show up with one of those.</p></div>
+      </details>
+      <details>
+        <summary>I run FM1 Open or another custom firmware. What should I do?</summary>
+        <div class="a"><p>Return to the official V15 firmware first, then install KARMA from there. Going from one custom firmware straight to another is not tested.</p></div>
+      </details>
+      <details>
+        <summary>When can I install it?</summary>
+        <div class="a"><p>After hardware testing. The first FM-1 unit arrives in a few days, and the installer opens once KARMA has been checked on it. Until then, the browser simulator runs the same firmware.</p></div>
+      </details>
+      <details>
+        <summary>Does it cost anything?</summary>
+        <div class="a"><p>No. KARMA is free and will stay free. It is licensed GPL-3.0-only, the source is public, and it is never for sale.</p></div>
+      </details>
+      <details>
+        <summary>Can I use it as an audio interface?</summary>
+        <div class="a"><p>Yes. Over USB the FM-1 shows up as a class-compliant stereo audio interface at 44.1 or 48 kHz, and as a MIDI device. Separate stems per track are being built now.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<section id="credits">
+  <div class="wrap">
+    <div class="head">
+      <span class="tag c3">CREDITS</span>
+      <h2>Built on other people's open work</h2>
+      <p class="lede">KARMA is made by Ariel Muchnik, with Claude. It stands on the code below; each part keeps its own licence.</p>
+    </div>
+    <div class="credits-wrap">
+      <table class="credits">
+        <thead><tr><th>PROJECT</th><th>WHAT KARMA USES</th><th>LICENCE</th></tr></thead>
+        <tbody>
+          <tr><td><a href="https://github.com/hugelton/Felucca">Felucca</a></td><td>The firmware KARMA is based on, by Leo Kuroshita, Hügelton Instruments</td><td>GPL-3.0</td></tr>
+          <tr><td><a href="https://github.com/isod89/sloop-fm1">SLOOP</a></td><td>The Felucca fork KARMA grew from, by isod89</td><td>GPL-3.0</td></tr>
+          <tr><td><a href="https://github.com/charlesvestal/fm1-x0x">X0X</a></td><td>Charles Vestal's TB-303 voice (after Open303, MIT) and his port of TB-3PO from the Phazerville Hemisphere suite</td><td>GPL-3.0</td></tr>
+          <tr><td><a href="https://github.com/PatttF/fm-106">FM-106</a></td><td>PatttF's Juno-106 voice, after ultramaster KR-106</td><td>GPL-3.0</td></tr>
+          <tr><td><a href="https://github.com/pichenettes/eurorack">Plaits, Elements, Clouds</a></td><td>Open-source code by Émilie Gillet for Mutable Instruments: the PLAITS models, the ELEMENTS exciters and Ominous Voice, the CLOUD granular effect</td><td>MIT</td></tr>
+          <tr><td><a href="https://github.com/pichenettes/eurorack">Grids</a></td><td>Émilie Gillet's drum maps, read by DRUM GEN</td><td>GPL-3.0</td></tr>
+          <tr><td><a href="https://juanjiant-bit.github.io/JIANT/">JIANT FM</a></td><td>The idea of one chord plan for every generated part (and its pitch helpers), and the approach to USB stems, from Juan Jiant's FM-1 firmware</td><td>GPL-3.0</td></tr>
+          <tr><td>DotGothic16</td><td>The pixel font on this page's labels, by the DotGothic16 Project Authors</td><td><a href="fonts/OFL.txt">OFL-1.1</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legal">
+      <p class="free">FREE FOREVER. NEVER FOR SALE.</p>
+      <p>KARMA is free software under the <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU General Public License, version 3 only</a>. You may use, study, change and share it. If you pass on KARMA or firmware made from it, pass on its complete source under the same licence.</p>
+      <p>KARMA is not affiliated with or endorsed by M-VAVE, Mutable Instruments, Korg, Teenage Engineering, Hügelton Instruments or Juan Jiant. M-VAVE and FM-1 are trademarks of their owners. Mutable Instruments is a registered trademark; KARMA uses the open-source code of its modules and is not a Mutable Instruments product.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <svg class="mark" viewBox="0 0 29 7" aria-hidden="true"><g class="k1"><rect x="0" y="0" width=".86" height=".86"/><rect x="4" y="0" width=".86" height=".86"/><rect x="0" y="1" width=".86" height=".86"/><rect x="3" y="1" width=".86" height=".86"/><rect x="0" y="2" width=".86" height=".86"/><rect x="2" y="2" width=".86" height=".86"/><rect x="0" y="3" width=".86" height=".86"/><rect x="1" y="3" width=".86" height=".86"/><rect x="0" y="4" width=".86" height=".86"/><rect x="2" y="4" width=".86" height=".86"/><rect x="0" y="5" width=".86" height=".86"/><rect x="3" y="5" width=".86" height=".86"/><rect x="0" y="6" width=".86" height=".86"/><rect x="4" y="6" width=".86" height=".86"/></g><g class="k2"><rect x="7" y="0" width=".86" height=".86"/><rect x="8" y="0" width=".86" height=".86"/><rect x="9" y="0" width=".86" height=".86"/><rect x="6" y="1" width=".86" height=".86"/><rect x="10" y="1" width=".86" height=".86"/><rect x="6" y="2" width=".86" height=".86"/><rect x="10" y="2" width=".86" height=".86"/><rect x="6" y="3" width=".86" height=".86"/><rect x="7" y="3" width=".86" height=".86"/><rect x="8" y="3" width=".86" height=".86"/><rect x="9" y="3" width=".86" height=".86"/><rect x="10" y="3" width=".86" height=".86"/><rect x="6" y="4" width=".86" height=".86"/><rect x="10" y="4" width=".86" height=".86"/><rect x="6" y="5" width=".86" height=".86"/><rect x="10" y="5" width=".86" height=".86"/><rect x="6" y="6" width=".86" height=".86"/><rect x="10" y="6" width=".86" height=".86"/></g><g class="k3"><rect x="12" y="0" width=".86" height=".86"/><rect x="13" y="0" width=".86" height=".86"/><rect x="14" y="0" width=".86" height=".86"/><rect x="15" y="0" width=".86" height=".86"/><rect x="12" y="1" width=".86" height=".86"/><rect x="16" y="1" width=".86" height=".86"/><rect x="12" y="2" width=".86" height=".86"/><rect x="16" y="2" width=".86" height=".86"/><rect x="12" y="3" width=".86" height=".86"/><rect x="13" y="3" width=".86" height=".86"/><rect x="14" y="3" width=".86" height=".86"/><rect x="15" y="3" width=".86" height=".86"/><rect x="12" y="4" width=".86" height=".86"/><rect x="14" y="4" width=".86" height=".86"/><rect x="12" y="5" width=".86" height=".86"/><rect x="15" y="5" width=".86" height=".86"/><rect x="12" y="6" width=".86" height=".86"/><rect x="16" y="6" width=".86" height=".86"/></g><g class="k4"><rect x="18" y="0" width=".86" height=".86"/><rect x="22" y="0" width=".86" height=".86"/><rect x="18" y="1" width=".86" height=".86"/><rect x="19" y="1" width=".86" height=".86"/><rect x="21" y="1" width=".86" height=".86"/><rect x="22" y="1" width=".86" height=".86"/><rect x="18" y="2" width=".86" height=".86"/><rect x="20" y="2" width=".86" height=".86"/><rect x="22" y="2" width=".86" height=".86"/><rect x="18" y="3" width=".86" height=".86"/><rect x="20" y="3" width=".86" height=".86"/><rect x="22" y="3" width=".86" height=".86"/><rect x="18" y="4" width=".86" height=".86"/><rect x="22" y="4" width=".86" height=".86"/><rect x="18" y="5" width=".86" height=".86"/><rect x="22" y="5" width=".86" height=".86"/><rect x="18" y="6" width=".86" height=".86"/><rect x="22" y="6" width=".86" height=".86"/></g><g class="k5"><rect x="25" y="0" width=".86" height=".86"/><rect x="26" y="0" width=".86" height=".86"/><rect x="27" y="0" width=".86" height=".86"/><rect x="24" y="1" width=".86" height=".86"/><rect x="28" y="1" width=".86" height=".86"/><rect x="24" y="2" width=".86" height=".86"/><rect x="28" y="2" width=".86" height=".86"/><rect x="24" y="3" width=".86" height=".86"/><rect x="25" y="3" width=".86" height=".86"/><rect x="26" y="3" width=".86" height=".86"/><rect x="27" y="3" width=".86" height=".86"/><rect x="28" y="3" width=".86" height=".86"/><rect x="24" y="4" width=".86" height=".86"/><rect x="28" y="4" width=".86" height=".86"/><rect x="24" y="5" width=".86" height=".86"/><rect x="28" y="5" width=".86" height=".86"/><rect x="24" y="6" width=".86" height=".86"/><rect x="28" y="6" width=".86" height=".86"/></g></svg>
+    <span>KARMA · free FM-1 firmware · GPL-3.0-only · by Ariel Muchnik, with Claude</span>
+    <nav aria-label="Tools"><a href="emu/">Simulator</a><a href="webapp/installer/">Installer (soon)</a><a href="webapp/editor/">Editor</a></nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var shots = {
+    acid: { src: "img/acid.png", alt: "Track 1, ACID: the laughing Buddha sits on the bass line, with the WAVE, CUT, RES and ENV knobs below.", cap: "Track 1 · ACID. The Buddha laughs along with the bass line." },
+    elements: { src: "img/elements.png", alt: "Track 2, ELEMENTS: a gorilla plays two congas.", cap: "Track 2 · ELEMENTS. The gorilla plays congas on every strike." },
+    plaits: { src: "img/plaits.png", alt: "Track 3, PLAITS: a flying saucer beams down a note.", cap: "Track 3 · PLAITS. The saucer beams down each note." },
+    drums: { src: "img/drums.png", alt: "The DRUM track: a drummer behind a full kit above the step row.", cap: "DRUM · HEX. The drummer hits what the sequencer plays." }
+  };
+  var order = ["acid", "elements", "plaits", "drums"];
+  var img = document.getElementById("hero-shot");
+  var cap = document.getElementById("hero-cap");
+  var btns = document.querySelectorAll(".tracks button");
+  var i = 0, timer = null;
+  order.forEach(function (k) { var p = new Image(); p.src = shots[k].src; });
+  function show(k) {
+    var s = shots[k]; if (!s) return;
+    img.src = s.src; img.alt = s.alt; cap.textContent = s.cap; i = order.indexOf(k);
+    btns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.k === k)); });
+  }
+  btns.forEach(function (b) {
+    b.addEventListener("click", function () { if (timer) { clearInterval(timer); timer = null; } show(b.dataset.k); });
+  });
+  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!still) timer = setInterval(function () { show(order[(i + 1) % order.length]); }, 3200);
+})();
+</script>
+</body>
+</html>
