@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+ * Portions Copyright (C) 2026 Juan Ignacio Antonucci (Juan Jiant): the USB STEMS mode (after JIANT FM 0.7.1 .. 0.9.12) */
 /* USB full-speed device on USB0: a class-compliant USB-MIDI interface.
  * All SIE traffic happens in usb_poll(), called from the TIMER5 ISR at 2 kHz,
  * so INDEX is never shared and no USB IRQ is needed. MIDI in goes to a ring
@@ -18,7 +19,12 @@
  * phones and apps that only take 48 kHz: the host picks the rate with SET_CUR (two discrete rates in the one alt
  * setting). The engines stay at 44.1 kHz; at 48 kHz uac_tap48 resamples (a polyphase FIR 160 / 147, uac_fir.h:
  * 12 taps a phase, Q15, Felucca's 24 x Q30 made smaller) into the ring. 44.1 kHz, the rate until a host asks
- * for another, sends the samples as before, bit for bit. */
+ * for another, sends the samples as before, bit for bit.
+ * KARMA 3.0, after JIANT FM (Juan Jiant, GPL-3.0-only): menu USB AUDIO = STEMS (at the next start, as USB SERIAL): the
+ * audio input as 6 channels, 44.1 kHz only: tracks 1, 2, 3 and the drums mono, then the FX return L R (fx.c
+ * stem_buf, stem_fx: before the master), so a DAW records each part on its own. A device of its own (bcdDevice
+ * + 0x40, no console); its ring 3 words a frame, sharing the console's buffer (no console with it). Packets are
+ * queued at every TIMER5 tick (10 kHz), not only at 2 kHz: a stems packet is on the wire ~0.4 ms. */
 #include "../hal/fm1_usb.h"   /* registers; relative, so the loader and the host tests find it too */
 #ifndef FELUCCA_CDC
 #define FELUCCA_CDC 0
@@ -49,7 +55,11 @@ static uint8_t ep3rx[64 + 4] __attribute__((aligned(4)));
 /* serial rings: in = host -> console (ISR writes), out = console -> host (ISR reads) */
 #define CI_N 256u
 #define CO_N 2048u
+#if FELUCCA_UAC
+static uint8_t cdc_in[CI_N];     /* (cdc_out: in the audio ring's memory, below) */
+#else
 static uint8_t cdc_in[CI_N], cdc_out[CO_N];
+#endif
 static volatile uint32_t ci_w, ci_r, co_w, co_r;
 static struct {
     uint8_t line[7];             /* line coding: just stored and echoed back */
@@ -88,9 +98,38 @@ _Static_assert(UA_HI48 + UA_REND48 + UA_MAXF < UA_N, "the ring holds the band, a
 #endif
 #define UAC_MAXP (UA_MAXF * 4u)
 _Static_assert(UA_HI + HALF_FRAMES + UA_MAXF < UA_N, "the ring holds the band, a render and a packet");
-static uint32_t ua_ring[UA_N];
+/* STEMS: 6 channels of 16 bit, 3 words a frame; 46 frames a packet at most (44.1's 45 + 1: 552 bytes, JIANT 0.9.8) */
+#define UA_WS 3u
+#define UA_NFS 440u              /* the stems ring's frames (a modulo by a constant: a multiply) */
+#define UA_MAXFS 46u
+#define UAC_MAXPS (UA_MAXFS * 12u)
+_Static_assert(UA_HI + HALF_FRAMES + UA_MAXFS < UA_NFS, "the stems ring holds the band, a render and a packet");
+#if FELUCCA_CDC
+#define UA_CDCW (CO_N / 4u)      /* the console's output after the stereo ring: the stems ring takes both */
+#else
+#define UA_CDCW 0u
+#endif
+#ifndef FELUCCA_UAC_STEMS
+#define FELUCCA_UAC_STEMS (!FM1_AUDIO_RX_CLOCK)   /* (the RX-clocked fallback build has no RAM for the stems ring) */
+#endif
+#if FELUCCA_UAC_STEMS
+#define UA_MEMW (UA_NFS * UA_WS > UA_N + UA_CDCW ? UA_NFS * UA_WS : UA_N + UA_CDCW)
+#define UA_TXW (UA_MAXFS * UA_WS > UA_MAXF ? UA_MAXFS * UA_WS : UA_MAXF)
+#else
+#define UA_MEMW (UA_N + UA_CDCW)
+#define UA_TXW UA_MAXF
+#endif
+static uint32_t ua_ring[UA_MEMW];
+#if FELUCCA_CDC
+#define cdc_out ((uint8_t *)&ua_ring[UA_N])
+#endif
+static uint8_t usb_stems;        /* this start presents the stems (main.c, from the menu, before usb_start) */
+#define USB_STEMS_NOW usb_stems
+#define UA_FW (usb_stems ? UA_WS : 1u)                  /* words a frame */
+#define UA_NF (usb_stems ? UA_NFS : UA_N)               /* frames in the ring */
+static inline uint32_t ua_slot(uint32_t f) { return usb_stems ? f % UA_NFS : f & (UA_N - 1u); }
 static volatile uint32_t ua_w, ua_r;
-static uint32_t ep4tx[UA_MAXF] __attribute__((aligned(4)));
+static uint32_t ep4tx[UA_TXW] __attribute__((aligned(4)));
 static struct {
     volatile uint8_t alt;        /* streaming interface setting: 1 = the host records */
     volatile uint8_t r48;        /* the host's rate (SET_CUR): 1 = 48 kHz, 0 = 44.1 (bus reset) */
@@ -103,7 +142,8 @@ static struct {
     uint8_t e0_rx;               /* SET_CUR sampling frequency: data stage pending */
     volatile uint32_t fill_min;  /* ring fill when the last render started */
     uint32_t acc;                /* 44.1 frames per ms: 0.1 frame steps */
-    uint32_t last;               /* the last frame sent, repeated on an underrun */
+    uint32_t last[UA_WS];        /* the last frame sent, repeated on an underrun */
+    uint32_t owe, repaid;        /* frames an underrun repeated, not yet made up; made up (JIANT 0.8.9) */
     uint32_t starts, pkts, frames;               /* frames in packets sent from the ring */
     uint32_t underruns, overruns, missed;        /* glitches: ring empty (repeat), ring full (drop), no packet ready */
     uint32_t stalls;                             /* the host stopped reading for > 20 ms (alt still 1) */
@@ -264,6 +304,39 @@ static int usb_cdc_now(void) { return usb_cdc_on; }   /* (the menu: what this st
 #else
 static int usb_cdc_now(void) { return 0; }
 #endif
+#if FELUCCA_UAC
+/* KARMA 3.0 (after JIANT FM 0.7.1): menu USB AUDIO = STEMS, a device of its own: class 0, no IAD, no console, the
+ * audio function with 6 channels (input terminal 1: 6 ch, no spatial positions; type I: 6 ch, 16 bit, 44100 Hz
+ * only; EP4 IN 552 bytes), bcdDevice + 0x40 so a host never reuses what it learnt about the stereo one */
+#define CFG_STEMS_LEN (9 + 40 + 74 + 52)
+static const uint8_t DEV_DESC_STEMS[18] = {18, 1, 0x10, 0x01, 0, 0, 0, 64, 0x09, 0x12, 0x01, 0x00,
+                                           0x40 + 0x10 * (FELUCCA_UAC + FELUCCA_UAC_48K), 0x03, 1, 2, 0, 1};
+static const uint8_t CFG_DESC_STEMS[] = {
+    9, 2, CFG_STEMS_LEN & 0xFF, CFG_STEMS_LEN >> 8, 3, 1, 0, 0x80, 50,
+    9, 4, 0, 0, 0, 1, 1, 0, 0,
+    10, 0x24, 1, 0x00, 0x01, 31, 0, 2, 1, 2,             /* AC header 1.00: MIDI + audio streaming */
+    12, 0x24, 2, 1, 0x03, 0x06, 0, 6, 0x00, 0x00, 0, 0,  /* input terminal 1: line, 6 ch */
+    9, 0x24, 3, 2, 0x01, 0x01, 0, 1, 0,                  /* output terminal 2: USB streaming, from 1 */
+    9, 4, 1, 0, 2, 1, 3, 0, 0,
+    7, 0x24, 1, 0x00, 0x01, 0x41, 0x00,
+    6, 0x24, 2, 1, 1, 0,
+    6, 0x24, 2, 2, 2, 0,
+    9, 0x24, 3, 1, 3, 1, 2, 1, 0,
+    9, 0x24, 3, 2, 4, 1, 1, 1, 0,
+    9, 5, 0x01, 2, 64, 0, 0, 0, 0,
+    5, 0x25, 1, 1, 1,
+    9, 5, 0x81, 2, 64, 0, 0, 0, 0,
+    5, 0x25, 1, 1, 3,
+    9, 4, 2, 0, 0, 1, 2, 0, 0,                           /* IF2 audio streaming, alt 0 */
+    9, 4, 2, 1, 1, 1, 2, 0, 0,                           /* alt 1: the stream */
+    7, 0x24, 1, 2, 1, 0x01, 0x00,                        /* AS general: terminal 2, delay 1, PCM */
+    11, 0x24, 2, 1, 6, 2, 16, 1, 0x44, 0xAC, 0x00,       /* type I: 6 ch, 16 bit, 44100 */
+    9, 5, 0x84, 0x05, UAC_MAXPS & 0xFF, UAC_MAXPS >> 8, 1, 0, 0,   /* EP4 IN isochronous async, 1 ms */
+    7, 0x25, 1, 0x01, 0, 0, 0,                           /* CS endpoint: sampling frequency control */
+};
+typedef char cfg_stems_len_ok[sizeof CFG_DESC_STEMS == CFG_STEMS_LEN ? 1 : -1];
+_Static_assert(UAC_MAXPS <= 1023u, "a stems packet fits a full-speed isochronous one");
+#endif
 static const uint8_t STR0[4] = {4, 3, 0x09, 0x04};
 static const uint8_t STR1[] = {42, 3, 'H', 0, 0xFC, 0, 'g', 0, 'e', 0, 'l', 0, 't', 0, 'o', 0, 'n', 0, ' ', 0, 'I', 0,
                                'n', 0, 's', 0, 't', 0, 'r', 0, 'u', 0, 'm', 0, 'e', 0, 'n', 0, 't', 0, 's', 0};
@@ -278,6 +351,13 @@ static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)
 {
     switch (wvalue >> 8) {
     case 1:
+#if FELUCCA_UAC
+        if (usb_stems) {
+            *d = DEV_DESC_STEMS;
+            *l = sizeof DEV_DESC_STEMS;
+            return 1;
+        }
+#endif
         *d = DEV_DESC;
         *l = sizeof DEV_DESC;
 #if FELUCCA_CDC
@@ -286,6 +366,13 @@ static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)
 #endif
         return 1;
     case 2:
+#if FELUCCA_UAC
+        if (usb_stems) {
+            *d = CFG_DESC_STEMS;
+            *l = sizeof CFG_DESC_STEMS;
+            return 1;
+        }
+#endif
         *d = CFG_DESC;
         *l = sizeof CFG_DESC;
 #if FELUCCA_CDC
@@ -367,7 +454,8 @@ static void uac_stream(uint32_t alt)                    /* SET_INTERFACE, config
     RING_PUBLISH();
     uac.alt = (uint8_t)alt;
     uac.acc = 0;
-    uac.last = 0;
+    uac.last[0] = uac.last[1] = uac.last[2] = 0;
+    uac.owe = 0;
     if (alt) {                                          /* (the fill range of the last stream stays readable) */
         uac.starts++;
         uac.fill_lo = 0xFFFFFFFFu;
@@ -382,7 +470,7 @@ static void uac_stream(uint32_t alt)                    /* SET_INTERFACE, config
  * the stream: silence packets until the next render primes the ring at the new rate. */
 static void uac_rate_set(uint32_t hz)
 {
-    uint8_t r48 = (uint8_t)(FELUCCA_UAC_48K && hz >= (UAC_RATE + 48000u) / 2u);
+    uint8_t r48 = (uint8_t)(FELUCCA_UAC_48K && !usb_stems && hz >= (UAC_RATE + 48000u) / 2u);   /* (STEMS: 44.1) */
     if (r48 == uac.r48)
         return;
     uac.go = 0;
@@ -968,8 +1056,11 @@ static __attribute__((noinline)) void uac_render_start(void)   /* audio ISR, bef
             rs.w = rs.ph = 0;
         }
 #endif
-        for (i = 0; i < prime; i++)
-            ua_ring[(r + i) & (UA_N - 1u)] = 0;
+        for (i = 0; i < prime; i++) {
+            uint32_t j, *f = &ua_ring[ua_slot(r + i) * UA_FW];
+            for (j = 0; j < UA_FW; j++)
+                f[j] = 0;
+        }
         RING_PUBLISH();
         ua_w = r + prime;
         uac.fill_min = prime;
@@ -1043,7 +1134,7 @@ static __attribute__((noinline)) void uac_tap48(const int32_t *out, uint32_t n)
 static __attribute__((noinline)) void uac_tap(const int32_t *out, uint32_t n)   /* audio ISR: one block (Q15) */
 {
     uint32_t w = ua_w, i;
-    if (!uac.feed)
+    if (!uac.feed || usb_stems)
         return;
 #if FELUCCA_UAC_48K
     if (uac.ring48) {
@@ -1075,11 +1166,54 @@ static __attribute__((noinline)) void uac_tap(const int32_t *out, uint32_t n)   
     ua_w = w + n;
 }
 
+#ifdef UAC_STEMS_SRC
+/* menu USB AUDIO = STEMS (after JIANT FM's uac_tap8): a block as 6 channels (fx.c stem_buf: tracks 1..3 and the drums
+ * mono, stem_fx: the FX return L R), 16 bit each, three words a frame; the ring, the priming and the packets as the
+ * stereo stream's (44.1 kHz only) */
+static __attribute__((noinline)) void uac_tap6(uint32_t n)
+{
+    uint32_t w = ua_w, i;
+    if (!uac.feed || !usb_stems)
+        return;
+    if (UA_NFS - (w - ua_r) < n) {
+        uac.overruns++;
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        uint32_t *f = &ua_ring[ua_slot(w + i) * UA_WS];
+        f[0] = (uint32_t)(uint16_t)uac_s16(stem_buf[0][i]) | (uint32_t)(uint16_t)uac_s16(stem_buf[1][i]) << 16;
+        f[1] = (uint32_t)(uint16_t)uac_s16(stem_buf[2][i]) | (uint32_t)(uint16_t)uac_s16(stem_buf[3][i]) << 16;
+        f[2] = (uint32_t)(uint16_t)uac_s16(stem_fx[0][i]) | (uint32_t)(uint16_t)uac_s16(stem_fx[1][i]) << 16;
+    }
+    RING_PUBLISH();
+    ua_w = w + n;
+}
+#endif
+
+/* (JIANT FM 0.9.8) a frame made up after an underrun (uac_packet): the ring's n + 1 frames from r read into the
+ * packet's n, each channel linearly between its two neighbours, so the frame left out is spread over the millisecond
+ * instead of skipped (a skip is a step in a soloed stem: a click). Each 16-bit channel of each word */
+static __attribute__((noinline)) void uac_squeeze(uint32_t *d, uint32_t r, uint32_t n)
+{
+    uint32_t i, j, fw = UA_FW, st = (16384u << 8) / (n + 1u), q = st;
+    for (i = 0; i < n; i++, q += st) {
+        const uint32_t *a = &ua_ring[ua_slot(r + i) * fw], *b = &ua_ring[ua_slot(r + i + 1u) * fw];
+        int32_t w = (int32_t)(q >> 8);                  /* (i + 1) / (n + 1), Q14 */
+        for (j = 0; j < fw; j++) {
+            int32_t al = (int16_t)a[j], ah = (int16_t)(a[j] >> 16);
+            int32_t l = al + ((((int32_t)(int16_t)b[j] - al) * w + 8192) >> 14);
+            int32_t h = ah + ((((int32_t)(int16_t)(b[j] >> 16) - ah) * w + 8192) >> 14);
+            d[i * fw + j] = (uint32_t)(uint16_t)l | (uint32_t)(uint16_t)h << 16;
+        }
+    }
+}
+
 /* the next packet into d: 44 / 45 frames (+-1 to hold the ring's fill), from the ring or, until it is
- * primed, silence. An empty ring repeats the last frame. Returns the frame count. */
+ * primed, silence. An empty ring repeats the last frame (and owes it: a later packet takes one frame more of the
+ * ring, squeezed, JIANT 0.8.9). Returns the frame count. */
 static uint32_t uac_packet(uint32_t *d)
 {
-    uint32_t n = 44u, r, fill, k, i, lo = UA_LO, hi = UA_HI;
+    uint32_t n = 44u, r, fill, k, i, j, fw = UA_FW, lo = UA_LO, hi = UA_HI;
 #if FELUCCA_UAC_48K
     if (uac.r48) {                                      /* 48 frames a ms, no pattern */
         n = 48u;
@@ -1095,7 +1229,7 @@ static uint32_t uac_packet(uint32_t *d)
         }
     }
     if (!uac.go || uac.ring48 != uac.r48) {             /* not primed (at this rate) yet */
-        for (i = 0; i < n; i++)
+        for (i = 0; i < n * fw; i++)
             d[i] = 0;
         return n;
     }
@@ -1109,16 +1243,33 @@ static uint32_t uac_packet(uint32_t *d)
     r = ua_r;
     fill = ua_w - r;
     RING_PUBLISH();                                     /* the slots after the index */
-    k = fill < n ? fill : n;
-    for (i = 0; i < k; i++)
-        d[i] = ua_ring[(r + i) & (UA_N - 1u)];
-    if (k < n) {
-        uint32_t last = k ? d[k - 1u] : uac.last;
-        uac.underruns++;
-        for (; i < n; i++)
-            d[i] = last;
+    if (uac.owe && uac.fill_min >= lo && fill > n) {    /* a frame an underrun repeated, made up */
+        uac.owe--;
+        uac.repaid++;
+        uac_squeeze(d, r, n);
+        RING_PUBLISH();
+        ua_r = r + n + 1u;
+        uac.pkts++;
+        uac.frames += n;
+        for (j = 0; j < fw; j++)
+            uac.last[j] = d[(n - 1u) * fw + j];
+        return n;
     }
-    uac.last = d[n - 1u];
+    k = fill < n ? fill : n;
+    for (i = 0; i < k; i++) {
+        const uint32_t *f = &ua_ring[ua_slot(r + i) * fw];
+        for (j = 0; j < fw; j++)
+            d[i * fw + j] = f[j];
+    }
+    if (k < n) {
+        uac.underruns++;
+        uac.owe += n - k;
+        for (; i < n; i++)
+            for (j = 0; j < fw; j++)
+                d[i * fw + j] = k ? d[(k - 1u) * fw + j] : uac.last[j];
+    }
+    for (j = 0; j < fw; j++)
+        uac.last[j] = d[(n - 1u) * fw + j];
     RING_PUBLISH();
     ua_r = r + k;
     uac.pkts++;
@@ -1126,24 +1277,19 @@ static uint32_t uac_packet(uint32_t *d)
     return n;
 }
 
-/* TIMER5, 2 kHz, also nested in the render: the host takes one packet per 1 ms frame; queue the
+/* TIMER5, every tick (10 kHz), also nested in the render: the host takes one packet per 1 ms frame; queue the
  * next one as soon as the last has gone (TxPktRdy clear). Not paced on SOF-pending (see usb_poll).
+ * (JIANT FM 0.9.10 / 0.9.12) Every tick, not every 5th: TxPktRdy stays set while a packet is on the wire (a stems
+ * packet ~0.4 ms), so the next could only be queued in the time left before the next IN token, shorter than 2 kHz's
+ * 0.5 ms: tokens found nothing and the ring overran in bursts. After a fill, UAC_SKIP ticks are not polled (the
+ * packet waits for the next token anyway): ~4 SIE round trips a ms.
  * The ring is fed only while the host reads: it often selects alt 1 long before its first IN token,
  * and a recorder may stop reading without going back to alt 0 (a packet waiting > 20 ms). */
-static void uac_service(void)
+#define UAC_POLL_HZ 10000u
+#define UAC_SKIP 6u
+static __attribute__((noinline)) void ep4_fill(uint32_t csr)
 {
-    uint32_t csr, n;
-    if (!usb.up || !usb.config || !uac.alt)
-        return;
-    sie_wr(S_INDEX, 4);
-    csr = sie_rd(S_TXCSR1);
-    if (csr & 0x01u) {                                  /* still queued */
-        if (uac.wait < 255u && ++uac.wait == 40u && uac.flowing) {
-            uac.flowing = 0;
-            uac.stalls++;
-        }
-        return;
-    }
+    uint32_t n;
     if (uac.queued) {
         if (csr & 0x04u)
             uac.missed++;                               /* UnderRun: an IN token found nothing queued */
@@ -1152,8 +1298,31 @@ static void uac_service(void)
     uac.queued = 1;
     uac.wait = 0;
     n = uac_packet(ep4tx);
-    fm1_usb_ep4_send(ep4tx, n * 4u);
+    fm1_usb_ep4_send(ep4tx, n * 4u * UA_FW);
     sie_wr(S_TXCSR1, 0x01);                             /* TxPktRdy (and UnderRun cleared) */
+}
+static __attribute__((noinline)) void ep4_tx(void)
+{
+    uint32_t csr;
+    sie_wr(S_INDEX, 4);
+    csr = sie_rd(S_TXCSR1);
+    if (!(csr & 0x01u)) {
+        ep4_fill(csr);
+        return;
+    }
+    if (uac.wait < 255u && ++uac.wait == UAC_POLL_HZ / 50u && uac.flowing) {   /* still queued, 20 ms */
+        uac.flowing = 0;
+        uac.stalls++;
+    }
+}
+static inline void uac_service(void)
+{
+    if (usb.up && usb.config && uac.alt) {
+        if (uac.queued && uac.wait < UAC_SKIP)
+            uac.wait++;
+        else
+            ep4_tx();
+    }
 }
 #endif
 

@@ -31,6 +31,9 @@
   --on-accent: #0c0c11;
   --dev: #08080b;         /* hardware: stays black in every theme */
   --dev-edge: #24242c;
+  --hw-body: #1d1d1f;     /* the drawn FM-1, after the simulator's panel colours */
+  --hw-tray: #141415; --hw-part: #2a2a2d; --hw-edge: #3a3a3e; --hw-label: #d6d6d8;
+  --beat: .5357s;         /* one beat at 112 BPM, the tempo on the screen */
   --f-display: "Chivo", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Chivo", "Helvetica Neue", Arial, sans-serif;
   --f-mono: "Chivo Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -95,8 +98,9 @@ p { margin: 0; }
 .dot { width: .55rem; height: .55rem; background: var(--t4); display: inline-block; }
 
 /* ---------- hero ---------- */
-.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: clamp(2rem, 5vw, 4.5rem); align-items: center; padding-block: clamp(2.5rem, 6vw, 5rem); }
-.hero-copy { display: grid; gap: 1.6rem; min-width: 0; }
+.hero .wrap { display: grid; gap: clamp(2rem, 4vw, 3rem); padding-block: clamp(2rem, 5vw, 4rem) clamp(2.5rem, 5vw, 4rem); }
+.hero-copy { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.6rem clamp(2rem, 5vw, 4.5rem); align-items: end; min-width: 0; }
+.hero-copy > div { display: grid; gap: 1.4rem; min-width: 0; align-content: end; }
 .mark { width: min(100%, 30rem); height: auto; display: block; }
 .mark .k1 { fill: var(--t1); } .mark .k2 { fill: var(--t2); } .mark .k3 { fill: var(--t3); } .mark .k4 { fill: var(--t4); } .mark .k5 { fill: var(--lav); }
 .hero h1 { font-size: clamp(1.5rem, 3.2vw, 2.2rem); font-weight: 800; max-width: 24ch; }
@@ -119,28 +123,43 @@ p { margin: 0; }
 .btn.plain { border-color: var(--t1); color: var(--t1); }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:hover { transform: none; } }
 
-/* ---------- the drawn FM-1 ---------- */
-.device {
-  background: var(--dev); border: 1px solid var(--dev-edge); border-radius: 18px;
-  padding: clamp(14px, 3vw, 22px); display: grid; gap: 14px; max-width: 30rem; width: 100%; justify-self: center;
-  box-shadow: 0 1px 0 #2e2e38 inset, 0 30px 60px -30px rgba(0,0,0,.6);
+/* ---------- the drawn FM-1 (layout and proportions from the simulator's WIDE panel, web/emu) ---------- */
+.synth { margin: 0 auto; display: grid; gap: 1rem; min-width: 0; width: 100%; max-width: 58rem; }
+.device { position: relative; width: 100%; max-width: 100%; aspect-ratio: 1000 / 624; filter: drop-shadow(0 28px 40px rgba(0,0,0,.35)); }
+.fm1 { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fm1 .b-body { fill: var(--hw-body); stroke: var(--hw-edge); stroke-width: 1.5; }
+.fm1 .b-tray { fill: var(--hw-tray); }
+.fm1 .b-bezel { fill: #0b0b0c; }
+.fm1 .b-part, .fm1 .face { fill: var(--hw-part); stroke: var(--hw-edge); stroke-width: 1.5; }
+.fm1 .ind { stroke: var(--hw-label); stroke-width: 3; stroke-linecap: round; }
+.fm1 .knob .ind { transform-box: view-box; }
+.fm1 text { fill: var(--hw-label); text-anchor: middle; font-family: var(--f-pixel); font-weight: 600; letter-spacing: .04em; }
+.fm1 text.sans { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+.fm1 .rec text { fill: #ff453a; }
+.fm1 .key .face { fill: #0c0c0d; }
+.fm1 .slit { fill: #3a3a3c; transition: fill .09s; }
+.fm1 .key.on .slit { fill: #ececee; }
+.fm1 .key.on.c1 .slit { fill: #6aa6ff; } .fm1 .key.on.c2 .slit { fill: #5fe08a; } .fm1 .key.on.c4 .slit { fill: #ff8a4a; }
+.fm1 .btn .face { transition: fill .09s; }
+.fm1 .btn.lit .face { fill: #fff4d6; } .fm1 .btn.lit text { fill: #1d1d1f; }
+.fm1 .play.green .face { fill: #5fe08a; } .fm1 .play.green text { fill: #0d2414; }
+/* the 240 x 240 panel inside its bezel: (292 + 8) / 1000, (44 + 8) / 624, 240 / 1000, 240 / 624 */
+.device video, .device .still { position: absolute; left: 30%; top: 8.3333%; width: 24%; height: 38.4615%; display: block;
+  background: #000; object-fit: cover; image-rendering: pixelated; }
+.synth-ui { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; justify-content: space-between; }
+.tracks { display: flex; flex-wrap: wrap; gap: 6px; }
+.tracks button, .pp {
+  font: inherit; font-family: var(--f-pixel); font-size: .85rem; letter-spacing: .06em; cursor: pointer; line-height: 1;
+  background: transparent; color: var(--muted); border: 2px solid var(--line); padding: .45rem .6rem .4rem;
 }
-.device .top { display: flex; justify-content: space-between; align-items: center; font-family: var(--f-pixel); font-size: .75rem; letter-spacing: .12em; color: #6c6a7c; }
-.knobs { display: flex; gap: 8px; }
-.knobs i { width: 14px; height: 14px; border-radius: 50%; background: #1b1b22; border: 1px solid #34343f; position: relative; }
-.knobs i::after { content: ""; position: absolute; left: 6px; top: 1px; width: 1px; height: 5px; background: #8a889a; }
-.screen { aspect-ratio: 1; width: 100%; max-width: 100%; background: #000; border: 6px solid #111116; border-radius: 4px; overflow: hidden; }
-.screen img { width: 100%; height: 100%; image-rendering: auto; }
-.tracks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.tracks button {
-  font: inherit; font-family: var(--f-pixel); font-size: .85rem; letter-spacing: .05em; cursor: pointer;
-  background: #121218; color: #8c8a9c; border: 2px solid #2b2b35; padding: .45rem 0 .35rem; border-radius: 3px;
-}
-.tracks button[data-k="acid"][aria-pressed="true"] { background: #3f8cff; border-color: #3f8cff; color: #08080b; }
-.tracks button[data-k="elements"][aria-pressed="true"] { background: #2fd27e; border-color: #2fd27e; color: #08080b; }
-.tracks button[data-k="plaits"][aria-pressed="true"] { background: #e4e4ec; border-color: #e4e4ec; color: #08080b; }
-.tracks button[data-k="drums"][aria-pressed="true"] { background: #ff6b1f; border-color: #ff6b1f; color: #08080b; }
-.device figcaption { font-family: var(--f-mono); font-size: .75rem; color: #8c8a9c; min-height: 2.4em; }
+.tracks button:hover, .pp:hover { color: var(--fg); }
+.tracks button[aria-pressed="true"] { color: var(--on-accent); }
+.tracks button[data-k="acid"] { --c: var(--t1); } .tracks button[data-k="elements"] { --c: var(--t2); }
+.tracks button[data-k="plaits"] { --c: var(--t3); } .tracks button[data-k="drums"] { --c: var(--t4); } .tracks button[data-k="mix"] { --c: var(--lav); }
+.tracks button { border-color: color-mix(in srgb, var(--c) 55%, transparent); }
+.tracks button[aria-pressed="true"] { background: var(--c); border-color: var(--c); }
+.synth figcaption { font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); flex: 1 1 22rem; min-width: 0; min-height: 2.6em; }
+.pp { min-width: 5.5rem; }
 
 /* ---------- status strip ---------- */
 .status { background: var(--panel); border-block: 1px solid var(--line); }
@@ -209,16 +228,57 @@ footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: 
 footer .mark { width: 7rem; }
 footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
 
+/* ---------- top bar: Ko-fi, the beat ---------- */
+.bar-r { display: flex; align-items: center; gap: 1.1rem; }
+.kofi-s { font-family: var(--f-pixel); font-size: .85rem; letter-spacing: .06em; text-decoration: none; color: var(--t4);
+  border: 2px solid currentColor; padding: .25rem .5rem .2rem; line-height: 1; }
+.kofi-s:hover { background: var(--t4); color: var(--on-accent); }
+.beat { display: inline-flex; gap: 2px; }
+.beat i { width: .42rem; height: .55rem; background: var(--line); }
+.beat i:nth-child(1) { --c: var(--t1); } .beat i:nth-child(2) { --c: var(--t2); } .beat i:nth-child(3) { --c: var(--t3); } .beat i:nth-child(4) { --c: var(--t4); }
+.beat i { background: var(--c); opacity: .35; }
+
+/* ---------- support ---------- */
+.support { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 2rem clamp(2rem, 5vw, 4rem); align-items: center; }
+.support .head { margin: 0; gap: 1.1rem; }
+.support .fine { font-family: var(--f-mono); font-size: var(--s-1); color: var(--muted); }
+.band { display: grid; background: #000; border: 1px solid var(--dev-edge); border-radius: 12px; overflow: hidden; position: relative; }
+.band img { width: 100%; height: auto; image-rendering: pixelated; }
+
+/* ---------- motion (all of it off under prefers-reduced-motion, where every frame is the finished one) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  /* the wordmark assembles cell by cell on load, then a cell blinks now and then */
+  .anim #hero-mark rect { animation: cell .5s steps(3, end) backwards; animation-delay: calc(var(--i, 0) * 9ms); }
+  @keyframes cell { from { opacity: .08; } }
+  #hero-mark rect.blink { animation: blink .54s steps(2, end); }
+  @keyframes blink { 50% { fill: var(--fg); } }
+  /* the four track colours step through the bar at 112 BPM */
+  .beat i { animation: step calc(var(--beat) * 4) steps(1, end) infinite; }
+  .beat i:nth-child(2) { animation-delay: var(--beat); } .beat i:nth-child(3) { animation-delay: calc(var(--beat) * 2); } .beat i:nth-child(4) { animation-delay: calc(var(--beat) * 3); }
+  @keyframes step { 0% { opacity: 1; } 25%, 100% { opacity: .35; } }
+  /* the cast bobs, one bar per bob, each a beat apart */
+  .cast .scr { animation: bob calc(var(--beat) * 4) ease-in-out infinite; }
+  .cast figure:nth-child(4n+2) .scr { animation-delay: calc(var(--beat) * -1); }
+  .cast figure:nth-child(4n+3) .scr { animation-delay: calc(var(--beat) * -2); }
+  .cast figure:nth-child(4n+4) .scr { animation-delay: calc(var(--beat) * -3); }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+  /* the boxed section labels type in when they scroll into view (JS sets .typing) */
+  .tag.typing::after { content: ""; display: inline-block; width: .5em; height: .8em; margin-left: .15em; background: currentColor; vertical-align: -.05em; animation: caret .5s steps(1, end) infinite; }
+  @keyframes caret { 50% { opacity: 0; } }
+  .eng .shot img { transition: opacity .6s ease; }
+}
+
 /* ---------- narrow ---------- */
 @media (max-width: 64rem) {
   .engines, .cast { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 48rem) {
-  .hero .wrap { grid-template-columns: minmax(0, 1fr); }
+  .hero-copy { grid-template-columns: minmax(0, 1fr); }
   .steps { grid-template-columns: minmax(0, 1fr); }
   .feats { grid-template-columns: minmax(0, 1fr); }
   .bar nav { display: none; }
+  .support { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 40rem) {
   .credits { min-width: 0; }
@@ -239,10 +299,13 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
 
 <header class="bar">
   <div class="wrap">
-    <div class="id"><span class="dot" aria-hidden="true"></span>KARMA / FM-1</div>
-    <nav aria-label="Sections">
-      <a href="#start">Start</a><a href="#inside">Inside</a><a href="#cast">Characters</a><a href="#faq">FAQ</a><a href="#credits">Credits</a>
-    </nav>
+    <div class="id"><span class="beat" aria-hidden="true"><i></i><i></i><i></i><i></i></span>KARMA / FM-1</div>
+    <div class="bar-r">
+      <nav aria-label="Sections">
+        <a href="#start">Start</a><a href="#inside">Inside</a><a href="#cast">Characters</a><a href="#faq">FAQ</a><a href="#support">Support</a><a href="#credits">Credits</a>
+      </nav>
+      <a class="kofi-s" href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener">Ko-fi ↗</a>
+    </div>
   </div>
 </header>
 
@@ -250,27 +313,37 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
 <div class="hero">
   <div class="wrap">
     <div class="hero-copy">
-      <svg class="mark" viewBox="0 0 29 7" role="img" aria-labelledby="mark-t"><title id="mark-t">KARMA</title><g class="k1"><rect x="0" y="0" width=".86" height=".86"/><rect x="4" y="0" width=".86" height=".86"/><rect x="0" y="1" width=".86" height=".86"/><rect x="3" y="1" width=".86" height=".86"/><rect x="0" y="2" width=".86" height=".86"/><rect x="2" y="2" width=".86" height=".86"/><rect x="0" y="3" width=".86" height=".86"/><rect x="1" y="3" width=".86" height=".86"/><rect x="0" y="4" width=".86" height=".86"/><rect x="2" y="4" width=".86" height=".86"/><rect x="0" y="5" width=".86" height=".86"/><rect x="3" y="5" width=".86" height=".86"/><rect x="0" y="6" width=".86" height=".86"/><rect x="4" y="6" width=".86" height=".86"/></g><g class="k2"><rect x="7" y="0" width=".86" height=".86"/><rect x="8" y="0" width=".86" height=".86"/><rect x="9" y="0" width=".86" height=".86"/><rect x="6" y="1" width=".86" height=".86"/><rect x="10" y="1" width=".86" height=".86"/><rect x="6" y="2" width=".86" height=".86"/><rect x="10" y="2" width=".86" height=".86"/><rect x="6" y="3" width=".86" height=".86"/><rect x="7" y="3" width=".86" height=".86"/><rect x="8" y="3" width=".86" height=".86"/><rect x="9" y="3" width=".86" height=".86"/><rect x="10" y="3" width=".86" height=".86"/><rect x="6" y="4" width=".86" height=".86"/><rect x="10" y="4" width=".86" height=".86"/><rect x="6" y="5" width=".86" height=".86"/><rect x="10" y="5" width=".86" height=".86"/><rect x="6" y="6" width=".86" height=".86"/><rect x="10" y="6" width=".86" height=".86"/></g><g class="k3"><rect x="12" y="0" width=".86" height=".86"/><rect x="13" y="0" width=".86" height=".86"/><rect x="14" y="0" width=".86" height=".86"/><rect x="15" y="0" width=".86" height=".86"/><rect x="12" y="1" width=".86" height=".86"/><rect x="16" y="1" width=".86" height=".86"/><rect x="12" y="2" width=".86" height=".86"/><rect x="16" y="2" width=".86" height=".86"/><rect x="12" y="3" width=".86" height=".86"/><rect x="13" y="3" width=".86" height=".86"/><rect x="14" y="3" width=".86" height=".86"/><rect x="15" y="3" width=".86" height=".86"/><rect x="12" y="4" width=".86" height=".86"/><rect x="14" y="4" width=".86" height=".86"/><rect x="12" y="5" width=".86" height=".86"/><rect x="15" y="5" width=".86" height=".86"/><rect x="12" y="6" width=".86" height=".86"/><rect x="16" y="6" width=".86" height=".86"/></g><g class="k4"><rect x="18" y="0" width=".86" height=".86"/><rect x="22" y="0" width=".86" height=".86"/><rect x="18" y="1" width=".86" height=".86"/><rect x="19" y="1" width=".86" height=".86"/><rect x="21" y="1" width=".86" height=".86"/><rect x="22" y="1" width=".86" height=".86"/><rect x="18" y="2" width=".86" height=".86"/><rect x="20" y="2" width=".86" height=".86"/><rect x="22" y="2" width=".86" height=".86"/><rect x="18" y="3" width=".86" height=".86"/><rect x="20" y="3" width=".86" height=".86"/><rect x="22" y="3" width=".86" height=".86"/><rect x="18" y="4" width=".86" height=".86"/><rect x="22" y="4" width=".86" height=".86"/><rect x="18" y="5" width=".86" height=".86"/><rect x="22" y="5" width=".86" height=".86"/><rect x="18" y="6" width=".86" height=".86"/><rect x="22" y="6" width=".86" height=".86"/></g><g class="k5"><rect x="25" y="0" width=".86" height=".86"/><rect x="26" y="0" width=".86" height=".86"/><rect x="27" y="0" width=".86" height=".86"/><rect x="24" y="1" width=".86" height=".86"/><rect x="28" y="1" width=".86" height=".86"/><rect x="24" y="2" width=".86" height=".86"/><rect x="28" y="2" width=".86" height=".86"/><rect x="24" y="3" width=".86" height=".86"/><rect x="25" y="3" width=".86" height=".86"/><rect x="26" y="3" width=".86" height=".86"/><rect x="27" y="3" width=".86" height=".86"/><rect x="28" y="3" width=".86" height=".86"/><rect x="24" y="4" width=".86" height=".86"/><rect x="28" y="4" width=".86" height=".86"/><rect x="24" y="5" width=".86" height=".86"/><rect x="28" y="5" width=".86" height=".86"/><rect x="24" y="6" width=".86" height=".86"/><rect x="28" y="6" width=".86" height=".86"/></g></svg>
-      <h1>Four tracks, a drum synth and a small cast of characters for your FM-1.</h1>
-      <p class="sub">KARMA is free custom firmware for the M-VAVE FM-1. An acid bass or a Juno, physical modelling, two dozen synthesis models, a drum synthesizer, a 64-step sequencer and generators that keep writing while you play. It runs in your browser today.</p>
-      <div class="ctas">
-        <a class="btn go" href="emu/">TRY IN THE BROWSER<small>Live now · the real firmware</small></a>
-        <a class="btn soon" href="webapp/installer/" aria-describedby="soon-note">INSTALL<small id="soon-note">Soon · after hardware testing</small></a>
-        <a class="btn plain" href="webapp/editor/">EDITOR<small>Sounds, kits, projects</small></a>
+      <div>
+        <svg class="mark" id="hero-mark" viewBox="0 0 29 7" role="img" aria-labelledby="mark-t"><title id="mark-t">KARMA</title><g class="k1"><rect x="0" y="0" width=".86" height=".86"/><rect x="4" y="0" width=".86" height=".86"/><rect x="0" y="1" width=".86" height=".86"/><rect x="3" y="1" width=".86" height=".86"/><rect x="0" y="2" width=".86" height=".86"/><rect x="2" y="2" width=".86" height=".86"/><rect x="0" y="3" width=".86" height=".86"/><rect x="1" y="3" width=".86" height=".86"/><rect x="0" y="4" width=".86" height=".86"/><rect x="2" y="4" width=".86" height=".86"/><rect x="0" y="5" width=".86" height=".86"/><rect x="3" y="5" width=".86" height=".86"/><rect x="0" y="6" width=".86" height=".86"/><rect x="4" y="6" width=".86" height=".86"/></g><g class="k2"><rect x="7" y="0" width=".86" height=".86"/><rect x="8" y="0" width=".86" height=".86"/><rect x="9" y="0" width=".86" height=".86"/><rect x="6" y="1" width=".86" height=".86"/><rect x="10" y="1" width=".86" height=".86"/><rect x="6" y="2" width=".86" height=".86"/><rect x="10" y="2" width=".86" height=".86"/><rect x="6" y="3" width=".86" height=".86"/><rect x="7" y="3" width=".86" height=".86"/><rect x="8" y="3" width=".86" height=".86"/><rect x="9" y="3" width=".86" height=".86"/><rect x="10" y="3" width=".86" height=".86"/><rect x="6" y="4" width=".86" height=".86"/><rect x="10" y="4" width=".86" height=".86"/><rect x="6" y="5" width=".86" height=".86"/><rect x="10" y="5" width=".86" height=".86"/><rect x="6" y="6" width=".86" height=".86"/><rect x="10" y="6" width=".86" height=".86"/></g><g class="k3"><rect x="12" y="0" width=".86" height=".86"/><rect x="13" y="0" width=".86" height=".86"/><rect x="14" y="0" width=".86" height=".86"/><rect x="15" y="0" width=".86" height=".86"/><rect x="12" y="1" width=".86" height=".86"/><rect x="16" y="1" width=".86" height=".86"/><rect x="12" y="2" width=".86" height=".86"/><rect x="16" y="2" width=".86" height=".86"/><rect x="12" y="3" width=".86" height=".86"/><rect x="13" y="3" width=".86" height=".86"/><rect x="14" y="3" width=".86" height=".86"/><rect x="15" y="3" width=".86" height=".86"/><rect x="12" y="4" width=".86" height=".86"/><rect x="14" y="4" width=".86" height=".86"/><rect x="12" y="5" width=".86" height=".86"/><rect x="15" y="5" width=".86" height=".86"/><rect x="12" y="6" width=".86" height=".86"/><rect x="16" y="6" width=".86" height=".86"/></g><g class="k4"><rect x="18" y="0" width=".86" height=".86"/><rect x="22" y="0" width=".86" height=".86"/><rect x="18" y="1" width=".86" height=".86"/><rect x="19" y="1" width=".86" height=".86"/><rect x="21" y="1" width=".86" height=".86"/><rect x="22" y="1" width=".86" height=".86"/><rect x="18" y="2" width=".86" height=".86"/><rect x="20" y="2" width=".86" height=".86"/><rect x="22" y="2" width=".86" height=".86"/><rect x="18" y="3" width=".86" height=".86"/><rect x="20" y="3" width=".86" height=".86"/><rect x="22" y="3" width=".86" height=".86"/><rect x="18" y="4" width=".86" height=".86"/><rect x="22" y="4" width=".86" height=".86"/><rect x="18" y="5" width=".86" height=".86"/><rect x="22" y="5" width=".86" height=".86"/><rect x="18" y="6" width=".86" height=".86"/><rect x="22" y="6" width=".86" height=".86"/></g><g class="k5"><rect x="25" y="0" width=".86" height=".86"/><rect x="26" y="0" width=".86" height=".86"/><rect x="27" y="0" width=".86" height=".86"/><rect x="24" y="1" width=".86" height=".86"/><rect x="28" y="1" width=".86" height=".86"/><rect x="24" y="2" width=".86" height=".86"/><rect x="28" y="2" width=".86" height=".86"/><rect x="24" y="3" width=".86" height=".86"/><rect x="25" y="3" width=".86" height=".86"/><rect x="26" y="3" width=".86" height=".86"/><rect x="27" y="3" width=".86" height=".86"/><rect x="28" y="3" width=".86" height=".86"/><rect x="24" y="4" width=".86" height=".86"/><rect x="28" y="4" width=".86" height=".86"/><rect x="24" y="5" width=".86" height=".86"/><rect x="28" y="5" width=".86" height=".86"/><rect x="24" y="6" width=".86" height=".86"/><rect x="28" y="6" width=".86" height=".86"/></g></svg>
+        <h1>Four tracks, a drum synth and a small cast of characters for your FM-1.</h1>
       </div>
-      <div class="meta"><span>Free forever</span><span>GPL-3.0-only</span><span>Not for sale</span></div>
+      <div>
+        <p class="sub">KARMA is free custom firmware for the M-VAVE FM-1. An acid bass or a Juno, physical modelling, two dozen synthesis models, a drum synthesizer, a 64-step sequencer and generators that keep writing while you play. It runs in your browser today.</p>
+        <div class="ctas">
+          <a class="btn go" href="emu/">TRY IN THE BROWSER<small>Live now · the real firmware</small></a>
+          <a class="btn soon" href="webapp/installer/" aria-describedby="soon-note">INSTALL<small id="soon-note">Soon · after hardware testing</small></a>
+          <a class="btn plain" href="webapp/editor/">EDITOR<small>Sounds, kits, projects</small></a>
+        </div>
+        <div class="meta"><span>Free forever</span><span>GPL-3.0-only</span><span>Not for sale</span></div>
+      </div>
     </div>
 
-    <figure class="device" aria-label="An FM-1 showing KARMA's screens">
-      <div class="top"><span>FM-1 · KARMA</span><span class="knobs" aria-hidden="true"><i></i><i></i><i></i><i></i></span></div>
-      <div class="screen"><img id="hero-shot" src="img/acid.png" width="720" height="720" alt="Track 1, ACID: the laughing Buddha sits on the bass line, with the WAVE, CUT, RES and ENV knobs below."></div>
-      <div class="tracks" role="group" aria-label="Show a track">
-        <button type="button" data-k="acid" aria-pressed="true">1</button>
-        <button type="button" data-k="elements" aria-pressed="false">2</button>
-        <button type="button" data-k="plaits" aria-pressed="false">3</button>
-        <button type="button" data-k="drums" aria-pressed="false">DRUM</button>
+    <figure class="synth" aria-labelledby="hero-cap">
+      <div class="device">
+        <svg class="fm1" viewBox="0 0 1000 624" aria-hidden="true" focusable="false"><rect class="b-body" x="4" y="4" width="992" height="616" rx="40"/><rect class="b-tray" x="50" y="250" width="220" height="50" rx="14"/><rect class="b-tray" x="568" y="160" width="400" height="140" rx="14"/><rect class="b-bezel" x="292" y="44" width="256" height="256" rx="18"/><g class="knob"><circle class="b-tray" cx="105" cy="100" r="29"/><circle class="b-part" cx="105" cy="100" r="24"/><line class="ind" x1="105" y1="81" x2="105" y2="90"/><text x="105" y="64" font-size="16">MASTER</text></g><g class="knob"><circle class="b-tray" cx="215" cy="100" r="29"/><circle class="b-part" cx="215" cy="100" r="24"/><text x="215" y="64" font-size="16">SELECT</text></g><g class="knob"><circle class="b-tray" cx="105" cy="205" r="29"/><circle class="b-part" cx="105" cy="205" r="24"/><text x="105" y="169" font-size="16">PRESETS</text></g><g class="knob"><circle class="b-tray" cx="215" cy="205" r="29"/><circle class="b-part" cx="215" cy="205" r="24"/><text x="215" y="169" font-size="16">ALGORITHM</text></g><g class="knob"><circle class="b-tray" cx="610" cy="100" r="27"/><circle class="b-part" cx="610" cy="100" r="22"/><text x="610" y="66" font-size="16">KNOB 1</text></g><g class="knob"><circle class="b-tray" cx="714" cy="100" r="27"/><circle class="b-part" cx="714" cy="100" r="22"/><text x="714" y="66" font-size="16">KNOB 2</text></g><g class="knob"><circle class="b-tray" cx="818" cy="100" r="27"/><circle class="b-part" cx="818" cy="100" r="22"/><text x="818" y="66" font-size="16">KNOB 3</text></g><g class="knob"><circle class="b-tray" cx="922" cy="100" r="27"/><circle class="b-part" cx="922" cy="100" r="22"/><text x="922" y="66" font-size="16">KNOB 4</text></g><g class="btn" data-b="OCT-"><rect class="face" x="60" y="258" width="90" height="34" rx="8"/><text class="sans" x="105" y="279.5" font-size="12.6">OCT-</text></g><g class="btn" data-b="OCT+"><rect class="face" x="170" y="258" width="90" height="34" rx="8"/><text class="sans" x="215" y="279.5" font-size="12.6">OCT+</text></g><g class="btn" data-b="FX"><rect class="face" x="582" y="174" width="54" height="48" rx="8"/><text class="sans" x="609" y="202.5" font-size="12.6">FX</text></g><g class="btn" data-b="HOME"><rect class="face" x="582" y="236" width="54" height="48" rx="8"/><text class="sans" x="609" y="264.5" font-size="12.6">HOME</text></g><g class="btn" data-b="SEL"><rect class="face" x="645" y="174" width="54" height="48" rx="8"/><text class="sans" x="672" y="202.5" font-size="12.6">SEL</text></g><g class="btn" data-b="SAVE"><rect class="face" x="645" y="236" width="54" height="48" rx="8"/><text class="sans" x="672" y="264.5" font-size="12.6">SAVE</text></g><g class="btn" data-b="ENV"><rect class="face" x="708" y="174" width="54" height="48" rx="8"/><text class="sans" x="735" y="202.5" font-size="12.6">ENV</text></g><g class="btn" data-b="ARP"><rect class="face" x="708" y="236" width="54" height="48" rx="8"/><text class="sans" x="735" y="264.5" font-size="12.6">ARP</text></g><g class="btn" data-b="LFO"><rect class="face" x="771" y="174" width="54" height="48" rx="8"/><text class="sans" x="798" y="202.5" font-size="12.6">LFO</text></g><g class="btn" data-b="SEQ"><rect class="face" x="771" y="236" width="54" height="48" rx="8"/><text class="sans" x="798" y="264.5" font-size="12.6">SEQ</text></g><g class="btn" data-b="EDIT"><rect class="face" x="834" y="174" width="54" height="48" rx="8"/><text class="sans" x="861" y="202.5" font-size="12.6">EDIT</text></g><g class="btn play" data-b="PLAY"><rect class="face" x="834" y="236" width="54" height="48" rx="8"/><text class="sans" x="861" y="258" font-size="10.8">PLAY</text><text class="sans" x="861" y="271" font-size="9.9">STOP</text></g><g class="btn" data-b="GLO"><rect class="face" x="897" y="174" width="54" height="48" rx="8"/><text class="sans" x="924" y="202.5" font-size="12.6">GLO</text></g><g class="btn rec" data-b="REC"><rect class="face" x="897" y="236" width="54" height="48" rx="8"/><text class="sans" x="924" y="264.5" font-size="12.6">REC</text></g><rect class="b-tray" x="36" y="332" width="928" height="256" rx="18"/><g class="key" data-k="0"><rect class="face" x="54.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="73.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="2"><rect class="face" x="110.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="129.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="4"><rect class="face" x="167.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="186.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="6"><rect class="face" x="223.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="242.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="7"><rect class="face" x="280.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="299.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="9"><rect class="face" x="336.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="355.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="11"><rect class="face" x="393.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="412.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="12"><rect class="face" x="449.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="468.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="14"><rect class="face" x="506.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="525.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="16"><rect class="face" x="562.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="581.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="18"><rect class="face" x="619.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="638.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="19"><rect class="face" x="675.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="694.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="21"><rect class="face" x="732.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="751.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="23"><rect class="face" x="788.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="807.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="24"><rect class="face" x="845.2" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="864.2" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="26"><rect class="face" x="901.7" y="460" width="44.1" height="117.8" rx="22"/><rect class="slit" x="920.7" y="477.6" width="6.2" height="82.5" rx="3.1"/></g><g class="key" data-k="1"><rect class="face" x="82.5" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="101.4" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="3"><rect class="face" x="139" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="157.9" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="5"><rect class="face" x="195.5" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="214.4" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="8"><rect class="face" x="308.5" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="327.4" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="10"><rect class="face" x="365" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="383.9" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="13"><rect class="face" x="478" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="496.9" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="15"><rect class="face" x="534.5" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="553.4" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="17"><rect class="face" x="591" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="609.9" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="20"><rect class="face" x="704" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="722.9" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="22"><rect class="face" x="760.5" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="779.4" y="365" width="6.2" height="62" rx="3.1"/></g><g class="key" data-k="25"><rect class="face" x="873.5" y="347.4" width="44.1" height="97.3" rx="22"/><rect class="slit" x="892.4" y="365" width="6.2" height="62" rx="3.1"/></g></svg>
+        <video id="loop" muted loop playsinline preload="none" poster="img/karma-loop-poster.png" width="480" height="480" aria-label="A 30-second screen recording of KARMA running: a kick goes into the drum grid, then the ACID, ELEMENTS and PLAITS pages, the FX page and the mixer."><source src="img/karma-loop.mp4" type="video/mp4"></video>
       </div>
-      <figcaption id="hero-cap">Track 1 · ACID. The Buddha laughs along with the bass line.</figcaption>
+      <div class="synth-ui">
+        <div class="tracks" role="group" aria-label="Jump to a track in the recording">
+          <button type="button" data-k="acid" aria-pressed="false">1</button>
+          <button type="button" data-k="elements" aria-pressed="false">2</button>
+          <button type="button" data-k="plaits" aria-pressed="false">3</button>
+          <button type="button" data-k="drums" aria-pressed="true">DRUM</button>
+          <button type="button" data-k="mix" aria-pressed="false">MIX</button>
+        </div>
+        <button type="button" class="pp" id="pp" aria-controls="loop">PLAY</button>
+        <figcaption id="hero-cap">DRUM · HEX. A kick goes in on the step grid and the drummer plays it.</figcaption>
+      </div>
     </figure>
   </div>
 </div>
@@ -468,6 +541,25 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
   </div>
 </section>
 
+<section id="support">
+  <div class="wrap">
+    <div class="support">
+      <div class="head">
+        <span class="tag c4">SUPPORT</span>
+        <h2>KARMA is free and stays free. If it makes music with you, buy Ariel a coffee.</h2>
+        <p class="lede">KARMA is made by one person, Ariel Muchnik, in his own time. A coffee on Ko-fi goes into that time: testing on real hardware, new features and fixes. The firmware, the simulator and the editor stay free and open for everyone either way.</p>
+        <div class="ctas">
+          <a class="btn go kofi" href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener">BUY ARIEL A COFFEE<small>On Ko-fi · ko-fi.com/arielmuchnik ↗</small></a>
+        </div>
+        <p class="fine">Ko-fi handles the payment. Nothing in KARMA asks you for money.</p>
+      </div>
+      <a class="band" href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener" tabindex="-1" aria-hidden="true">
+        <img src="img/karma-band.png" width="1200" height="400" loading="lazy" alt="">
+      </a>
+    </div>
+  </div>
+</section>
+
 <section id="credits">
   <div class="wrap">
     <div class="head">
@@ -503,34 +595,151 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
   <div class="wrap">
     <svg class="mark" viewBox="0 0 29 7" aria-hidden="true"><g class="k1"><rect x="0" y="0" width=".86" height=".86"/><rect x="4" y="0" width=".86" height=".86"/><rect x="0" y="1" width=".86" height=".86"/><rect x="3" y="1" width=".86" height=".86"/><rect x="0" y="2" width=".86" height=".86"/><rect x="2" y="2" width=".86" height=".86"/><rect x="0" y="3" width=".86" height=".86"/><rect x="1" y="3" width=".86" height=".86"/><rect x="0" y="4" width=".86" height=".86"/><rect x="2" y="4" width=".86" height=".86"/><rect x="0" y="5" width=".86" height=".86"/><rect x="3" y="5" width=".86" height=".86"/><rect x="0" y="6" width=".86" height=".86"/><rect x="4" y="6" width=".86" height=".86"/></g><g class="k2"><rect x="7" y="0" width=".86" height=".86"/><rect x="8" y="0" width=".86" height=".86"/><rect x="9" y="0" width=".86" height=".86"/><rect x="6" y="1" width=".86" height=".86"/><rect x="10" y="1" width=".86" height=".86"/><rect x="6" y="2" width=".86" height=".86"/><rect x="10" y="2" width=".86" height=".86"/><rect x="6" y="3" width=".86" height=".86"/><rect x="7" y="3" width=".86" height=".86"/><rect x="8" y="3" width=".86" height=".86"/><rect x="9" y="3" width=".86" height=".86"/><rect x="10" y="3" width=".86" height=".86"/><rect x="6" y="4" width=".86" height=".86"/><rect x="10" y="4" width=".86" height=".86"/><rect x="6" y="5" width=".86" height=".86"/><rect x="10" y="5" width=".86" height=".86"/><rect x="6" y="6" width=".86" height=".86"/><rect x="10" y="6" width=".86" height=".86"/></g><g class="k3"><rect x="12" y="0" width=".86" height=".86"/><rect x="13" y="0" width=".86" height=".86"/><rect x="14" y="0" width=".86" height=".86"/><rect x="15" y="0" width=".86" height=".86"/><rect x="12" y="1" width=".86" height=".86"/><rect x="16" y="1" width=".86" height=".86"/><rect x="12" y="2" width=".86" height=".86"/><rect x="16" y="2" width=".86" height=".86"/><rect x="12" y="3" width=".86" height=".86"/><rect x="13" y="3" width=".86" height=".86"/><rect x="14" y="3" width=".86" height=".86"/><rect x="15" y="3" width=".86" height=".86"/><rect x="12" y="4" width=".86" height=".86"/><rect x="14" y="4" width=".86" height=".86"/><rect x="12" y="5" width=".86" height=".86"/><rect x="15" y="5" width=".86" height=".86"/><rect x="12" y="6" width=".86" height=".86"/><rect x="16" y="6" width=".86" height=".86"/></g><g class="k4"><rect x="18" y="0" width=".86" height=".86"/><rect x="22" y="0" width=".86" height=".86"/><rect x="18" y="1" width=".86" height=".86"/><rect x="19" y="1" width=".86" height=".86"/><rect x="21" y="1" width=".86" height=".86"/><rect x="22" y="1" width=".86" height=".86"/><rect x="18" y="2" width=".86" height=".86"/><rect x="20" y="2" width=".86" height=".86"/><rect x="22" y="2" width=".86" height=".86"/><rect x="18" y="3" width=".86" height=".86"/><rect x="20" y="3" width=".86" height=".86"/><rect x="22" y="3" width=".86" height=".86"/><rect x="18" y="4" width=".86" height=".86"/><rect x="22" y="4" width=".86" height=".86"/><rect x="18" y="5" width=".86" height=".86"/><rect x="22" y="5" width=".86" height=".86"/><rect x="18" y="6" width=".86" height=".86"/><rect x="22" y="6" width=".86" height=".86"/></g><g class="k5"><rect x="25" y="0" width=".86" height=".86"/><rect x="26" y="0" width=".86" height=".86"/><rect x="27" y="0" width=".86" height=".86"/><rect x="24" y="1" width=".86" height=".86"/><rect x="28" y="1" width=".86" height=".86"/><rect x="24" y="2" width=".86" height=".86"/><rect x="28" y="2" width=".86" height=".86"/><rect x="24" y="3" width=".86" height=".86"/><rect x="25" y="3" width=".86" height=".86"/><rect x="26" y="3" width=".86" height=".86"/><rect x="27" y="3" width=".86" height=".86"/><rect x="28" y="3" width=".86" height=".86"/><rect x="24" y="4" width=".86" height=".86"/><rect x="28" y="4" width=".86" height=".86"/><rect x="24" y="5" width=".86" height=".86"/><rect x="28" y="5" width=".86" height=".86"/><rect x="24" y="6" width=".86" height=".86"/><rect x="28" y="6" width=".86" height=".86"/></g></svg>
     <span>KARMA · free FM-1 firmware · GPL-3.0-only · by Ariel Muchnik, with Claude</span>
-    <nav aria-label="Tools"><a href="emu/">Simulator</a><a href="webapp/installer/">Installer (soon)</a><a href="webapp/editor/">Editor</a></nav>
+    <nav aria-label="Tools"><a href="emu/">Simulator</a><a href="webapp/installer/">Installer (soon)</a><a href="webapp/editor/">Editor</a><a href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener">Ko-fi ↗</a></nav>
   </div>
 </footer>
 
 <script>
 (function () {
-  var shots = {
-    acid: { src: "img/acid.png", alt: "Track 1, ACID: the laughing Buddha sits on the bass line, with the WAVE, CUT, RES and ENV knobs below.", cap: "Track 1 · ACID. The Buddha laughs along with the bass line." },
-    elements: { src: "img/elements.png", alt: "Track 2, ELEMENTS: a gorilla plays two congas.", cap: "Track 2 · ELEMENTS. The gorilla plays congas on every strike." },
-    plaits: { src: "img/plaits.png", alt: "Track 3, PLAITS: a flying saucer beams down a note.", cap: "Track 3 · PLAITS. The saucer beams down each note." },
-    drums: { src: "img/drums.png", alt: "The DRUM track: a drummer behind a full kit above the step row.", cap: "DRUM · HEX. The drummer hits what the sequencer plays." }
-  };
-  var order = ["acid", "elements", "plaits", "drums"];
-  var img = document.getElementById("hero-shot");
+  var mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+  var still = function () { return mq.matches; };
+
+  /* ---- the hero loop: a 30 s screen recording of the firmware, cut from the build video ---- */
+  var video = document.getElementById("loop");
+  var pp = document.getElementById("pp");
   var cap = document.getElementById("hero-cap");
   var btns = document.querySelectorAll(".tracks button");
-  var i = 0, timer = null;
-  order.forEach(function (k) { var p = new Image(); p.src = shots[k].src; });
-  function show(k) {
-    var s = shots[k]; if (!s) return;
-    img.src = s.src; img.alt = s.alt; cap.textContent = s.cap; i = order.indexOf(k);
-    btns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.k === k)); });
+  // where each page sits in img/karma-loop.mp4 (seconds), what the chips and caption say, which key colour lights
+  var SEG = [
+    { t: 0,  k: "drums",    c: "c4", cap: "DRUM · HEX. A kick goes in on the step grid and the drummer plays it.", notes: [0, 7, 12, 7] },
+    { t: 6,  k: "acid",     c: "c1", cap: "Track 1 · ACID. GEN writes a bass line, then the Buddha laughs along with it.", notes: [0, 12, 3, 15, 5, 12, 10, 3] },
+    { t: 13, k: "elements", c: "c2", cap: "Track 2 · ELEMENTS. Notes go in on the grid, then the gorilla plays them on congas.", notes: [7, 14, 19, 14] },
+    { t: 19, k: "plaits",   c: "",   cap: "Track 3 · PLAITS. The saucer beams down each note.", notes: [7, 11, 14, 16, 19, 16] },
+    { t: 23, k: "plaits",   c: "",   cap: "Track 3 · FX. The wizard casts the chorus, delay and reverb.", notes: [14, 19, 23] },
+    { t: 26, k: "mix",      c: "",   cap: "MIX. The whole band on podiums above their level meters.", notes: [0, 7, 14, 19] }
+  ];
+  var JUMP = { drums: 0, acid: 6, elements: 13, plaits: 19, mix: 26 };
+  var keys = {}, playBtn = document.querySelector('.fm1 .play');
+  document.querySelectorAll(".fm1 .key").forEach(function (g) { keys[g.getAttribute("data-k")] = g; });
+  var cur = -1, lastBeat = -1, litKey = null, raf = 0;
+
+  function segAt(t) { var i = SEG.length - 1; while (i > 0 && t < SEG[i].t) i--; return i; }
+  function showSeg(i) {
+    if (i === cur) return; cur = i;
+    cap.textContent = SEG[i].cap;
+    btns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.k === SEG[i].k)); });
   }
+  function light(k, cls) {
+    if (litKey) litKey.setAttribute("class", "key");
+    litKey = keys[k] || null;
+    if (litKey) litKey.setAttribute("class", "key on" + (cls ? " " + cls : ""));
+  }
+  // decorative: a key slit flashes on every eighth note at 112 BPM, in the playing track's colour
+  function tick() {
+    raf = 0;
+    if (video.paused) return;
+    var t = video.currentTime, i = segAt(t), seg = SEG[i];
+    showSeg(i);
+    var beat = Math.floor((t - seg.t) * 112 / 60 * 2);
+    if (beat !== lastBeat) { lastBeat = beat; light(seg.notes[beat % seg.notes.length], seg.c); }
+    raf = requestAnimationFrame(tick);
+  }
+  function setPlaying(on) {
+    pp.textContent = on ? "PAUSE" : "PLAY";
+    pp.setAttribute("aria-label", on ? "Pause the recording" : "Play the recording");
+    if (playBtn) playBtn.setAttribute("class", "btn play" + (on ? " green" : ""));
+    if (!on && litKey) { litKey.setAttribute("class", "key"); litKey = null; }
+  }
+  function play() {
+    video.preload = "auto";
+    var pr = video.play();
+    if (pr && pr.catch) pr.catch(function () { setPlaying(false); });
+  }
+  video.addEventListener("play", function () { setPlaying(true); if (!raf) raf = requestAnimationFrame(tick); });
+  video.addEventListener("pause", function () { setPlaying(false); });
+  video.addEventListener("seeked", function () { showSeg(segAt(video.currentTime)); });
+  pp.addEventListener("click", function () { choice = video.paused ? "play" : "pause"; if (choice === "play") play(); else video.pause(); });
   btns.forEach(function (b) {
-    b.addEventListener("click", function () { if (timer) { clearInterval(timer); timer = null; } show(b.dataset.k); });
+    b.addEventListener("click", function () {
+      var t = JUMP[b.dataset.k] + .05;
+      showSeg(segAt(t));
+      if (video.readyState < 1) { video.preload = "auto"; video.load(); video.addEventListener("loadedmetadata", function f() { video.removeEventListener("loadedmetadata", f); video.currentTime = t; }); }
+      else video.currentTime = t;
+    });
   });
-  var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!still) timer = setInterval(function () { show(order[(i + 1) % order.length]); }, 3200);
+  // starts by itself only when motion is welcome, and only while it is on screen
+  var choice = null, onScreen = true;
+  function auto() {
+    var want = onScreen && (choice ? choice === "play" : !still());
+    if (want && video.paused) play(); else if (!want && !video.paused) video.pause();
+  }
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(function (es) { onScreen = es[0].isIntersecting; auto(); }, { threshold: .15 }).observe(video);
+  } else auto();
+  if (mq.addEventListener) mq.addEventListener("change", auto);
+  setPlaying(false);
+
+  if (still()) return;
+
+  /* ---- the wordmark assembles, then blinks a cell in its own colour now and then ---- */
+  var mark = document.getElementById("hero-mark");
+  var cells = mark ? mark.querySelectorAll("rect") : [];
+  cells.forEach(function (r, i) { r.style.setProperty("--i", (i * 37) % cells.length); });
+  document.documentElement.classList.add("anim");
+  setTimeout(function () { document.documentElement.classList.remove("anim"); }, 2200);
+  setInterval(function () {
+    if (document.hidden || still()) return;
+    var r = cells[Math.floor(Math.random() * cells.length)];
+    if (!r) return;
+    r.classList.remove("blink"); void r.getBBox(); r.classList.add("blink");
+  }, 1071);
+
+  /* ---- the boxed section labels type in the first time they scroll into view ---- */
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        io.unobserve(e.target);
+        var el = e.target, full = el.textContent, n = 0;
+        el.style.minWidth = el.getBoundingClientRect().width + "px";
+        el.textContent = ""; el.classList.add("typing");
+        var iv = setInterval(function () {
+          n++; el.textContent = full.slice(0, n);
+          if (n >= full.length) { clearInterval(iv); setTimeout(function () { el.classList.remove("typing"); el.style.minWidth = ""; }, 900); }
+        }, 70);
+      });
+    }, { rootMargin: "0px 0px -15% 0px" });
+    document.querySelectorAll("section .head .tag").forEach(function (t) {
+      var r = t.getBoundingClientRect();
+      if (r.top > window.innerHeight) io.observe(t);   // labels already on screen stay as they are
+    });
+  }
+
+  /* ---- the DRUM and track 1 cards fade through their pages ---- */
+  var cycles = [
+    { img: document.querySelector(".eng.c1 .shot img"), shots: [
+      ["img/acid.png", "ACID edit page: WAVE SAW, CUT 31, RES 79, ENV 63, with the Buddha."],
+      ["img/gen.png", "GEN page on the JUNO track: generated notes with DRIFT, DENS and RANGE."]] },
+    { img: document.querySelector(".eng.c4 .shot img"), shots: [
+      ["img/hex.png", "HEX drum synth page: a kick's decaying waveform with P.AMT, P.DEC, RATIO and FM knobs."],
+      ["img/drums.png", "The drummer behind a full kit, above the DRUM step row."],
+      ["img/drumgen.png", "DRUM GEN page: kick, snare and hats lanes with MAP X, MAP Y and CHAOS."]] }
+  ];
+  var step = 0;
+  setInterval(function () {
+    if (document.hidden) return;
+    step++;
+    cycles.forEach(function (c, j) {
+      if (!c.img) return;
+      var s = c.shots[(step + j) % c.shots.length], im = c.img;
+      if (im.getAttribute("src") === s[0]) return;
+      var pre = new Image(); pre.src = s[0];
+      pre.onload = function () {
+        im.style.opacity = "0";
+        setTimeout(function () { im.src = s[0]; im.alt = s[1]; im.style.opacity = "1"; }, 600);
+      };
+    });
+  }, 4286);
 })();
 </script>
 </body>

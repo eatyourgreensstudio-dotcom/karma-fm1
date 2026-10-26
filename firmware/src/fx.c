@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+ * Portions Copyright (C) 2026 Juan Ignacio Antonucci (Juan Jiant): the USB STEMS capture / the half acked first (JIANT FM) */
 /* Effects: per-track DIST insert, then sends into three shared buses (chorus, tempo delay, reverb).
  * Stereo dry mix; the chorus and the reverb come back in stereo, the delay in the middle. */
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 down to 41 BPM, 1/8 dotted down to 31, 1/4 dotted down to 61 (clamped below) */
@@ -1046,6 +1047,25 @@ static void texture_mix(int32_t *l, int32_t *r, uint32_t n)
         texture_reset(src);                             /* faded out: the new source from rest */
 }
 
+/* KARMA 3.0, after JIANT FM 0.7.1 (Juan Jiant, GPL-3.0-only): menu USB AUDIO = STEMS, the USB audio input as 6
+ * channels (usb.c uac_tap6): each track mono (its LEVEL, DIST, SLICER, INSERT, FILTER and MUTE in, its PAN not: what
+ * it adds to the dry mix, L + R halved), tracks 1..3 then the drums, and the FX return L R (the CHORUS, DELAY and
+ * REVERB buses, the CLOUD, TEXTURE), all before the master (no DUST, punch-in, DJ filter, limiter or MASTER: the
+ * mix's own scale); the metronome in none. fx_stems: this render feeds them (audio.c) */
+static int32_t stem_buf[NTRK][CTL], stem_fx[2][CTL], stem_pre[CTL];
+static uint8_t fx_stems;
+#define UAC_STEMS_SRC 1
+static __attribute__((noinline)) void stem_take(uint32_t k, uint32_t n, int post)
+{
+    uint32_t i;
+    if (!post)
+        for (i = 0; i < n; i++)
+            stem_pre[i] = mix_l[i] + mix_r[i];
+    else
+        for (i = 0; i < n; i++)
+            stem_buf[k][i] = (mix_l[i] + mix_r[i] - stem_pre[i]) >> 1;
+}
+
 static void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i;
@@ -1059,8 +1079,15 @@ static void mix_block(int32_t *out, uint32_t n)
     }
     events_block(n);
     duck_block(n * (uint32_t)song.g[G_BPM]);
-    for (i = 0; i < NPART; i++)
+    for (i = 0; i < NPART; i++) {
+        if (fx_stems)
+            stem_take(i, n, 0);
         mix_part(&trk[i], n);
+        if (fx_stems)
+            stem_take(i, n, 1);
+    }
+    if (fx_stems)
+        stem_take(TRK_DRUM, n, 0);
     drums.a0 = TDRUM->att;                              /* the drum track's mute / solo fade */
     drums.a1 = 32767 - gain_next(TDRUM);
     {
@@ -1097,7 +1124,12 @@ static void mix_block(int32_t *out, uint32_t n)
             slicer_drums(mix_l, mix_r, send_r, send_d, n);   /* drums_render, through the SLICER when on */
         }
     }
+    if (fx_stems)
+        stem_take(TRK_DRUM, n, 1);                      /* the drums' stem */
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
+    if (fx_stems)                                       /* the FX return: what is added from here (not the metronome) */
+        for (i = 0; i < n; i++)
+            stem_fx[0][i] = mix_l[i], stem_fx[1][i] = mix_r[i];
     texture_mix(mix_l, mix_r, n);                       /* GLO > TEXTURE (2.6): the bed, dry */
     punch_freeze_feed(send_r, mix_l, mix_r, n);         /* punch-in FREEZE: the dry mix into the held reverb */
     fx_buses(send_c, send_d, send_r, wet_l, wet_r, n);
@@ -1106,6 +1138,9 @@ static void mix_block(int32_t *out, uint32_t n)
         mix_r[i] += wet_r[i];
     }
     cloud_process(cloud_bus, mix_l, mix_r, n);          /* the CLOUD: grains of what the tracks sent it (cloud.c) */
+    if (fx_stems)                                       /* ... what the buses, the CLOUD and TEXTURE added */
+        for (i = 0; i < n; i++)
+            stem_fx[0][i] = mix_l[i] - stem_fx[0][i], stem_fx[1][i] = mix_r[i] - stem_fx[1][i];
     dust_process(mix_l, mix_r, n);
     punch_process(mix_l, mix_r, n);
     djf_process(mix_l, mix_r, n);

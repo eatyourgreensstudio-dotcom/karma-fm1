@@ -40,14 +40,17 @@ void fm1_timer5_irq(void)
     if (felucca_dbg.in_audio) {
         felucca_dbg.nested++;
 #if FELUCCA_UAC
-        if (usb_due)
-            uac_service();
+        uac_service();                          /* (every tick: KARMA 3.0 after JIANT FM 0.9.10, the stems' packets) */
 #endif
         t5_nested_ticks += fm1_ticks() - t0;
         return;
     }
     if (owed & 1u)
-        usb_poll();
+        usb_poll();                             /* (uac_service at its end) */
+#if FELUCCA_UAC
+    else
+        uac_service();
+#endif
 #if FELUCCA_UART
     if (owed & 2u)
         uart_midi_poll();
@@ -159,6 +162,13 @@ static void fm1_main(void)
     audio_init();
 #if FELUCCA_CDC
     usb_cdc_on = usb_serial;                            /* menu USB SERIAL (persist_boot read it): before USB starts */
+#endif
+#if FELUCCA_UAC
+    usb_stems = (uint8_t)(FELUCCA_UAC_STEMS && usb_stems_set);   /* menu USB AUDIO = STEMS: 6 channels, no console */
+#if FELUCCA_CDC
+    if (usb_stems)
+        usb_cdc_on = 0;
+#endif
 #endif
     usb_start();
 #if FELUCCA_UART

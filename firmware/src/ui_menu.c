@@ -40,7 +40,7 @@ static const char *mi_value(uint32_t i, uint16_t *c)
         return KEYS_NAME[lights_keys % KEYS_N];
     case MI_NOTES: return lights_notes ? "ON" : "OFF";
     case MI_LOWCUT: return settings.lowcut ? "ON" : "OFF";
-    case MI_USB: return usb_full ? "FULL" : "MASTER";
+    case MI_USB: return usb_stems_set ? "STEMS" : usb_full ? "FULL" : "MASTER";
     case MI_SERIAL: return usb_serial ? "ON" : "OFF";
     case MI_LCLEAR: {                                 /* (2.6) the CCs MIDI LEARN holds; OCT+ clears them */
         static char b[8];
@@ -64,7 +64,7 @@ static void draw_menu(void)
     uint32_t i, pass, sec = mi_sec(ui.menu_sel % MI_COUNT);
     uint32_t sig = ui.menu * 7u + ui.menu_sel * 131u + settings.palette * 1009u + settings.lowcut * 7919u +
                    settings.zoom * 104729u + lights_lvl * 1299709u + lights_keys * 15485863u + ml_count() * 2654435u +
-                   lights_notes * 32452843u + usb_full * 49979687u + usb_serial * 86028121u;
+                   lights_notes * 32452843u + usb_full * 49979687u + usb_serial * 86028121u + usb_stems_set * 15485863u;
     if (!ui.force && sig == ui.menu_sig)
         return;
     ui.menu_sig = sig;
@@ -137,7 +137,7 @@ static void draw_menu(void)
                     for (q = 0; q < 5u; q++)
                         cv_rect(xv + 10 + (int32_t)q * 14, y + 28, 10, 10, pal[q]);
                 }
-                if (i == MI_SERIAL && usb_serial != usb_cdc_now())
+                if ((i == MI_SERIAL && usb_serial != usb_cdc_now()) || (i == MI_USB && usb_stems_set != USB_STEMS_NOW))
                     cv_text(xv + 8, y + 30, &FONT_S, "RESTART", C_AMB);   /* (usb.c: at the next start) */
             }
             cv_text(4, MI_Y0 + 3 * MI_DY + 6, &FONT_S, "SELECT SECTION  KNOB SETS", C_DIM);
@@ -181,9 +181,13 @@ static void mi_set(uint32_t i, int32_t s)
         fx_lowcut = (uint8_t)(settings.lowcut != 0);
         break;
     }
-    case MI_USB:                                       /* right FULL, left MASTER */
-        usb_full = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !usb_full);
+    case MI_USB: {                                     /* MASTER, FULL, STEMS (KARMA 3.0: at the next start); OCT+ round */
+        uint32_t v = usb_stems_set ? 2u : usb_full ? 1u : 0u;
+        v = s > 0 ? (v < 2u ? v + 1u : 2u) : s < 0 ? (v ? v - 1u : 0u) : (v + 1u) % 3u;
+        usb_full = (uint8_t)(v == 1u);
+        usb_stems_set = (uint8_t)(v == 2u);
         break;
+    }
     case MI_SERIAL:
         usb_serial = (uint8_t)(s > 0 ? 1u : s < 0 ? 0u : !usb_serial);
         break;

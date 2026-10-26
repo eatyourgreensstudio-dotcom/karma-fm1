@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+ * Portions Copyright (C) 2026 Juan Ignacio Antonucci (Juan Jiant): the USB STEMS capture / the half acked first (JIANT FM) */
 /* I2S output (ALNK0 -> external codec) and the audio ISR: each half buffer is
  * rendered in blocks of CTL samples by mix_block (fx.c: events -> each synth part
  * -> dist -> level / pan -> sends -> drums -> buses -> master), then scaled to 24-bit stereo. */
@@ -41,7 +42,10 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
     uint32_t i;
     mix_block(out, n);
 #if FELUCCA_UAC
-    uac_tap(usb_full_now ? usb_out : out, n);           /* the USB audio input: the master output, or at full level */
+    if (fx_stems)
+        uac_tap6(n);                                    /* menu USB AUDIO = STEMS: 6 channels (fx.c stem_buf) */
+    else
+        uac_tap(usb_full_now ? usb_out : out, n);       /* the USB audio input: the master output, or at full level */
 #endif
     for (i = 0; i < n; i++) {
         if (i & 1u)
@@ -54,6 +58,8 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
     }
 }
 
+static uint32_t audio_lost;                     /* halves rendered twice in a row: one was lost (a late render) */
+static uint8_t audio_last_half = 0xFF;
 /* overload: shed_voice (voice.c) */
 static volatile uint8_t shed_req;
 static uint8_t shed_over;                      /* bit k: the half k halves ago was over 85 % */
@@ -70,6 +76,13 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
     if (p & FM1_AUDIO_HALF) {
         uint32_t half = fm1_audio_free_half(), b, us;
         int32_t *o = &abuf[half * HALF_WORDS];
+        fm1_audio_ack_half();                           /* first (KARMA 3.0, after JIANT FM 0.8.9): a flip during a late
+                                                         * render stays pending and this ISR runs again for the other
+                                                         * half at once; acked after the render, every late half lost the
+                                                         * next one (its stale audio played again, USB packets short) */
+        if (half == audio_last_half)
+            audio_lost++;
+        audio_last_half = (uint8_t)half;
         if (shed_req) {
             shed_req = 0;
             shed_voice();
@@ -77,10 +90,10 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
 #if FELUCCA_UAC
         uac_render_start();
         usb_full_now = (uint8_t)(usb_full && uac.feed);  /* menu USB AUDIO = FULL, while the computer records */
+        fx_stems = (uint8_t)(usb_stems && uac.feed);    /* menu USB AUDIO = STEMS, while the computer records */
 #endif
         for (b = 0; b < HALF_FRAMES; b += CTL)
             audio_block(o + 2u * b, CTL);
-        fm1_audio_ack_half();
         audio_halves++;
         {   /* the deadline sees the render and TIMER5 nested in it (the USB audio stream); the load
              * figures the render alone (after Felucca 1.0) */

@@ -98,6 +98,10 @@ static uint8_t midi_set[6] = MIDI_SET_DEF;
 static const uint16_t LIGHTS_NS[LIGHTS_N] = {0u, 500u, 1000u, 2000u};   /* the backlight pulse a frame (ns): a lit
                                                 * LED ~95 us, the glow (landmarks) 4 us (fm1_input.h) */
 static uint8_t usb_serial;                      /* menu USB SERIAL: 1 = the serial console presented (usb.c) */
+static uint8_t usb_stems_set;                   /* menu USB AUDIO = STEMS: the 6 channels at the next start (usb.c) */
+#ifndef USB_STEMS_NOW
+#define USB_STEMS_NOW 0                         /* (a build without usb.c: the host tests of the UI) */
+#endif
 static uint8_t vis_style;                       /* the visualiser's style, 0..11 (ui_vis.c) */
 static uint32_t lights_word(void)
 {
@@ -106,7 +110,8 @@ static uint32_t lights_word(void)
            (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
            (uint32_t)(usb_serial != 0u) << 16 | (uint32_t)(vis_style % 12u) << 17 |
            (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |  /* 2.6: CH n (n 1..16; 0 none) */
-           (uint32_t)((midi_knobs ^ 4u) & 7u) << 26;                                   /* KNOBS (2026-10-20; 0: PANEL) */
+           (uint32_t)((midi_knobs ^ 4u) & 7u) << 26 |                                  /* KNOBS (2026-10-20; 0: PANEL) */
+           (uint32_t)(usb_stems_set != 0u) << 29;                                      /* USB AUDIO = STEMS (KARMA 3.0) */
 }
 static void lights_from_word(uint32_t w)
 {
@@ -125,6 +130,9 @@ static void lights_from_word(uint32_t w)
     if (midi_knobs > 4u)
         midi_knobs = 4u;
     usb_serial = (uint8_t)((w >> 16) & 1u);
+    usb_stems_set = (uint8_t)((w >> 29) & 1u);
+    if (usb_stems_set)
+        usb_full = 0;
     vis_style = (uint8_t)(((w >> 17) & 15u) % 12u);   /* the visualiser (ui_vis.c); 0 in 2.3 = OSCILLOSCOPE */     /* menu USB SERIAL (usb.c usb_cdc_on, at the next start); 0 in 2.3 = OFF */
 }
 

@@ -113,6 +113,8 @@ $CC -DT_CDC=0 -DHALF_FRAMES=$HALF -o "$OUT/uac_test_nocdc" tests/uac_test.c $PLX
 run "USB audio input: descriptors (without CDC), ring and packets" "$OUT/uac_test_nocdc"
 $CC -DT_CDC=2 -DHALF_FRAMES=$HALF -o "$OUT/uac_test_seroff" tests/uac_test.c $PLX -lm
 run "USB audio input: descriptors (CDC built in, menu USB SERIAL OFF), ring and packets" "$OUT/uac_test_seroff"
+$CC -DHALF_FRAMES=$HALF -o "$OUT/uac_stems_test" tests/uac_stems_test.c $PLX -lm
+run "USB STEMS: 6 channels, descriptors, ring and packets (KARMA 3.0)" "$OUT/uac_stems_test"
 run "USB SERIAL OFF: the descriptors of a build without CDC, byte for byte" \
     sh -c "[ \"\$(UAC_DUMP=1 '$OUT/uac_test_seroff' | tail -n 2)\" = \"\$(UAC_DUMP=1 '$OUT/uac_test_nocdc' | tail -n 2)\" ] && echo same"
 uac_in_app() { ${CC%% *} -E -Ibuild/gen -Ifirmware/hal -Ifirmware/src firmware/src/felucca.c 2>/dev/null | grep -q uac_service; }

@@ -15,6 +15,10 @@ static struct {
 static void con_putc(char c)
 {
     uint32_t t0 = fm1_ms;
+#if FELUCCA_UAC
+    if (usb_stems)
+        return;                                         /* (USB AUDIO = STEMS: no console; its buffer is the stems ring's) */
+#endif
     while (co_w - co_r >= CO_N) {                      /* full: wait for usb_poll, briefly */
         if (!cdc.dtr || con.stalled || fm1_ms - t0 > 20u) {
             con.stalled = 1;
