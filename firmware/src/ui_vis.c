@@ -68,6 +68,15 @@ static int32_t vis_lvl(int32_t a)
 }
 
 /* ---- drawing helpers (canvas coordinates; cv_oy picks the band) ---- */
+/* VIS_GRAD as a colour: a vertical gradient, vis_g0c at row vis_g0 to vis_g1c at vis_g1 (the DANCER's soft shading) */
+#define VIS_GRAD 0x0821u
+static int32_t vis_g0, vis_g1;
+static uint16_t vis_g0c, vis_g1c;
+static uint16_t vis_gcol(int32_t y)
+{
+    int32_t k = vis_g1 > vis_g0 ? (y - vis_g0) * 256 / (vis_g1 - vis_g0) : 0;
+    return mix565(vis_g0c, vis_g1c, clamp(k, 0, 256));
+}
 static void vis_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint16_t c)
 {
     int32_t y;
@@ -78,7 +87,7 @@ static void vis_ellipse(int32_t cx, int32_t cy, int32_t rx, int32_t ry, uint16_t
         while (w <= rx && (w * w) * (ry * ry) + (y * y) * (rx * rx) <= (rx * rx) * (ry * ry))
             w++;
         if (w)
-            cv_rect(cx - w + 1, cy + y, 2 * w - 1, 1, c);
+            cv_rect(cx - w + 1, cy + y, 2 * w - 1, 1, c == VIS_GRAD ? vis_gcol(cy + y) : c);
     }
 }
 static void vis_circle(int32_t cx, int32_t cy, int32_t r, uint16_t c)  /* an outline */
@@ -124,7 +133,7 @@ static void vis_poly(const int32_t *px, const int32_t *py, uint32_t n, uint16_t 
                 int32_t t = xs[b]; xs[b] = xs[b - 1]; xs[b - 1] = t;
             }
         for (a = 0; a + 1 < m; a += 2)
-            cv_rect((xs[a] + 8) >> 4, y, ((xs[a + 1] + 8) >> 4) - ((xs[a] + 8) >> 4), 1, c);
+            cv_rect((xs[a] + 8) >> 4, y, ((xs[a + 1] + 8) >> 4) - ((xs[a] + 8) >> 4), 1, c == VIS_GRAD ? vis_gcol(y) : c);
     }
 }
 /* a seven-segment digit, the unlit segments faintly there (an LCD) */
@@ -327,9 +336,11 @@ static void vis_update(void)
             }
         }
         break;
-    case 0:                                         /* DANCER: her energy, the mix's level (fast up, slow down) */
-        vs.vu[4] = (int16_t)(vs.lvl[4] > vs.vu[4] ? vs.vu[4] + (vs.lvl[4] - vs.vu[4]) / 3 : vs.vu[4] - 8);
-        if (vs.vu[4] < 0) vs.vu[4] = 0;
+    case 0:                                         /* DANCER: her energy, the mix's and each track's level */
+        for (i = 0; i < 5u; i++) {                  /* (fast up, slow down) */
+            vs.vu[i] = (int16_t)(vs.lvl[i] > vs.vu[i] ? vs.vu[i] + (vs.lvl[i] - vs.vu[i]) / 3 : vs.vu[i] - 8);
+            if (vs.vu[i] < 0) vs.vu[i] = 0;
+        }
         break;
     default:
         break;
@@ -555,12 +566,19 @@ static void vis_wires(void)
 }
 /* the logo (tools/gen_logo.py at 0.86, centred on 120, 112), alive: the dial is the master, the sail's four
  * bands the tracks (growing with their level, flashing on a note), the boat rocks on the master's wave */
-/* DANCER (KARMA 3.0): an original figure, a white silhouette on black, dancing to the beat: her weight goes from one
- * leg to the other on every beat (that knee gives, the hip drops, the other leg straight), the arms take one of four
- * moves for two bars each (a V waving, pumping, the disco point, a wave), wider the louder the mix; a kick adds a
- * little bounce; the skirt and the long hair swing behind her. Angles 1024 a turn, from straight down, outward
- * positive. A limb is a polygon with a muscle's profile (its width at the start, at its widest, at the end) */
-static void vis_limb(int32_t x0, int32_t y0, int32_t a, int32_t len, int32_t r0, int32_t rm, int32_t r1,
+/* DANCER (KARMA 3.0): an original dancer, a silhouette on a stage, in KARMA's colours: a soft spotlight and a glow on
+ * the floor behind her, her body in a soft white going lavender to the feet, a rim of light on her edges (blue on one
+ * side, orange on the other, as if lit from the stage). She dances in flowing moves (our own choreography, after the
+ * style of a slow, sensual stage dance): a hip roll with a hand on her head, a body wave with her wrists crossed over
+ * her head, her hands sliding up her body and opening out, a hair toss with a hand in her hair; one move each two
+ * bars, each blending into the next over a beat; the knees give on the beat; wider the louder the mix. The pose is
+ * worked out once, then drawn three times (the two rims, offset, then the body). Angles 1024 a turn, from straight
+ * down, outward positive; limbs are polygons with a muscle's profile */
+typedef struct {
+    int32_t hx, hy, tilt, cx, cy, wx, wy, nx, ny, hd, hair;     /* hips, tilt, chest, waist, neck, head x, hair swing */
+    int32_t up[2], el[2], th[2], kn[2];                         /* arms (upper, elbow) and legs (thigh, knee), L R */
+} dz_pose_t;
+static void vis_limb(int32_t x0, int32_t y0, int32_t a, int32_t len, int32_t r0, int32_t rm, int32_t r1, uint16_t col,
                      int32_t *ex, int32_t *ey)
 {
     int32_t s = isin((uint32_t)a), c = icos((uint32_t)a), px[6], py[6];
@@ -572,76 +590,148 @@ static void vis_limb(int32_t x0, int32_t y0, int32_t a, int32_t len, int32_t r0,
     px[3] = x1 - ((c * r1 * 16) >> 15), py[3] = y1 + ((s * r1 * 16) >> 15);
     px[4] = xm - ((c * rm * 16) >> 15), py[4] = ym + ((s * rm * 16) >> 15);
     px[5] = x0 * 16 - ((c * r0 * 16) >> 15), py[5] = y0 * 16 + ((s * r0 * 16) >> 15);
-    vis_poly(px, py, 6, C_WHITE);
+    vis_poly(px, py, 6, col);
     *ex = (x1 + 8) >> 4, *ey = (y1 + 8) >> 4;
-    vis_ellipse(*ex, *ey, r1, r1, C_WHITE);                     /* (the joint, round) */
+    vis_ellipse(*ex, *ey, r1, r1, col);                         /* (the joint, round) */
+}
+/* one move's pose at phase f (0..1023 over its two beats) and energy e (0..1000) */
+static void dz_move(uint32_t mv, int32_t f, int32_t bt, int32_t e, dz_pose_t *p)
+{
+    int32_t sw = isin((uint32_t)f), cw = icos((uint32_t)f), k, side;
+    memset(p, 0, sizeof *p);
+    p->hx = (sw * 11 * e / 1000) >> 15;                         /* the hips sway (a side a beat) ... */
+    p->hy = (cw * 3 * e / 1000) >> 15;                          /* ... and roll */
+    p->tilt = (sw * 22) >> 15;
+    p->cx = -(sw * 5) >> 15;                                    /* the chest against them */
+    p->hair = -(sw * 14) >> 15;
+    p->hd = -(sw * 3) >> 15;
+    for (side = 0; side < 2; side++) {
+        int32_t on = (side ? sw : -sw) > 0;                     /* her weight on this leg */
+        p->th[side] = on ? 14 : 34 + ((sw < 0 ? -sw : sw) * 30 >> 15);
+        p->kn[side] = on ? 4 : 50 + bt * 20 / 1000;
+    }
+    switch (mv) {
+    case 0:                                                     /* a hip roll, a hand on her head, the other on her hip */
+        p->hy = (cw * 5 * e / 1000) >> 15;
+        p->up[1] = 430, p->el[1] = 210;
+        p->up[0] = 80, p->el[0] = -300;
+        break;
+    case 1:                                                     /* a body wave, the wrists crossed over her head */
+        p->cx = (isin((uint32_t)(f - 256)) * 9 * e / 1000) >> 15;   /* (the wave: the chest after the hips) */
+        p->hd = (isin((uint32_t)(f - 512)) * 6 * e / 1000) >> 15;
+        for (side = 0; side < 2; side++)
+            p->up[side] = 470 + ((isin((uint32_t)(f + side * 512)) * 25) >> 15), p->el[side] = 95;
+        break;
+    case 2:                                                     /* the hands slide up her body and open out */
+        k = f < 512 ? f : 1024 - f;                             /* (0 .. 512 .. 0) */
+        for (side = 0; side < 2; side++) {
+            p->up[side] = 60 + k * 420 / 512;
+            p->el[side] = k < 256 ? -260 + k * 260 / 256 : (k - 256) * 120 / 256;
+        }
+        break;
+    default:                                                    /* a hair toss, a hand in her hair, the other reaching */
+        p->hair = (sw * 13) >> 15;
+        p->hd = (sw * 6) >> 15;
+        p->up[1] = 450, p->el[1] = 240;
+        p->up[0] = 180 + ((cw * 60) >> 15), p->el[0] = 40;
+        break;
+    }
+    for (side = 0; side < 2; side++)                            /* (quieter: smaller moves) */
+        p->up[side] = 60 + (p->up[side] - 60) * (500 + e / 2) / 1000;
+}
+static void dz_mix(dz_pose_t *a, const dz_pose_t *b, int32_t k)   /* a -> b, k 0..256 */
+{
+    int32_t *x = (int32_t *)a;
+    const int32_t *y = (const int32_t *)b;
+    uint32_t i;
+    for (i = 0; i < sizeof *a / sizeof(int32_t); i++)
+        x[i] += ((y[i] - x[i]) * k) >> 8;
+}
+static void dz_draw(const dz_pose_t *p, int32_t dx, int32_t kick, uint16_t col)
+{
+    int32_t hx = 120 + p->hx + dx, hy = 124 + p->hy + kick, cx, cy, wx, wy, x, y, side, k, px[8], py[8];
+    int32_t lean = p->cx * 3 - p->hx;
+    /* the legs */
+    for (side = -1; side <= 1; side += 2) {
+        int32_t i = side > 0, hip = hy + side * p->tilt / 8;
+        vis_limb(hx + side * 9, hip, side * (p->th[i] + p->kn[i] / 2), 50, 10, 9, 6, col, &x, &y);   /* thigh */
+        vis_limb(x, y, side * (p->th[i] - p->kn[i] / 2), 47, 6, 7, 3, col, &x, &y);                 /* calf */
+        px[0] = (x - 3) * 16, py[0] = y * 16, px[1] = (x + 3) * 16, py[1] = y * 16;                  /* the shoe */
+        px[2] = (x + side * 9) * 16, py[2] = (y + 7) * 16, px[3] = (x - side * 2) * 16, py[3] = (y + 7) * 16;
+        vis_poly(px, py, 4, col);
+    }
+    /* the torso: shoulders, the bust, a narrow waist, the hips */
+    cx = hx + p->cx + ((isin((uint32_t)(512 + lean)) * 62) >> 15), cy = hy + ((icos((uint32_t)(512 + lean)) * 62) >> 15);
+    wx = (cx * 9 + hx * 11) / 20 + p->cx / 2, wy = (cy * 9 + hy * 11) / 20;
+    px[0] = (cx - 14) * 16, py[0] = (cy + 1) * 16, px[1] = (cx + 14) * 16, py[1] = (cy + 1) * 16;
+    px[2] = (cx + 13) * 16, py[2] = (cy + 17) * 16, px[3] = (wx + 8) * 16, py[3] = wy * 16;
+    px[4] = (hx + 17) * 16, py[4] = (hy + p->tilt / 8 - 2) * 16, px[5] = (hx - 17) * 16, py[5] = (hy - p->tilt / 8 - 2) * 16;
+    px[6] = (wx - 8) * 16, py[6] = wy * 16, px[7] = (cx - 13) * 16, py[7] = (cy + 17) * 16;
+    vis_poly(px, py, 8, col);
+    vis_ellipse(cx - 7, cy + 15, 7, 6, col);                    /* the bust */
+    vis_ellipse(cx + 7, cy + 15, 7, 6, col);
+    vis_ellipse(cx, cy + 3, 15, 5, col);                        /* the shoulders */
+    /* a short dress: from the hips, close, its hem swinging */
+    k = -p->hx * 2;
+    px[0] = (hx - 17) * 16, py[0] = (hy - p->tilt / 8 - 4) * 16, px[1] = (hx + 17) * 16, py[1] = (hy + p->tilt / 8 - 4) * 16;
+    px[2] = (hx + 24 + k / 2) * 16, py[2] = (hy + 20) * 16, px[3] = (hx + k / 2) * 16, py[3] = (hy + 23) * 16;
+    px[4] = (hx - 24 + k / 2) * 16, py[4] = (hy + 20) * 16;
+    vis_poly(px, py, 5, col);
+    /* the arms */
+    for (side = -1; side <= 1; side += 2) {
+        int32_t i = side > 0;
+        vis_limb(cx + side * 13, cy + 4, side * p->up[i], 31, 6, 6, 4, col, &x, &y);
+        vis_limb(x, y, side * (p->up[i] + p->el[i]), 27, 4, 4, 2, col, &x, &y);
+        vis_limb(x, y, side * (p->up[i] + p->el[i]), 8, 3, 4, 2, col, &x, &y);   /* the hand */
+    }
+    /* the neck, the head, the long hair */
+    vis_limb(cx - lean / 8, cy - 1, 512, 10, 5, 4, 4, col, &x, &y);
+    k = x + p->hd;
+    px[0] = (k - 9) * 16, py[0] = (y - 16) * 16, px[1] = (k + 9) * 16, py[1] = (y - 16) * 16;
+    px[2] = (k + 13 + p->hair / 2) * 16, py[2] = (y + 2) * 16, px[3] = (k + 12 + p->hair) * 16, py[3] = (y + 22) * 16;
+    px[4] = (k + 5 + p->hair) * 16, py[4] = (y + 15) * 16, px[5] = (k - 2 + p->hair) * 16, py[5] = (y + 19) * 16;
+    px[6] = (k - 12 + p->hair) * 16, py[6] = (y + 22) * 16, px[7] = (k - 13 + p->hair / 2) * 16, py[7] = (y + 2) * 16;
+    vis_poly(px, py, 8, col);
+    vis_ellipse(k, y - 10, 9, 12, col);
+    vis_ellipse(k, y - 16, 11, 9, col);
 }
 static void vis_dancer(void)
 {
-    uint32_t bq = vis_beat_q8(), mv = (bq >> 11) & 3u;          /* a move every two bars */
-    int32_t e = 350 + vs.vu[4] * 65 / 100;                      /* energy 350..1000 */
-    int32_t w = (isin(bq * 2u) * e) >> 15;                      /* her weight: on the right leg (+) or the left, a beat each */
-    int32_t g = (w < 0 ? -w : w), kick = vs.kick * 3 / 255;     /* g: how far it has gone over */
-    int32_t hx = 120 + w * 9 / 1000, hy = 122 + g * 6 / 1000 + kick, tilt = w * 26 / 1000;   /* the hips: over the leg */
-    int32_t lean = -w * 30 / 1000, cx, cy, wx, wy, x, y, side, k, beat = isin(bq * 4u + 256u);
-    int32_t px[8], py[8];
-    vis_ellipse(120 + w * 5 / 1000, 229, 42, 4, RGB(36, 36, 42));   /* her shadow */
-    /* the legs: the weight leg straight under her, the other knee given; a heel each */
-    for (side = -1; side <= 1; side += 2) {
-        int32_t on = side * w > 0, kb = on ? 6 : 40 + g * 40 / 1000, hip = hy + side * tilt / 8;
-        vis_limb(hx + side * 9, hip, side * (26 + kb / 2) + (on ? -side * 10 : 0), 50, 10, 9, 6, &x, &y);   /* thigh */
-        vis_limb(x, y, side * (26 - kb / 2) + (on ? -side * 10 : side * 6), 47, 6, 7, 3, &x, &y);            /* calf */
-        px[0] = (x - 3) * 16, py[0] = y * 16, px[1] = (x + 3) * 16, py[1] = y * 16;                         /* the shoe */
-        px[2] = (x + side * 9) * 16, py[2] = (y + 7) * 16, px[3] = (x - side * 2) * 16, py[3] = (y + 7) * 16;
-        vis_poly(px, py, 4, C_WHITE);
+    uint32_t bq = vis_beat_q8(), mv = (bq >> 11) & 3u, in = bq & 2047u;   /* a move each two bars (2048 = 8 beats) */
+    int32_t e = 200 + vs.vu[4] * 8 / 10, f = (int32_t)((bq * 2u) & 1023u);   /* energy 200..1000: the mix; f: two beats */
+    int32_t bt = isin(bq * 4u + 256u), kick = vs.kick * 8 / 255, side;        /* the kick: a hit she takes */
+    uint16_t rimb, rimo;
+    dz_pose_t p, q;
+    int32_t px[4], py[4];
+    bt = bt > 0 ? bt * 1000 / 32767 : 0;                        /* (the beat's push, for the knees) */
+    dz_move(mv, f, bt, e, &p);
+    if (in < 256u) {                                            /* the first beat of a move: from the last one */
+        dz_move((mv + 3u) & 3u, f, bt, e, &q);
+        dz_mix(&q, &p, (int32_t)in);
+        p = q;
     }
-    /* the torso: shoulders, the bust, a narrow waist, the hips, leaning against the weight */
-    cx = hx + ((isin((uint32_t)(512 + lean)) * 62) >> 15), cy = hy + ((icos((uint32_t)(512 + lean)) * 62) >> 15);
-    wx = (cx * 9 + hx * 11) / 20, wy = (cy * 9 + hy * 11) / 20;
-    px[0] = (cx - 14) * 16, py[0] = (cy + 1) * 16, px[1] = (cx + 14) * 16, py[1] = (cy + 1) * 16;
-    px[2] = (cx + 13) * 16, py[2] = (cy + 17) * 16, px[3] = (wx + 8) * 16, py[3] = wy * 16;
-    px[4] = (hx + 17) * 16, py[4] = (hy + tilt / 8 - 2) * 16, px[5] = (hx - 17) * 16, py[5] = (hy - tilt / 8 - 2) * 16;
-    px[6] = (wx - 8) * 16, py[6] = wy * 16, px[7] = (cx - 13) * 16, py[7] = (cy + 17) * 16;
-    vis_poly(px, py, 8, C_WHITE);
-    vis_ellipse(cx - 7, cy + 15, 7, 6, C_WHITE);                /* the bust */
-    vis_ellipse(cx + 7, cy + 15, 7, 6, C_WHITE);
-    vis_ellipse(cx, cy + 3, 15, 5, C_WHITE);                    /* the shoulders, round */
-    /* the skirt: from the hips, flared, its hem swinging behind her and fluttering */
-    {
-        int32_t sk = -w * 20 / 1000, f = (isin(bq * 8u) * 2) >> 15;
-        px[0] = (hx - 17) * 16, py[0] = (hy - tilt / 8 - 4) * 16, px[1] = (hx + 17) * 16, py[1] = (hy + tilt / 8 - 4) * 16;
-        px[2] = (hx + 31 + sk) * 16, py[2] = (hy + 22 + f) * 16, px[3] = (hx + 15 + sk) * 16, py[3] = (hy + 26 - f) * 16;
-        px[4] = (hx + sk) * 16, py[4] = (hy + 24 + f) * 16, px[5] = (hx - 15 + sk) * 16, py[5] = (hy + 26 - f) * 16;
-        px[6] = (hx - 31 + sk) * 16, py[6] = (hy + 22 + f) * 16;
-        vis_poly(px, py, 7, C_WHITE);
+    /* the music in her: the bass swings her hips, the kick drops them and pops her knees, the synths' notes flick
+     * her hands up, loud music doubles her bounce */
+    p.hx = p.hx * (700 + vs.vu[0] * 6 / 10) / 1000;
+    for (side = 0; side < 2; side++) {
+        p.kn[side] += kick * 6;
+        p.up[side] += (side ? vs.flash[2] : vs.flash[1]) * 12;
     }
-    /* the arms: each move's angles (upper arm, then the elbow), mirrored */
-    for (side = -1; side <= 1; side += 2) {
-        int32_t up, el, sd = side > 0 ? beat : -beat;           /* (Q15: the arms alternate on the beat) */
-        switch (mv) {
-        case 0: up = 400 + ((sd * 60) >> 15); el = 60; break;   /* a V, waving */
-        case 1: up = sd > 0 ? 470 : 140; el = sd > 0 ? 30 : 210; break;   /* pumping, a fist up on its beat */
-        case 2: up = side > 0 ? (beat > 0 ? 420 : 190) : 90; el = side > 0 ? 10 : -230; break;   /* the disco point */
-        default: up = 250 + ((isin(bq * 2u + (side > 0 ? 0u : 256u)) * 60) >> 15); el = (isin(bq * 4u) * 120) >> 15; break;
-        }
-        up = 70 + (up - 70) * e / 1000;                          /* (quieter: smaller moves) */
-        vis_limb(cx + side * 13, cy + 4, side * up, 31, 6, 6, 4, &x, &y);              /* the upper arm */
-        vis_limb(x, y, side * (up + el), 27, 4, 4, 2, &x, &y);                         /* the forearm */
-        vis_limb(x, y, side * (up + el), 8, 3, 4, 2, &x, &y);                          /* the hand */
-    }
-    /* the neck, the head, the long hair falling behind and swinging with her */
-    vis_limb(cx - lean / 8, cy - 1, 512, 10, 5, 4, 4, &x, &y);
-    k = x - w * 4 / 1000;
-    {                                                           /* the hair: from the sides of the head down past */
-        int32_t hs = -w * 16 / 1000;                            /* the shoulders, swinging behind her, its ends uneven */
-        px[0] = (k - 9) * 16, py[0] = (y - 16) * 16, px[1] = (k + 9) * 16, py[1] = (y - 16) * 16;
-        px[2] = (k + 13 + hs) * 16, py[2] = (y + 2) * 16, px[3] = (k + 12 + hs * 2) * 16, py[3] = (y + 22) * 16;
-        px[4] = (k + 5 + hs * 2) * 16, py[4] = (y + 15) * 16, px[5] = (k - 2 + hs * 2) * 16, py[5] = (y + 19) * 16;
-        px[6] = (k - 12 + hs * 2) * 16, py[6] = (y + 22) * 16, px[7] = (k - 13 + hs) * 16, py[7] = (y + 2) * 16;
-        vis_poly(px, py, 8, C_WHITE);
-    }
-    vis_ellipse(k, y - 10, 9, 12, C_WHITE);                     /* the head */
-    vis_ellipse(k, y - 16, 11, 9, C_WHITE);                     /* the hair over it, round */
+    p.tilt += (p.tilt > 0 ? kick : -kick) * 2;
+    if (e > 750)
+        p.hy += ((isin(bq * 8u) < 0 ? -isin(bq * 8u) : isin(bq * 8u)) * (e - 750) / 250) >> 14;   /* (eighths, up to 2 px) */
+    /* the stage: a soft spotlight from above, a glow on the floor */
+    px[0] = 104 * 16, py[0] = 0, px[1] = 136 * 16, py[1] = 0, px[2] = 200 * 16, py[2] = 232 * 16, px[3] = 40 * 16, py[3] = 232 * 16;
+    vis_poly(px, py, 4, mix565(RGB(14, 13, 26), RGB(46, 40, 86), vs.kick / 2));   /* (it flashes on the kick) */
+    vis_ellipse(120, 230, 70, 7, mix565(RGB(30, 27, 52), RGB(80, 70, 140), vs.kick / 2));
+    vis_ellipse(120 + p.hx / 2, 230, 44, 4, RGB(52, 46, 86));
+    /* the rims (blue on her left, orange on her right), then her body, soft white to lavender */
+    rimb = mix565(RGB(24, 44, 100), RGB(70, 130, 255), 60 + e / 5);   /* the rims brighter the louder */
+    rimo = mix565(RGB(100, 46, 26), RGB(255, 130, 70), 60 + e / 5);
+    dz_draw(&p, -3, kick, rimb);
+    dz_draw(&p, 3, kick, rimo);
+    vis_g0 = 20, vis_g1 = 230, vis_g0c = RGB(240, 238, 248), vis_g1c = RGB(150, 140, 210);
+    dz_draw(&p, 0, kick, VIS_GRAD);
 }
 
 /* the visualiser, every other frame: the update, then both bands */
