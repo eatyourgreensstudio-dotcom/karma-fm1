@@ -36,7 +36,7 @@ See [BUILDING.md](BUILDING.md): the firmware (`sh build.sh`, JieLi clang in Dock
 
 ## Credits and licence
 
-KARMA is by Ariel Muchnik, with Claude. It is a fork of [SLOOP](https://github.com/isod89/sloop-fm1) by isod89, based on
+KARMA is by Ariel Muchnik. It is a fork of [SLOOP](https://github.com/isod89/sloop-fm1) by isod89, based on
 [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. It uses code from
 [X0X](https://github.com/charlesvestal/fm1-x0x) (Charles Vestal), [FM-106](https://github.com/PatttF/fm-106) (PatttF),
 Mutable Instruments' [Plaits, Elements, Clouds and Grids](https://github.com/pichenettes/eurorack) (Émilie Gillet) and
