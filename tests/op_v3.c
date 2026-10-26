@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The third take for posting (2026-10-26, Ariel's direction), on his pattern (tests/op_v3_pattern.fm1p: G mixolydian,
  * 124 BPM, JUNO bass, ELEMENTS, PLAITS lead, a 4/4 kick): HOME with ELEMENTS alone; ELEMENTS' EDIT; the kick's EDIT,
- * the kick comes in; the mixer, track 1 comes in; its EDIT; its GEN page; HOME; PLAITS' EDIT, PLAITS fading in; the
- * mixer; FX; LFO; HOME; the KARMA boot screen as the sound fades. Same harness and output as op_tour.c
+ * the drummer as the kick comes in; the mixer, track 1 comes in; its EDIT; its GEN page; HOME; the mixer, PLAITS
+ * fading in; PLAITS' EDIT; FX; LFO; HOME; the KARMA boot screen as the sound fades. Same harness and output as op_tour.c
  * (TAKE=op_v3 sh tools/op_tour.sh). */
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"
@@ -113,7 +113,7 @@ static void to_page(const char *title)
     vframe();
 }
 
-static void plaits_fade_in(double bars)              /* PLAITS' LEVEL from 0 to its own over `bars`, its EDIT page shown */
+static void plaits_fade_in(double bars)              /* PLAITS' LEVEL from 0 to its own over `bars` (the mixer shows it rise) */
 {
     int16_t to = trk[2].p[P_LEVEL];
     uint32_t f0 = nframe, n, i;
@@ -192,10 +192,9 @@ int main(int argc, char **argv)
     part(2, 0, 0, 0, 0);                            /* 1. HOME: ELEMENTS alone */
     open_family(FAM_EDIT);
     part(2, 0, 10, 12, 8);                          /* 2. ELEMENTS' EDIT */
-    song.sel = TRK_DRUM; drum_lane = 0;
-    open_family(FAM_EDIT);
+    song.sel = TRK_DRUM; studio_open(SC_DRUM); drum_page = 0; drum_lane = 0; drum_cursor = 0; ui.force = 1;
     vframe();
-    TDRUM->p[P_MUTE] = 0;                           /* 3. the kick's EDIT (HEX), the kick comes in */
+    TDRUM->p[P_MUTE] = 0;                           /* 3. the drummer, the kick comes in */
     part(2, 0, 0, 0, 0);
     go_home();                                      /* 4. the mixer: track 1 comes in */
     hold(B_GLO);
@@ -213,12 +212,13 @@ int main(int argc, char **argv)
     part(2, 0, 0, 0, 0);                            /* 6. its GEN page */
     go_home();
     part(2, 0, 0, 0, 0);                            /* 7. HOME */
-    song.sel = 2; open_family(FAM_EDIT); ui.force = 1; vframe();
-    plaits_fade_in(4);                              /* 8. PLAITS' EDIT, PLAITS fading in */
-    go_home();
+    song.sel = 2; go_home();
     hold(B_GLO);
-    part(2, 0, 0, 0, 0);                            /* 9. the mixer */
+    vframe(); vframe();
+    plaits_fade_in(4);                              /* 8. the mixer: PLAITS fading in */
     let_go(B_GLO);
+    open_family(FAM_EDIT);
+    part(2, 0, 10, 12, 8);                          /* 9. PLAITS' EDIT */
     open_family(FAM_FX);
     part(2, 0, 12, 16, 0);                          /* 10. FX */
     open_family(FAM_LFO);

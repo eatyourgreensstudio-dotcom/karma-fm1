@@ -168,19 +168,27 @@ static void graph_adsr(const track_t *t, uint16_t c)
 #undef EGY
 }
 
+/* LFO: two cycles of the wave, running (KARMA 3.0): it scrolls with the track's LFO, "now" at x = LFO_NOW with a dot
+ * on the value it gives (a dim line there), what it did to the left, what comes to the right */
+#define LFO_NOW 160
 static void graph_lfo(const track_t *t, uint16_t c)
 {
-    int32_t x, py = 50;
-    uint32_t ph = (uint32_t)t->p[P_LPHASE] << 25;
+    int32_t x, py = 50, ny = 50;
+    uint32_t now = t->lfo_ph, step = 0xFFFFFFFFu / 120u;
+    cv_line(0, 50, 239, 50, C_LINE);
+    cv_line(LFO_NOW, 4, LFO_NOW, 96, C_LINE);
     for (x = 0; x < 240; x++) {                      /* (lfo_wave only reads the track) */
-        int32_t y = 50 - lfo_wave((track_t *)t, ph + (uint32_t)x * (0xFFFFFFFFu / 120u)) * 38 / 32768;
-        if (t->p[P_LWAVE] == 4)
-            y = 50 - ((int32_t)((x / 20 * 2654435761u) >> 16) - 32768) * 38 / 32768;
+        uint32_t ph = now + (uint32_t)(x - LFO_NOW) * step;
+        int32_t y = 50 - lfo_wave((track_t *)t, ph) * 38 / 32768;
+        if (t->p[P_LWAVE] == 4)                      /* RANDOM: a held value a sixth of a cycle, scrolling with it */
+            y = 50 - ((int32_t)(((ph / 0x2AAAAAABu) * 2654435761u) >> 16) - 32768) * 38 / 32768;
         if (x)
             cv_line(x - 1, py, x, y, c);
+        if (x == LFO_NOW)
+            ny = y;
         py = y;
     }
-    cv_line(0, 50, 239, 50, C_LINE);
+    cv_rect(LFO_NOW - 3, ny - 3, 7, 7, C_WHITE);    /* now */
 }
 
 static void graph_steps(const track_t *t, uint16_t c)
@@ -388,6 +396,8 @@ static uint32_t graph_signature(void)
         h ^= (hex_gen * 977u + drum_lane * 31u + (uint32_t)TDRUM->p[P_E0] * 7u) * 40503u;
     if (pg->graph == GR_ARP && !is_drum(t))          /* ARP: the stones as the keys change, the hops */
         h ^= (t->nheld * 31u + t->arp_note * 977u + (op_arp_hop ? ui.frame + 1u : 0u)) * 40503u;
+    if (pg->graph == GR_LFO && !is_drum(t))          /* LFO: the wave runs (every other frame) */
+        h ^= (ui.frame / 2u + 1u) * 40503u;
     if (pg->graph == GR_ADSR && !is_drum(t) && op_env_voice(t))   /* ENV: the character follows the voice */
         h ^= (ui.frame / 2u + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
