@@ -90,12 +90,12 @@ footer small { font-size: 11px; opacity: .8; }
 
 <p class="keys" id="midistat" aria-live="polite">MIDI: switch on first</p>
 <p class="keys"><button id="rec" type="button">● Record</button> <span id="recstat">the screen and the sound, as a video file</span></p>
-<p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <button id="pnew" type="button">New pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin,.json" hidden> <span id="pstat">your pattern is kept in this browser (it comes back after a reload)</span></p>
+<p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin,.json" hidden> <span id="pstat">a reload starts a new pattern: Save pattern keeps yours</span></p>
 <p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="#" id="csopen" style="color:inherit">Cheat sheet: where everything is</a></p>
 
 <footer>
   <a href="https://github.com/eatyourgreensstudio-dotcom/karma-fm1">KARMA</a>, free FM-1 firmware by Ariel Muchnik: a fork of <a href="https://github.com/isod89/sloop-fm1">SLOOP</a> by isod89, itself based on <a href="https://github.com/hugelton/Felucca">Felucca</a> by Leo Kuroshita, Hügelton Instruments · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · this page after Felucca's browser build and charlesvestal's <a href="https://github.com/charlesvestal/fm1-x0x">X0X</a> · DotGothic16 font, <a href="fonts/OFL.txt">SIL OFL 1.1</a><br>
-  <small>The pattern is kept in this browser; user presets and settings are not. M-VAVE and FM-1 are trademarks of their respective owners; this firmware is not affiliated with or endorsed by them, nor by teenage engineering.</small>
+  <small>A reload starts afresh (Save pattern / Open pattern keep and bring back yours); user presets and settings are not kept. M-VAVE and FM-1 are trademarks of their respective owners; this firmware is not affiliated with or endorsed by them, nor by teenage engineering.</small>
 </footer>
 </main>
 
@@ -545,11 +545,10 @@ let lastProj = null;
 function pstat(t) { const e = document.getElementById("pstat"); if (e) e.textContent = t; }
 function toB64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(s); }
 function fromB64(t) { const s = atob(t), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
-let pResetting = false;                       /* NEW PATTERN: nothing kept from here on, the page starts again */
+/* (2026-10-26, Ariel: a reload starts afresh; SAVE / OPEN PATTERN keep a pattern. Until then the pattern was kept in
+ * this browser and came back after a reload) */
 function projGot(m) {
-  if (pResetting) return;
   lastProj = m.bytes;
-  try { localStorage.setItem(PKEY, toB64(m.bytes)); } catch { /* (private mode, full: the file still works) */ }
   if (m.why === "file") {
     if (dl) offerFile(new Blob([JSON.stringify({ fm1p: toB64(m.bytes) })]), `fm1-pattern-${stamp()}.json`, pstat);
     else offerFile(new Blob([m.bytes]), `fm1-pattern-${stamp()}.fm1p`, pstat);
@@ -557,32 +556,12 @@ function projGot(m) {
 }
 function projLoaded(m) {
   if (m.why === "file") pstat(m.ok ? "pattern opened" : "that file is not an FM-1 pattern");
-  else if (m.why === "restore" && m.ok) pstat("your pattern is back (kept in this browser)");
 }
 function projStart() {
-  let saved = null;
-  try { saved = localStorage.getItem(PKEY); } catch { /* none */ }
-  if (saved) send({ type: "proj_put", bytes: fromB64(saved), why: "restore" });
-  setInterval(() => { if (node) send({ type: "proj_get", why: "keep" }); }, 3000);
+  try { localStorage.removeItem(PKEY); } catch { /* (what older pages kept: not brought back) */ }
 }
 document.getElementById("psave").addEventListener("click", () => { if (node) send({ type: "proj_get", why: "file" }); else pstat("switch on first"); });
 document.getElementById("popen").addEventListener("click", () => document.getElementById("pfile").click());
-/* NEW PATTERN (2026-10-26): the kept pattern forgotten and the simulator started again, as a new FM-1 (Save pattern
- * first to keep the one playing) */
-let pNewArm = 0;                               /* (a second click within 4 s: no dialog, they can be blocked in a frame) */
-document.getElementById("pnew").addEventListener("click", (e) => {
-  const btn = e.currentTarget;
-  if (!pNewArm) {
-    btn.textContent = "Clear it? click again";
-    pstat("the pattern playing is cleared (Save pattern first to keep it)");
-    pNewArm = setTimeout(() => { pNewArm = 0; btn.textContent = "New pattern"; }, 4000);
-    return;
-  }
-  clearTimeout(pNewArm);
-  pResetting = true;
-  try { localStorage.removeItem(PKEY); } catch { /* nothing kept */ }
-  location.reload();
-});
 document.getElementById("pfile").addEventListener("change", async (e) => {
   const f = e.target.files && e.target.files[0];
   if (!f || !node) return;
@@ -591,7 +570,6 @@ document.getElementById("pfile").addEventListener("change", async (e) => {
   send({ type: "proj_put", bytes, why: "file" });
   e.target.value = "";
 });
-document.addEventListener("visibilitychange", () => { if (document.hidden && node) send({ type: "proj_get", why: "keep" }); });
 
 // ------------------------------------------------------------------ recording (2026-10-21)
 // The screen (drawn 4x, sharp, into a 960 x 960 canvas) and the device's sound, with MediaRecorder, to a video file:
