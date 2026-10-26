@@ -11,16 +11,20 @@ mkdir -p build/video build/host "$OUT"
 sh tools/plx_host.sh >/dev/null
 TAKE="${TAKE:-op_tour}"
 PAT="${2:-tests/${TAKE}_pattern.fm1p}"
-NAME=$( [ "$TAKE" = op_tour ] && echo fm1-tour || echo fm1-build )
+NAME=$( [ "$TAKE" = op_tour ] && echo fm1-tour || { [ "$TAKE" = op_v3 ] && echo fm1-karma || echo fm1-build; } )
+VFADE=$( [ "$TAKE" = op_v3 ] && echo 1.6 || echo 0 )   # (op_v3: the picture fades out too, on the boot screen)
 cc -O2 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -Itests -o "build/host/$TAKE" "tests/$TAKE.c" build/host/libplx.a -lc++ -lm
 DUR=$("build/host/$TAKE" build/video "$PAT" | sed -n "s/.* frames, \([0-9.]*\) s/\1/p")
 FADE=$(echo "$DUR - 0.6" | bc)
+if [ "$VFADE" != 0 ]; then FADE=$(echo "$DUR - 2.2" | bc); fi
+VF=$( [ "$VFADE" != 0 ] && echo ",fade=t=out:st=$FADE:d=$VFADE" || echo "" )
+AD=$( [ "$VFADE" != 0 ] && echo 2.0 || echo 0.5 )
 for v in "1080:60:60:$NAME" "1920:60:480:$NAME-reel"; do
     H=${v%%:*}; R=${v#*:}; X=${R%%:*}; R=${R#*:}; Y=${R%%:*}; N=${R#*:}
     ffmpeg -loglevel error -y -f rawvideo -pix_fmt rgb24 -s 240x240 -framerate 44100/704 -i build/video/tour.rgb \
         -f s16le -ar 44100 -ac 2 -i build/video/tour.pcm \
-        -vf "scale=960:960:flags=neighbor,pad=1080:$H:$X:$Y:color=0x0c0c0e,fps=60" \
-        -af "afade=t=in:d=0.005,afade=t=out:st=$FADE:d=0.5" \
+        -vf "scale=960:960:flags=neighbor,pad=1080:$H:$X:$Y:color=0x0c0c0e,fps=60$VF" \
+        -af "afade=t=in:d=0.005,afade=t=out:st=$FADE:d=$AD" \
         -c:v libx264 -preset slow -crf 14 -pix_fmt yuv420p -c:a aac -b:a 256k -movflags +faststart -shortest "$OUT/$N.mp4"
 done
 rm -f build/video/tour.rgb build/video/tour.pcm
