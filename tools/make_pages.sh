@@ -16,7 +16,7 @@ cp web/landing/index.html docs/index.html
 cp -R web/landing/img web/landing/fonts docs/
 cp build/emu/index.html build/emu/worklet.js build/emu/sloop.wasm build/emu/cheatsheet.html docs/emu/
 cp -R build/emu/fonts docs/emu/
-cp web/editor.html docs/webapp/editor/index.html
+sed -e "s|<!--DL-->.*<!--/DL-->||" web/editor.html > docs/webapp/editor/index.html   # (no offline copy here: make_site.py makes it)
 cp web/fukiai.ttf web/FUKIAI-LICENSE.txt docs/webapp/editor/
 cat > docs/webapp/installer/index.html <<'HTML'
 <!doctype html>
