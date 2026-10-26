@@ -90,7 +90,7 @@ footer small { font-size: 11px; opacity: .8; }
 
 <p class="keys" id="midistat" aria-live="polite">MIDI: switch on first</p>
 <p class="keys"><button id="rec" type="button">● Record</button> <span id="recstat">the screen and the sound, as a video file</span></p>
-<p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin,.json" hidden> <span id="pstat">your pattern is kept in this browser (it comes back after a reload)</span></p>
+<p class="keys"><button id="psave" type="button">Save pattern</button> <button id="popen" type="button">Open pattern</button> <button id="pnew" type="button">New pattern</button> <input id="pfile" type="file" accept=".fm1p,.bin,.json" hidden> <span id="pstat">your pattern is kept in this browser (it comes back after a reload)</span></p>
 <p class="keys"><button id="demo" type="button">Load demo pattern</button> <span>then press PLAY</span> · <a href="#" id="csopen" style="color:inherit">Cheat sheet: where everything is</a></p>
 
 <footer>
@@ -545,7 +545,9 @@ let lastProj = null;
 function pstat(t) { const e = document.getElementById("pstat"); if (e) e.textContent = t; }
 function toB64(u8) { let s = ""; for (let i = 0; i < u8.length; i += 8192) s += String.fromCharCode(...u8.subarray(i, i + 8192)); return btoa(s); }
 function fromB64(t) { const s = atob(t), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+let pResetting = false;                       /* NEW PATTERN: nothing kept from here on, the page starts again */
 function projGot(m) {
+  if (pResetting) return;
   lastProj = m.bytes;
   try { localStorage.setItem(PKEY, toB64(m.bytes)); } catch { /* (private mode, full: the file still works) */ }
   if (m.why === "file") {
@@ -565,6 +567,22 @@ function projStart() {
 }
 document.getElementById("psave").addEventListener("click", () => { if (node) send({ type: "proj_get", why: "file" }); else pstat("switch on first"); });
 document.getElementById("popen").addEventListener("click", () => document.getElementById("pfile").click());
+/* NEW PATTERN (2026-10-26): the kept pattern forgotten and the simulator started again, as a new FM-1 (Save pattern
+ * first to keep the one playing) */
+let pNewArm = 0;                               /* (a second click within 4 s: no dialog, they can be blocked in a frame) */
+document.getElementById("pnew").addEventListener("click", (e) => {
+  const btn = e.currentTarget;
+  if (!pNewArm) {
+    btn.textContent = "Clear it? click again";
+    pstat("the pattern playing is cleared (Save pattern first to keep it)");
+    pNewArm = setTimeout(() => { pNewArm = 0; btn.textContent = "New pattern"; }, 4000);
+    return;
+  }
+  clearTimeout(pNewArm);
+  pResetting = true;
+  try { localStorage.removeItem(PKEY); } catch { /* nothing kept */ }
+  location.reload();
+});
 document.getElementById("pfile").addEventListener("change", async (e) => {
   const f = e.target.files && e.target.files[0];
   if (!f || !node) return;
