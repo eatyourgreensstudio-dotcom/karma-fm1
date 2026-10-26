@@ -393,7 +393,7 @@ static void cloud_ui_sync(void)
         *v = (uint8_t)clamp(song.g[G_CLSEND], 0, 127);
     }
 }
-/* the drum track's EDIT pages (HEX OSC .. HEX NOISE): G_HXMODEL.. show the selected sound (drum_lane) of the
+/* the drum track's EDIT pages (HEX OSC .. HEX MORE): G_HXMODEL.. show the selected sound (drum_lane) of the
  * drum track's kit, if it is a HEX kit, and what the knobs set goes into it. A factory kit (HEX BOOM ..) is not
  * changed: the first turn copies it into the first MY HEX kit not edited yet and the drum track takes that one
  * (all four edited: a message, nothing changed). An edit is stored with the settings when all is quiet
@@ -453,11 +453,11 @@ static void hex_ui_sync(void)
     dst = &dsu.k[kit - DRUM_SYN].s[lane];
     for (i = 0; i < 22u; i++)
         ((uint8_t *)dst)[i] = (uint8_t)song.g[G_HXMODEL + i];
-    dsu_fix_sound(dst);
+    dsu_fix_sound(dst);                                 /* (a value the model has no use for: back in its range) */
     dsu.k[kit - DRUM_SYN].rsv[0] = 1;
     dsu_dirty = 1;
     for (i = 0; i < 22u; i++)
-        was[i] = song.g[G_HXMODEL + i];
+        song.g[G_HXMODEL + i] = was[i] = i == 3u ? (int16_t)(int8_t)((const uint8_t *)dst)[i] : ((const uint8_t *)dst)[i];
     was_sel = (uint16_t)(kit << 4 | lane);
     hex_gen++;
 }

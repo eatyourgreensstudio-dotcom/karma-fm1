@@ -352,15 +352,18 @@ static void dsu_defaults(void)
     for (k = 0; k < DSU_N; k++)
         dsu_from_factory(k, DSU_DEF[k]);
 }
-static void dsu_fix_sound(hex_snd_t *d)          /* a sound into the ranges the voices expect */
+static void dsu_fix_sound(hex_snd_t *d)          /* a sound into the ranges the voices expect (hex_drums.c) */
 {
     if (d->model >= HM_COUNT) d->model = HM_DRUM;
     if (d->wave >= HW_COUNT) d->wave = HW_SINE;
-    if (d->click >= HC_COUNT) d->click = HC_OFF;
+    if (d->click >= HC_COUNT) d->click = HC_SNAP;
     if (d->ftype >= HF_COUNT) d->ftype = HF_OFF;
+    if (d->aux1 > hex_aux_max(d->model)) d->aux1 = 0;
+    if (d->fine > 62) d->fine = 62;
+    if (d->crush > 126u) d->crush = 126;
     d->coarse &= 127u; d->atk &= 127u; d->dec &= 127u; d->slope &= 127u; d->level &= 127u;
     d->pamt &= 127u; d->pdec &= 127u; d->fmratio &= 127u; d->fmamt &= 127u; d->clvl &= 127u; d->ctone &= 127u;
-    d->cut &= 127u; d->res &= 127u; d->drive &= 127u; d->aux1 &= 127u; d->aux2 &= 127u; d->crush &= 127u;
+    d->cut &= 127u; d->res &= 127u; d->drive &= 127u; d->aux2 &= 127u;
 }
 static void dsu_fix_kit(dsu_kit_t *u)
 {

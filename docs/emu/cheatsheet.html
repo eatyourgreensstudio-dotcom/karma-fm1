@@ -365,14 +365,15 @@ footer { color: var(--dim); font-family: var(--f-mono); font-size: 12px; border-
 <section class="s4">
   <h2>Drums: edit a sound <small>EDIT on the drum screen</small></h2>
   <div class="how">EDIT → sound pages · press a key to pick the sound · SEQ = back</div>
-  <div class="pg">HEX OSC · HEX AEG · HEX MOD</div>
-  <div class="knobs"><div class="c1">MODEL<span>DRUM SNARE CLAP CYM HAT</span></div><div class="c2">WAVE<span>SIN TRI SAW SQR NOIS</span></div><div class="c3">TUNE<span>note</span></div><div class="c4">FINE<span>cents</span></div></div>
+  <div class="pg">HEX OSC · HEX AEG · HEX MOD <small>(the DRUM model's names; each model shows its own)</small></div>
+  <div class="knobs"><div class="c1">MODEL<span>DRUM SNARE CLAP CYM HAT</span></div><div class="c2">WAVE<span>SIN TRI SAW SQR NOIS PWM</span></div><div class="c3">TUNE<span>pitch</span></div><div class="c4">P.SLP<span>pitch-drop curve</span></div></div>
   <div class="knobs"><div class="c1">ATK</div><div class="c2">DEC</div><div class="c3">SLOPE<span>tail ↔ punch</span></div><div class="c4">LEVEL</div></div>
-  <div class="knobs"><div class="c1">P.AMT<span>pitch drop</span></div><div class="c2">P.DEC<span>its speed</span></div><div class="c3">RATIO<span>FM</span></div><div class="c4">FM<span>depth</span></div></div>
-  <div class="pg">HEX CLICK · HEX FILT · HEX NOISE</div>
-  <div class="knobs"><div class="c1">CLICK<span>TICK NOIS POP BLIP ZAP</span></div><div class="c2">C.LVL</div><div class="c3">TONE</div><div class="c4">CRUSH</div></div>
-  <div class="knobs"><div class="c1">FILT<span>LP HP BP NOTCH</span></div><div class="c2">CUT</div><div class="c3">RES</div><div class="c4">DRIVE</div></div>
-  <div class="knobs"><div class="c1">AUX A<span>snare noise · clap spread · hat noise</span></div><div class="c2">AUX B<span>snare noise decay · clap tail · hat spread</span></div><div class="c3"></div><div class="c4"></div></div>
+  <div class="knobs"><div class="c1">P.AMT<span>pitch drop</span></div><div class="c2">P.DEC<span>its speed</span></div><div class="c3">M.PIT<span>mod osc pitch</span></div><div class="c4">FM<span>depth (or mix)</span></div></div>
+  <div class="pg">HEX CLICK · HEX FILT · HEX MORE</div>
+  <div class="knobs"><div class="c1">TRANS<span>SNAP OFFS CLK TICK KICK RIM HAT CLAP SNR TOM…</span></div><div class="c2">T.LVL<span>click level</span></div><div class="c3">T.PIT<span>click pitch</span></div><div class="c4">CRUSH<span>sample rate down</span></div></div>
+  <div class="knobs"><div class="c1">FILT<span>LP HP BP UBP NTCH PEAK LP2 OFF</span></div><div class="c2">CUT</div><div class="c3">RES</div><div class="c4">DRIVE</div></div>
+  <div class="knobs"><div class="c1">MOD<span>mod osc wave, FM or MIX (snare: noise; clap: repeats)</span></div><div class="c2">DIST<span>distortion</span></div><div class="c3"></div><div class="c4"></div></div>
+  <p class="note">The drum voices come from the open-source LXR-02 firmware by Erica Synths (GPL-3.0), ported to KARMA: its drum, snare, cymbal and hi-hat voices and its short click transients. CLAP is the snare voice with repeats.</p>
   <p class="note">The built-in kits never change: your first edit copies the kit into MY HEX 1–4 and switches to it. Saved on the FM-1 by itself.</p>
 </section>
 

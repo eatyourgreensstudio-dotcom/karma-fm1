@@ -58,6 +58,10 @@ if [ -d "$FM106/firmware/src" ]; then
     $CC -O1 -w -Ifirmware/src -I"$FM106/firmware/src" -o "$OUT/juno_test" tests/juno_test.c $PLX -lm
     run "JUNO: DCO, VCF, chorus as FM-106's, sample for sample" "$OUT/juno_test"
 fi
+LXR=${LXR:-$HOME/fm1-firmware/ref/lxr}               # the HEX drum voices against the LXR firmware's own, when its checkout is there
+if [ -f "$LXR/Core/Src/Soundengine/DSPAudio/DrumVoice.c" ]; then
+    run "HEX: the LXR-02's drum voices as its firmware plays them (tests/lxr_ref)" env LXR="$LXR" sh tests/lxr_ref/build.sh
+fi
 run "SEQ > GEN: a loop that changes as it plays (CHANGE, SCALE, RANGE, ON per track)" "$OUT/gen_seq_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq2_test" tests/seq2_test.c $PLX -lm
 run "sequencer 2.0: no drift, ratchets, roll, erase / undo, ghost / hard, chords, mute / solo, nudge, locks" "$OUT/seq2_test"

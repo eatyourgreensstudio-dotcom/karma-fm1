@@ -8,7 +8,8 @@
  * PAN and MUTE: the drum track's P_PAN / P_MUTE. Rendered from the audio ISR. */
 #define NDRUM 6
 #include "drum_synth.c"       /* synthesised kits (DS_KITS) */
-/* P_E0 was unused on the drum track: it holds the kit. 0..4: the HEX kits (hex_drums.c; they took the places of the
+/* P_E0 was unused on the drum track: it holds the kit. 0..4: the HEX kits (hex_drums.c, the LXR-02's drum voices
+ * ported in lxr_dsp.c; they took the places of the
  * GM sample kit and its four treatments, gone with the samples), 5..: the synthesised kits, then (2.4) USR1..USR4:
  * a user sample slot as a kit (the web editor's DRUM KIT: a sound per lane, zone lo..hi = the lane's note),
  * and USR3+4: one kit over the slots USR3 and USR4 (a lane's sound in either) */
@@ -358,8 +359,9 @@ static inline void drum_voice_sends(uint32_t k, int own_only, int32_t *rs, int32
 #define DRUM_KNEE 9000                          /* (where the soft knee starts) */
 #endif
 /* and each kit level with the others (Q8; measured on a house beat, tests: about -16.5 LUFS): HEX BOOM, ACID,
- * METAL, GLITCH, ROOM, then 808, 909 (the rest: 1) */
-static const uint16_t DRUM_KIT_TRIM[7] = {320, 560, 245, 860, 290, 215, 256};
+ * METAL, GLITCH, ROOM, then 808, 909 (the rest: 1). The HEX kits' (2026-10-26, the LXR's voices): their grooves as
+ * loud as the HEX kits' before (tests/hex_demo.c), each sound's LEVEL set by tools/level_hexkits.py */
+static const uint16_t DRUM_KIT_TRIM[7] = {160, 145, 96, 149, 183, 215, 256};
 static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dly, int32_t *mono, uint32_t n)
 {
     uint32_t k, i;

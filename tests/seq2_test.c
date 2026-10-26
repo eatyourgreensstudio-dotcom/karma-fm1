@@ -1652,7 +1652,7 @@ static double drdly_echo(int32_t dly, int32_t flt)
     TDRUM->p[P_TFLT] = (int16_t)flt;
     tf_measure(40);
     trk_note_on(TDRUM, 38u, 120);
-    tf_measure(120);                                     /* the hit */
+    tf_measure(400);                                     /* the hit (2026-10-26: the HEX snare, the LXR's, rings 0.25 s) */
     tf_measure(1600);                                    /* then its echoes (or silence) */
     e = tf_rms;
     song.g[G_DRDLY] = 0;

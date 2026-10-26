@@ -1,35 +1,53 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-/* HEX: synthesised drums in the manner of the LXR drum machine's voices (written here from what such a voice does,
- * no code of the LXR's): every sound of a kit is one hex_snd_t, a small synth with
- *   OSC     a waveform (sine, triangle, saw, square, noise) at a pitch (COARSE a note, FINE cents)
- *   PITCH   a fall from PAMT semitones above, as fast as PDEC: the body of a kick or a tom
- *   FM      a sine modulating the oscillator's phase: RATIO to it, AMT how deep (it fades with the sound)
- *   CLICK   a transient on the attack: a tick, a noise burst, a pop, a blip or a zap, its level and tone
- *   FILTER  low-pass, high-pass, band-pass or notch: CUT, RES; DRIVE before it
- *   AEG     ATK, DEC, SLOPE (from a long tail to a short punch), LEVEL
- *   CRUSH   the sample rate reduced
- * and its model, which says what the oscillator is part of:
- *   DRUM    the oscillator alone: kicks, toms, percussion, zaps
- *   SNARE   the oscillator (the head) and a noise (the wires: AUX1 its level, AUX2 its decay), the filter on the noise
- *   CLAP    noise in a few quick bursts (AUX1 how far apart), then the tail (AUX2 its level), through the filter
- *   CYM     three squares at inharmonic ratios, ringing into each other (FM AMT), and a noise (AUX1)
- *   HAT     six squares at the ratios of the metal of an analogue hat (AUX2 their spread), and a noise (AUX1)
- * Float, on the AC79's FPU (as eng_acid.c). The kits: HEX_KITS below; drums.c plays them as kits 0..4. */
+/* HEX: the drum track's synthesised kits. Each of a kit's 16 sounds is one of the drum voices of the LXR-02 drum
+ * machine's open-source firmware by Erica Synths (GPL-3.0-only), ported in lxr_dsp.c: a hex_snd_t (22 bytes, the
+ * layout of the MY HEX kits and of the editor's DRUM SYNTH commands) holds the voice's parameters, as the LXR's
+ * 0..127 values; hex_par() gives them to the voice. Its MODEL is the voice:
+ *   DRUM    the LXR's three drum voices: an oscillator, frequency-modulated by a second one (or mixed with it),
+ *           a pitch envelope, a transient, the filter, the amplitude envelope, the distortion: kicks, toms, percussion
+ *   SNARE   its snare voice: an oscillator with a pitch envelope, a noise (sample-and-hold at NOISE FREQ) through the
+ *           filter, MIX between them, the transient
+ *   CLAP    the snare voice too (the LXR has no clap: one makes it from the snare with REPEAT, the attack phase
+ *           played again as quick bursts before the tail, and the noise alone)
+ *   CYM     its cymbal voice: an oscillator frequency-modulated by two others (one often noise), the filter
+ *   HAT     its hi-hat voice: the same at half the level (the open and the closed hat: two sounds, two decays)
+ * The bytes (what each model reads; the LXR's own parameter in [ ]):
+ *   model   HM_*
+ *   wave    the oscillator: SIN TRI SAW SQR NOIS, or its PWM wave at a width (P12 P25 P37)          [OSC_WAVE, PWM]
+ *   coarse  its note, 0..127 (the lane's note offset added)                                         [COARSE]
+ *   fine    DRUM, SNARE: the pitch envelope's SLOPE, -64..63 (0 straight)                           [PITCH_SLOPE]
+ *           CYM, HAT: FINE, -64..63 (+-half a semitone)                                             [FINE]
+ *   atk dec slope level   the amplitude envelope (and REPEAT's bursts: ATK), the level              [VELOA VELOD VOL_SLOPE VOL]
+ *   pamt pdec             DRUM, SNARE: the pitch envelope's amount and decay                       [MODAMNT PITCHD]
+ *                         CYM, HAT: the second modulator's level and note                          [MOD_OSC_GAIN2 MOD_OSC_F2]
+ *   fmratio fmamt         DRUM: the mod oscillator's note, the FM depth (MIX: its level)           [FM_FREQ FMAMNT]
+ *                         SNARE: the noise's rate, the noise's share                               [SNARE_NOISE_F SNARE_MIX]
+ *                         CYM, HAT: the first modulator's note and level                           [MOD_OSC_F1 MOD_OSC_GAIN1]
+ *   click clvl ctone      the transient: SNAP, OFFS(et), or a sample; its level; its pitch (SNAP: its speed)  [TRANS_*]
+ *   ftype cut res drive   the filter: LP HP BP UBP NTCH PEAK LP2 OFF, cutoff, resonance, its drive [FILTER_*]
+ *   aux1    DRUM: the mod oscillator's wave, FM or MIX (FMSIN .. MXPWM)                             [MOD_WAVE, MIX_MOD]
+ *           SNARE, CLAP: REPEAT                                                                     [REPEAT]
+ *           CYM, HAT: the two modulators' waves (SI/NO: a sine and a noise)                        [WAVE2, WAVE3]
+ *   aux2    DIST, the distortion after the envelope                                                 [*_DIST]
+ *   crush   the sample rate reduced, 0 off .. 126                                                   [VOICE_DECIMATION]
+ * drums.c plays the kits HEX_KITS as kits 0..4. */
 enum { HM_DRUM, HM_SNARE, HM_CLAP, HM_CYM, HM_HAT, HM_COUNT };
-enum { HW_SINE, HW_TRI, HW_SAW, HW_SQR, HW_NOISE, HW_COUNT };
-enum { HF_OFF, HF_LP, HF_HP, HF_BP, HF_NOTCH, HF_COUNT };
-enum { HC_OFF, HC_TICK, HC_NOISE, HC_POP, HC_BLIP, HC_ZAP, HC_COUNT };
+enum { HW_SINE, HW_TRI, HW_SAW, HW_SQR, HW_NOISE, HW_P12, HW_P25, HW_P37, HW_COUNT };
+enum { HF_LP, HF_HP, HF_BP, HF_UBP, HF_NOTCH, HF_PEAK, HF_LP2, HF_OFF, HF_COUNT };
+enum { HC_SNAP, HC_OFFS, HC_CLK, HC_CK2, HC_TICK, HC_KICK, HC_RIM, HC_DRIP, HC_HAT, HC_CLAP, HC_KK2, HC_SNR,
+       HC_TOM, HC_SP2, HC_COUNT };
+#define HX_MODW 6u                               /* aux1: the mod waves (SIN TRI SAW SQR NOIS PWM) */
 
 typedef struct {
-    uint8_t model, wave, coarse;                 /* HM_*, HW_*, the note (MIDI) */
-    int8_t fine;                                 /* cents, -64..63 */
-    uint8_t atk, dec, slope, level;              /* AEG: 0..127 (level 100 = 0 dB) */
-    uint8_t pamt, pdec;                          /* PITCH: semitones x 4 / 3 above at the hit, its fall */
-    uint8_t fmratio, fmamt;                      /* FM: ratio (64 = 1:1, 16 a step of an octave), depth */
-    uint8_t click, clvl, ctone;                  /* CLICK: HC_*, level, tone */
-    uint8_t ftype, cut, res, drive;              /* FILTER: HF_*, cutoff, resonance; drive before it */
-    uint8_t aux1, aux2;                          /* the model's own (above) */
-    uint8_t crush;                               /* 0 off .. 127 the rate down to ~1/16 */
+    uint8_t model, wave, coarse;                 /* HM_*, HW_*, the note */
+    int8_t fine;                                 /* -64..63 */
+    uint8_t atk, dec, slope, level;
+    uint8_t pamt, pdec;
+    uint8_t fmratio, fmamt;
+    uint8_t click, clvl, ctone;                  /* HC_*, level, pitch */
+    uint8_t ftype, cut, res, drive;              /* HF_*, .. */
+    uint8_t aux1, aux2;
+    uint8_t crush;                               /* 0..126 */
 } hex_snd_t;
 #define HEX_LANES 16
 typedef struct {
@@ -37,289 +55,189 @@ typedef struct {
     hex_snd_t s[HEX_LANES];
 } hex_kit_t;
 
+#include "lxr_dsp.c"
+
 typedef struct {
     const hex_snd_t *d;
-    float ph, ph2, inc, base, fm_inc;            /* the oscillator (turns), the FM sine, Hz -> turns */
-    float pe, kpe;                               /* pitch envelope (1 at the hit) and its fall a sample */
-    float amp, ka, att, katt;                    /* the amplitude envelope, its fall; the attack ramp */
-    float nz, kn;                                /* SNARE / CLAP: the noise's envelope */
-    float ck, kck, cph, cinc;                    /* the click: its envelope, its oscillator */
-    float kb;                                    /* CLAP: a burst's fall a sample */
-    float mph[6], minc[6];                       /* CYM / HAT: the squares */
-    float s1, s2, g, k, a1;                      /* the filter (TPT state variable) */
-    float hold, held;                            /* CRUSH: the sample held, how far into the hold */
-    float vel, gain;
-    uint32_t rnd, t, burst;                      /* noise, samples since the hit, CLAP: bursts so far */
+    lx_voice_t lx;
+    uint8_t note;                                /* 60 + the lane's note offset */
 } hex_v_t;
 
-static inline float hx_noise(hex_v_t *v)        /* -1 .. 1 */
+static uint32_t hex_aux_max(uint32_t model)      /* the largest aux1 of a model */
 {
-    v->rnd = v->rnd * 1664525u + 1013904223u;
-    return (float)(int32_t)v->rnd * (1.0f / 2147483648.0f);
+    return model == HM_DRUM ? 2u * HX_MODW - 1u : model >= HM_CYM ? HX_MODW * HX_MODW - 1u : 127u;
 }
-static inline float hx_sin(float ph)             /* sin(2 pi ph), ph in turns (any), parabolic, refined */
+/* a sound's bytes -> the LXR's parameters */
+static void hex_par(const hex_snd_t *d, lx_par_t *p)
 {
-    float x = ph - fm_floorf(ph), y;
-    x = x < 0.5f ? x : x - 1.0f;                 /* -0.5 .. 0.5 */
-    y = 8.0f * x - 16.0f * x * (x < 0.0f ? -x : x);
-    return 0.225f * (y * (y < 0.0f ? -y : y) - y) + y;
-}
-static inline float hx_wave(uint32_t w, float ph, float dt, hex_v_t *v)
-{
-    float x = ph - fm_floorf(ph), y, t;
-    switch (w) {
-    case HW_TRI:
-        return x < 0.5f ? 4.0f * x - 1.0f : 3.0f - 4.0f * x;
-    case HW_SAW:                                 /* (a polyBLEP on its edge) */
-        y = 2.0f * x - 1.0f;
-        if (x < dt) { t = x / dt; y -= t + t - t * t - 1.0f; }
-        else if (x > 1.0f - dt) { t = (x - 1.0f) / dt; y -= t * t + t + t + 1.0f; }
-        return y;
-    case HW_SQR:
-        return x < 0.5f ? 1.0f : -1.0f;
-    case HW_NOISE:
-        return hx_noise(v);
-    default:
-        return hx_sin(ph);
+    static const uint8_t PWM[3] = {32, 64, 95};
+    uint32_t m = d->model < HM_COUNT ? d->model : HM_DRUM, a1 = d->aux1 <= hex_aux_max(m) ? d->aux1 : 0u;
+    int32_t f = d->fine + 64;
+    memset(p, 0, sizeof *p);
+    p->kind = m == HM_DRUM ? LV_DRUM : m <= HM_CLAP ? LV_SNARE : m == HM_CYM ? LV_CYM : LV_HAT;
+    p->wave = d->wave < HW_P12 ? d->wave : d->wave < HW_COUNT ? LW_PWM : LW_SINE;
+    p->pwm = d->wave >= HW_P12 && d->wave < HW_COUNT ? PWM[d->wave - HW_P12] : 64u;
+    p->coarse = d->coarse & 127u;
+    p->atk = d->atk & 127u;
+    p->dec = d->dec & 127u;
+    p->slope = d->slope & 127u;
+    p->vol = d->level & 127u;
+    p->twave = d->click < HC_COUNT ? d->click : HC_SNAP;
+    p->tvol = d->clvl & 127u;
+    p->tfreq = d->ctone & 127u;
+    p->ftype = (uint8_t)((d->ftype < HF_COUNT ? d->ftype : HF_OFF) + 1u);
+    p->fcut = d->cut & 127u;
+    p->fres = d->res & 127u;
+    p->fdrive = d->drive & 127u;
+    p->dist = d->aux2 & 127u;
+    p->decim = (uint8_t)(127u - (d->crush > 126u ? 126u : d->crush));
+    f = f < 0 ? 0 : f > 126 ? 126 : f;                       /* (127: an infinite slope) */
+    if (p->kind <= LV_SNARE) {
+        p->fine = 64;
+        p->pslope = (uint8_t)f;
+        p->pamt = d->pamt & 127u;
+        p->pdec = d->pdec & 127u;
+        if (p->kind == LV_DRUM) {
+            p->mcoarse = d->fmratio & 127u;
+            p->mamt = d->fmamt & 127u;
+            p->mwave = (uint8_t)(a1 % HX_MODW);
+            p->mix = (uint8_t)(a1 >= HX_MODW);
+        } else {
+            p->noisef = d->fmratio & 127u;
+            p->mix = d->fmamt & 127u;
+            p->repeat = (uint8_t)a1;
+        }
+    } else {
+        p->fine = (uint8_t)f;
+        p->m2amt = d->pamt & 127u;
+        p->m2coarse = d->pdec & 127u;
+        p->mcoarse = d->fmratio & 127u;
+        p->mamt = d->fmamt & 127u;
+        p->mwave = (uint8_t)(a1 / HX_MODW);
+        p->m2wave = (uint8_t)(a1 % HX_MODW);
     }
 }
-/* a time of 0..127: 1 ms .. ~4 s, exponential; the factor a sample that falls -60 dB in it */
-static float hx_ms(uint32_t c) { return 1.0f * fm_exp2f((float)c * (12.0f / 127.0f)); }
-static float hx_fall(float ms) { return fm_exp2f(-9.966f / (ms * 44.1f)); }
-static float hx_hz(int32_t note16) { return 440.0f * fm_exp2f(((float)note16 * (1.0f / 16.0f) - 69.0f) * (1.0f / 12.0f)); }
-static void hx_filter(hex_v_t *v, float fc)      /* fc in Hz; k from the resonance */
-{
-    float w = fc * (3.14159265f / 44100.0f);
-    if (w > 1.5f)
-        w = 1.5f;
-    v->g = fm_tanf(w);
-    v->a1 = 1.0f / (1.0f + v->g * (v->g + v->k));
-}
-
-static const float HX_CYM[3] = {1.0f, 1.4471f, 1.6170f};
-static const float HX_HAT[6] = {1.0f, 1.3420f, 1.2312f, 1.6532f, 1.9523f, 2.1523f};
 
 static void hex_on(hex_v_t *v, const hex_snd_t *kit, uint32_t note, uint32_t vel)
 {
     int32_t semi;
-    uint32_t lane = ds_lane(note, &semi), i;
-    const hex_snd_t *d = &kit[lane % HEX_LANES];
-    float hz;
+    uint32_t lane = ds_lane(note, &semi);
+    lx_par_t p;
     memset(v, 0, sizeof *v);
-    v->d = d;
-    v->vel = 0.25f + 0.75f * (float)vel * (1.0f / 127.0f);
-    v->gain = fm_exp2f(((float)d->level - 100.0f) * (1.0f / 16.0f));   /* 16 a 6 dB step */
-    hz = hx_hz(((int32_t)d->coarse + semi) * 16 + (d->fine * 16) / 100);
-    v->base = hz * (1.0f / 44100.0f);
-    v->fm_inc = v->base * fm_exp2f(((float)d->fmratio - 64.0f) * (1.0f / 16.0f));
-    v->pe = d->pamt ? 1.0f : 0.0f;
-    v->kpe = hx_fall(hx_ms(d->pdec) * 0.5f);
-    v->ka = hx_fall(hx_ms(d->dec));
-    v->katt = d->atk ? 1.0f / (hx_ms(d->atk >> 1) * 44.1f) : 1.0f;
-    v->att = d->atk ? 0.0f : 1.0f;
-    v->amp = 1.0f;
-    v->nz = 1.0f;
-    v->kn = d->model == HM_CLAP ? 1.0f : hx_fall(hx_ms(d->aux2));
-    v->ck = d->click ? (float)d->clvl * (1.0f / 127.0f) : 0.0f;
-    v->cinc = (200.0f * fm_exp2f((float)d->ctone * (6.0f / 127.0f))) * (1.0f / 44100.0f);
-    v->kck = hx_fall(d->click == HC_POP ? 18.0f : d->click == HC_ZAP ? 12.0f : 4.0f);
-    v->kb = hx_fall(9.0f);
-    for (i = 0; i < 6u; i++)
-        v->minc[i] = v->base * (d->model == HM_CYM ? (i < 3u ? HX_CYM[i] : HX_CYM[i - 3u] * 2.0f)
-                                                   : 1.0f + (HX_HAT[i] - 1.0f) * (0.5f + (float)d->aux2 * (1.0f / 127.0f)));
-    v->k = 2.0f - 1.96f * (float)d->res * (1.0f / 127.0f);
-    hx_filter(v, 20.0f * fm_exp2f((float)d->cut * (10.0f / 127.0f)) * (0.6f + 0.4f * v->vel));
-    v->rnd = 0x9E3779B9u ^ (note * 2654435761u) ^ rng();
+    v->d = &kit[lane % HEX_LANES];
+    v->note = (uint8_t)(60 + semi);
+    hex_par(v->d, &p);
+    lx_trigger(&v->lx, &p, v->note, vel ? vel : 1u);
 }
 
-/* n samples of a voice into out[] (the drums' scale: about +-32767 at full); 0 when it has rung out */
+/* n samples of a voice into out[] (the drums' scale: +-32767 at full); 0 when it has rung out */
 static int hex_render(hex_v_t *v, int32_t *out, uint32_t n)
 {
-    const hex_snd_t *d = v->d;
-    uint32_t i, k, m = d->model, cr = d->crush ? 1u + (uint32_t)d->crush / 8u : 0u;
-    float pamt = (float)d->pamt * (1.0f / 36.0f), fmi = (float)d->fmamt * (1.0f / 16.0f);   /* octaves; radians / 2 pi */
-    float drive = 1.0f + (float)d->drive * (1.0f / 16.0f), out_g = 26000.0f * v->gain * v->vel;
-    float slope = (float)d->slope * (1.0f / 127.0f), aux1 = (float)d->aux1 * (1.0f / 127.0f);
-    for (i = 0; i < n; i++) {
-        float a = v->amp * (1.0f - slope + slope * v->amp * v->amp), env = a * v->att, x = 0.0f, nz = 0.0f, f;
-        float inc = v->base * fm_exp2f(pamt * v->pe);
-        /* the source */
-        if (m == HM_CYM || m == HM_HAT) {
-            float sq = 0.0f;
-            for (k = 0; k < 6u; k++) {
-                float p = v->mph[k] + (m == HM_CYM && k ? fmi * 0.05f * (sq > 0.0f ? 1.0f : -1.0f) : 0.0f);
-                sq += p - fm_floorf(p) < 0.5f ? 1.0f : -1.0f;
-                v->mph[k] += v->minc[k] * (1.0f + pamt * v->pe);
-            }
-            x = sq * (1.0f / 6.0f) * (1.0f - aux1) + hx_noise(v) * aux1;
-        } else if (m == HM_CLAP) {
-            x = 0.0f;
-            nz = hx_noise(v);
-        } else {
-            float pm = fmi > 0.0f ? fmi * env * hx_sin(v->ph2) : 0.0f;
-            x = hx_wave(d->wave, v->ph + pm, inc, v);
-            v->ph2 += v->fm_inc * (1.0f + pamt * v->pe);
-            if (m == HM_SNARE)
-                nz = hx_noise(v) * aux1 * v->nz;
-        }
-        v->ph += inc;
-        if (v->ph > 64.0f) {
-            v->ph -= 64.0f;
-            v->ph2 -= fm_floorf(v->ph2);
-        }
-        /* the click */
-        if (v->ck > 1e-4f) {
-            float c;
-            switch (d->click) {
-            case HC_TICK: c = hx_sin(v->cph * 4.0f); break;
-            case HC_NOISE: c = hx_noise(v); break;
-            case HC_POP: c = hx_sin(v->cph * 0.5f); break;
-            case HC_BLIP: c = v->cph - fm_floorf(v->cph) < 0.5f ? 1.0f : -1.0f; break;
-            default: c = hx_sin(v->cph * 2.0f); v->cinc *= 0.9985f; break;   /* ZAP: its pitch falls */
-            }
-            v->cph += v->cinc;
-            x += c * v->ck * 1.5f;
-            v->ck *= v->kck;
-        }
-        /* the filter: on everything, but on the noise alone in a snare, after the drive */
-        f = m == HM_SNARE ? nz : m == HM_CLAP ? nz : x;
-        if (d->drive)
-            f = fm_tanhf(f * drive) / (drive > 2.0f ? 1.0f : drive * 0.5f + 0.5f);
-        if (d->ftype != HF_OFF) {
-            float hp = (f - (v->g + v->k) * v->s1 - v->s2) * v->a1, bp = v->g * hp + v->s1, lp = v->g * bp + v->s2;
-            v->s1 = v->g * hp + bp;
-            v->s2 = v->g * bp + lp;
-            f = d->ftype == HF_LP ? lp : d->ftype == HF_HP ? hp : d->ftype == HF_BP ? bp * v->k : hp + lp;
-        }
-        if (m == HM_SNARE)
-            f = x + f;
-        else if (m == HM_CLAP) {                 /* bursts, then the tail */
-            uint32_t gap = 220u + (uint32_t)d->aux1 * 7u;
-            float b;
-            if (v->burst < 3u && v->t >= (v->burst + 1u) * gap) {
-                v->burst++;
-                v->nz = 1.0f;
-            }
-            b = v->burst < 3u ? v->nz : 0.0f;
-            f = f * (b + (float)d->aux2 * (1.0f / 127.0f) * v->amp * (v->burst ? 1.0f : 0.3f));
-            env = v->att;
-            v->nz *= v->kb;
-        }
-        /* the amplitude, the crush */
-        x = f * env;
-        if (cr) {
-            if (v->held <= 0.0f) {
-                v->hold = x;
-                v->held = (float)cr;
-            }
-            v->held -= 1.0f;
-            x = v->hold;
-        }
-        out[i] = (int32_t)(fm_clampf(x, -1.2f, 1.2f) * out_g);
-        v->amp *= v->ka;
-        v->nz *= v->kn;
-        v->pe *= v->kpe;
-        if (v->att < 1.0f) {
-            v->att += v->katt;
-            if (v->att > 1.0f)
-                v->att = 1.0f;
-        }
-        v->t++;
+    int16_t b[32];
+    uint32_t i, j, k;
+    int alive = 1;
+    lx_par_t p;
+    hex_par(v->d, &p);
+    for (i = 0; i < n; i += k) {
+        k = n - i < 32u ? n - i : 32u;
+        alive = lx_render(&v->lx, &p, b, k, v->note);
+        for (j = 0; j < k; j++)
+            out[i + j] = b[j];
     }
-    v->s1 = fm_flush(v->s1);
-    v->s2 = fm_flush(v->s2);
-    return v->amp > 1e-4f || (m == HM_CLAP && v->burst < 3u) || v->ck > 1e-4f || v->att < 1.0f;
+    return alive;
 }
 
 /* ---- the kits: {MODEL, WAVE, COARSE, FINE, ATK, DEC, SLOPE, LEVEL, PAMT, PDEC, RATIO, FM, CLICK, CLVL, CTONE,
- * FILTER, CUT, RES, DRIVE, AUX1, AUX2, CRUSH}. DEC: 60 ~50 ms, 80 ~190 ms, 100 ~0.7 s, 120 ~2.5 s; CUT: 64 ~660 Hz,
- * 90 ~2.7 kHz, 110 ~8 kHz; LEVEL 100 = 0 dB, 16 a 6 dB step. Lanes: kick snare clap hat open-hat tom-lo tom-hi crash
- * ride shaker conga rim cowbell clave kick-2 snare-2 */
+ * FILTER, CUT, RES, DRIVE, AUX1, AUX2, CRUSH}, in the LXR's units (lxr_dsp.c). DEC: 5 ~60 ms, 10 ~0.13 s, 20 ~0.27 s,
+ * 30 ~0.45 s, 40 ~0.7 s, 60 ~1.3 s (to silence; SLOPE under 64 the faster the start of the fall); PDEC: 10 ~13 ms,
+ * 20 ~28 ms, 40 ~70 ms; PAMT: 20 +10 semitones, 30 +18, 40 +25, 50 +31; CUT: 40 ~470 Hz, 64 ~1 kHz, 90 ~2.3 kHz, 100
+ * ~3.2 kHz, 110 ~5 kHz, 120 ~9.4 kHz; DRIVE 40: unity into the filter; CTONE 25: the transient at its pitch. Lanes:
+ * kick snare clap hat open-hat tom-lo tom-hi crash ride shaker conga rim cowbell clave kick-2 snare-2 */
 #define HS(...) {__VA_ARGS__}
 static const hex_kit_t HEX_KITS[5] = {
     {"HEX BOOM", {
-        HS(HM_DRUM, HW_SINE, 33, 0, 0, 92, 40, 120, 72, 52, 64, 0, HC_POP, 70, 60, HF_LP, 120, 0, 20, 0, 0, 0),
-        HS(HM_SNARE, HW_TRI, 50, 0, 0, 70, 60, 106, 40, 40, 64, 0, HC_TICK, 60, 90, HF_HP, 90, 20, 0, 100, 72, 0),
-        HS(HM_CLAP, HW_NOISE, 60, 0, 0, 76, 0, 127, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 95, 50, 10, 16, 80, 0),
-        HS(HM_HAT, HW_SQR, 70, 0, 0, 52, 80, 123, 0, 0, 64, 0, HC_NOISE, 40, 110, HF_HP, 108, 30, 0, 40, 64, 0),
-        HS(HM_HAT, HW_SQR, 70, 0, 0, 86, 40, 112, 0, 0, 64, 0, HC_NOISE, 40, 110, HF_HP, 108, 30, 0, 40, 64, 0),
-        HS(HM_DRUM, HW_SINE, 43, 0, 0, 84, 40, 114, 40, 50, 64, 0, HC_TICK, 50, 70, HF_LP, 110, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 50, 0, 0, 80, 40, 116, 40, 46, 64, 0, HC_TICK, 50, 80, HF_LP, 112, 0, 0, 0, 0, 0),
-        HS(HM_CYM, HW_SQR, 64, 0, 0, 112, 30, 95, 0, 0, 64, 40, HC_NOISE, 50, 110, HF_HP, 100, 20, 0, 50, 0, 0),
-        HS(HM_CYM, HW_SQR, 72, 0, 0, 104, 20, 101, 0, 0, 64, 20, HC_TICK, 50, 120, HF_HP, 104, 30, 0, 20, 0, 0),
-        HS(HM_DRUM, HW_NOISE, 60, 0, 20, 50, 60, 116, 0, 0, 64, 0, HC_OFF, 0, 0, HF_HP, 112, 10, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 57, 0, 0, 74, 40, 114, 20, 30, 64, 0, HC_POP, 50, 90, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_TRI, 70, 0, 0, 40, 60, 127, 30, 20, 90, 30, HC_TICK, 90, 100, HF_BP, 96, 50, 20, 0, 0, 0),
-        HS(HM_DRUM, HW_SQR, 68, 0, 0, 70, 40, 103, 0, 0, 73, 20, HC_OFF, 0, 0, HF_BP, 92, 40, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 84, 0, 0, 44, 50, 122, 0, 0, 64, 0, HC_TICK, 60, 110, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 36, 0, 0, 80, 60, 127, 90, 42, 64, 30, HC_ZAP, 60, 100, HF_LP, 100, 30, 30, 0, 0, 0),
-        HS(HM_SNARE, HW_SINE, 55, 0, 0, 60, 60, 96, 50, 30, 64, 0, HC_NOISE, 60, 100, HF_BP, 100, 30, 20, 110, 60, 0)}},
+        HS(HM_DRUM, HW_SINE, 31, -30, 0, 34, 40, 120, 40, 32, 43, 0, HC_KICK, 70, 25, HF_LP, 110, 10, 40, 0, 10, 0),
+        HS(HM_SNARE, HW_TRI, 52, -20, 0, 18, 30, 113, 22, 22, 120, 85, HC_SNR, 60, 25, HF_HP, 100, 20, 52, 0, 10, 0),
+        HS(HM_CLAP, HW_SINE, 60, 0, 8, 16, 30, 127, 0, 0, 115, 127, HC_CLAP, 50, 25, HF_BP, 84, 40, 50, 3, 10, 0),
+        HS(HM_HAT, HW_SQR, 82, 0, 0, 4, 30, 96, 70, 120, 91, 60, HC_HAT, 40, 30, HF_HP, 112, 10, 40, 22, 10, 0),
+        HS(HM_HAT, HW_SQR, 82, 0, 0, 20, 40, 52, 70, 120, 91, 60, HC_HAT, 40, 30, HF_HP, 112, 10, 40, 22, 10, 0),
+        HS(HM_DRUM, HW_SINE, 43, -20, 0, 24, 40, 78, 20, 30, 50, 0, HC_TOM, 50, 25, HF_LP, 112, 0, 40, 0, 10, 0),
+        HS(HM_DRUM, HW_SINE, 50, -20, 0, 22, 40, 74, 20, 28, 57, 0, HC_TOM, 50, 30, HF_LP, 114, 0, 40, 0, 10, 0),
+        HS(HM_CYM, HW_SQR, 70, 0, 0, 55, 50, 28, 60, 118, 83, 80, HC_HAT, 40, 20, HF_HP, 106, 10, 40, 22, 10, 0),
+        HS(HM_CYM, HW_TRI, 82, 0, 0, 46, 50, 49, 20, 120, 89, 50, HC_TICK, 30, 30, HF_BP, 112, 20, 40, 21, 10, 0),
+        HS(HM_HAT, HW_NOISE, 120, 0, 10, 8, 40, 97, 0, 0, 60, 0, HC_OFFS, 0, 25, HF_HP, 115, 10, 40, 0, 10, 0),
+        HS(HM_DRUM, HW_SINE, 57, -20, 0, 16, 40, 66, 10, 20, 64, 0, HC_TICK, 50, 25, HF_LP, 116, 0, 40, 0, 10, 0),
+        HS(HM_DRUM, HW_TRI, 76, 0, 0, 5, 36, 127, 10, 10, 88, 40, HC_RIM, 110, 25, HF_BP, 108, 30, 72, 0, 20, 0),
+        HS(HM_DRUM, HW_SQR, 73, 0, 0, 12, 34, 81, 0, 0, 80, 50, HC_OFFS, 0, 25, HF_BP, 82, 30, 66, 9, 10, 0),
+        HS(HM_DRUM, HW_SINE, 98, 0, 0, 4, 40, 52, 4, 10, 98, 0, HC_CLK, 40, 25, HF_OFF, 127, 0, 40, 0, 10, 0),
+        HS(HM_DRUM, HW_SINE, 29, -40, 0, 46, 50, 84, 50, 40, 41, 20, HC_KK2, 80, 25, HF_LP, 104, 20, 50, 0, 30, 0),
+        HS(HM_SNARE, HW_SINE, 55, -20, 0, 14, 30, 127, 20, 18, 127, 100, HC_CLK, 70, 25, HF_BP, 108, 20, 52, 0, 20, 0)}},
     {"HEX ACID", {                                /* bright, tight, techno */
-        HS(HM_DRUM, HW_SINE, 36, 0, 0, 82, 70, 127, 60, 40, 64, 10, HC_TICK, 80, 90, HF_LP, 110, 10, 40, 0, 0, 0),
-        HS(HM_SNARE, HW_TRI, 55, 0, 0, 60, 70, 114, 36, 30, 64, 0, HC_NOISE, 70, 100, HF_HP, 100, 20, 10, 110, 64, 0),
-        HS(HM_CLAP, HW_NOISE, 60, 0, 0, 70, 0, 120, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 100, 60, 20, 12, 70, 0),
-        HS(HM_HAT, HW_SQR, 74, 0, 0, 44, 90, 127, 0, 0, 64, 0, HC_TICK, 50, 120, HF_HP, 112, 40, 10, 30, 80, 0),
-        HS(HM_HAT, HW_SQR, 74, 0, 0, 80, 50, 122, 0, 0, 64, 0, HC_TICK, 50, 120, HF_HP, 112, 40, 10, 30, 80, 0),
-        HS(HM_DRUM, HW_SINE, 45, 0, 0, 76, 60, 127, 48, 40, 64, 10, HC_TICK, 60, 90, HF_LP, 110, 0, 10, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 52, 0, 0, 72, 60, 127, 48, 36, 64, 10, HC_TICK, 60, 90, HF_LP, 112, 0, 10, 0, 0, 0),
-        HS(HM_CYM, HW_SQR, 68, 0, 0, 108, 40, 102, 0, 0, 64, 60, HC_NOISE, 60, 120, HF_HP, 106, 30, 10, 40, 0, 0),
-        HS(HM_CYM, HW_SQR, 76, 0, 0, 100, 30, 103, 0, 0, 64, 30, HC_TICK, 60, 124, HF_HP, 108, 40, 0, 20, 0, 0),
-        HS(HM_DRUM, HW_NOISE, 60, 0, 10, 44, 70, 126, 0, 0, 64, 0, HC_OFF, 0, 0, HF_HP, 116, 20, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 60, 0, 0, 68, 50, 119, 24, 24, 64, 0, HC_POP, 60, 100, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SQR, 72, 0, 0, 36, 70, 127, 20, 16, 96, 40, HC_TICK, 100, 110, HF_BP, 100, 60, 30, 0, 0, 0),
-        HS(HM_DRUM, HW_SQR, 70, 0, 0, 66, 50, 115, 0, 0, 73, 30, HC_OFF, 0, 0, HF_BP, 96, 50, 10, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 88, 0, 0, 40, 60, 126, 0, 0, 64, 0, HC_TICK, 70, 120, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 34, 0, 0, 88, 50, 127, 100, 36, 64, 20, HC_ZAP, 70, 110, HF_LP, 96, 40, 60, 0, 0, 0),
-        HS(HM_SNARE, HW_SQR, 58, 0, 0, 56, 70, 96, 40, 24, 80, 30, HC_TICK, 80, 110, HF_BP, 104, 40, 30, 120, 56, 0)}},
+        HS(HM_DRUM, HW_SINE, 33, -40, 0, 28, 30, 124, 46, 26, 45, 10, HC_CLK, 90, 30, HF_LP, 106, 20, 60, 0, 30, 0),
+        HS(HM_SNARE, HW_TRI, 55, -20, 0, 14, 30, 127, 26, 18, 124, 90, HC_CK2, 70, 30, HF_HP, 104, 30, 52, 0, 30, 0),
+        HS(HM_CLAP, HW_SINE, 60, 0, 6, 14, 30, 127, 0, 0, 120, 127, HC_CLAP, 60, 30, HF_BP, 90, 50, 60, 4, 30, 0),
+        HS(HM_HAT, HW_SQR, 86, 0, 0, 3, 30, 104, 80, 124, 95, 70, HC_CLK, 40, 40, HF_HP, 116, 20, 50, 22, 20, 0),
+        HS(HM_HAT, HW_SQR, 86, 0, 0, 16, 40, 54, 80, 124, 95, 70, HC_CLK, 40, 40, HF_HP, 116, 20, 50, 22, 20, 0),
+        HS(HM_DRUM, HW_SINE, 45, -30, 0, 20, 40, 92, 26, 24, 52, 10, HC_CLK, 60, 30, HF_LP, 110, 10, 50, 0, 20, 0),
+        HS(HM_DRUM, HW_SINE, 52, -30, 0, 18, 40, 87, 26, 22, 59, 10, HC_CLK, 60, 30, HF_LP, 112, 10, 50, 0, 20, 0),
+        HS(HM_CYM, HW_SQR, 74, 0, 0, 50, 50, 30, 80, 124, 87, 90, HC_HAT, 50, 30, HF_HP, 110, 20, 50, 22, 20, 0),
+        HS(HM_CYM, HW_SQR, 84, 0, 0, 40, 50, 24, 30, 120, 93, 60, HC_TICK, 40, 40, HF_BP, 116, 30, 50, 21, 20, 0),
+        HS(HM_HAT, HW_NOISE, 124, 0, 6, 6, 40, 101, 0, 0, 60, 0, HC_OFFS, 0, 25, HF_HP, 118, 20, 50, 0, 20, 0),
+        HS(HM_DRUM, HW_SINE, 60, -30, 0, 12, 40, 85, 16, 16, 67, 10, HC_TICK, 60, 30, HF_LP, 118, 0, 50, 0, 20, 0),
+        HS(HM_DRUM, HW_SQR, 78, 0, 0, 5, 36, 127, 12, 8, 90, 50, HC_RIM, 110, 30, HF_BP, 108, 40, 72, 0, 30, 0),
+        HS(HM_DRUM, HW_SQR, 73, 0, 0, 12, 34, 105, 0, 0, 80, 60, HC_OFFS, 0, 25, HF_BP, 82, 30, 66, 9, 20, 0),
+        HS(HM_DRUM, HW_SINE, 100, 0, 0, 3, 40, 79, 6, 8, 100, 0, HC_CLK, 50, 30, HF_OFF, 127, 0, 40, 0, 20, 0),
+        HS(HM_DRUM, HW_SINE, 31, -40, 0, 40, 40, 98, 60, 30, 43, 30, HC_KICK, 90, 30, HF_LP, 100, 40, 70, 0, 50, 0),
+        HS(HM_SNARE, HW_SQR, 58, -20, 0, 12, 30, 127, 26, 14, 127, 104, HC_SNR, 80, 30, HF_BP, 110, 30, 52, 0, 40, 0)}},
     {"HEX METAL", {                               /* FM, drive, industrial */
-        HS(HM_DRUM, HW_SINE, 31, 0, 0, 90, 50, 120, 80, 46, 72, 40, HC_ZAP, 70, 90, HF_LP, 104, 30, 80, 0, 0, 0),
-        HS(HM_SNARE, HW_SINE, 52, 0, 0, 68, 60, 102, 30, 30, 101, 60, HC_TICK, 80, 110, HF_BP, 98, 50, 40, 100, 70, 0),
-        HS(HM_CLAP, HW_NOISE, 60, 0, 0, 74, 0, 123, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 90, 80, 60, 20, 80, 0),
-        HS(HM_HAT, HW_SQR, 66, 0, 0, 48, 80, 117, 0, 0, 64, 0, HC_TICK, 60, 120, HF_HP, 104, 60, 40, 20, 110, 0),
-        HS(HM_HAT, HW_SQR, 66, 0, 0, 84, 40, 101, 0, 0, 64, 0, HC_TICK, 60, 120, HF_HP, 104, 60, 40, 20, 110, 0),
-        HS(HM_DRUM, HW_SINE, 40, 0, 0, 82, 50, 113, 50, 50, 83, 50, HC_TICK, 60, 80, HF_LP, 104, 20, 50, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 47, 0, 0, 78, 50, 116, 50, 46, 83, 50, HC_TICK, 60, 90, HF_LP, 106, 20, 50, 0, 0, 0),
-        HS(HM_CYM, HW_SQR, 60, 0, 0, 114, 30, 82, 0, 0, 64, 100, HC_NOISE, 60, 110, HF_HP, 96, 40, 40, 30, 0, 0),
-        HS(HM_CYM, HW_SQR, 70, 0, 0, 106, 20, 84, 0, 0, 64, 70, HC_TICK, 60, 120, HF_BP, 106, 60, 30, 10, 0, 0),
-        HS(HM_DRUM, HW_NOISE, 60, 0, 10, 48, 60, 112, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 108, 60, 30, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 55, 0, 0, 72, 50, 113, 30, 30, 90, 40, HC_POP, 60, 90, HF_OFF, 0, 0, 20, 0, 0, 0),
-        HS(HM_DRUM, HW_SQR, 74, 0, 0, 34, 70, 127, 20, 16, 110, 80, HC_TICK, 100, 110, HF_BP, 100, 80, 60, 0, 0, 0),
-        HS(HM_DRUM, HW_SQR, 66, 0, 0, 72, 40, 110, 0, 0, 77, 70, HC_OFF, 0, 0, HF_BP, 94, 70, 30, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 82, 0, 0, 44, 50, 124, 0, 0, 107, 60, HC_TICK, 70, 110, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SAW, 33, 0, 0, 84, 50, 127, 90, 40, 64, 0, HC_ZAP, 80, 110, HF_LP, 92, 60, 90, 0, 0, 0),
-        HS(HM_SNARE, HW_SQR, 50, 0, 0, 64, 60, 96, 40, 30, 107, 80, HC_NOISE, 70, 100, HF_HP, 100, 50, 60, 110, 64, 0)}},
-    {"HEX GLITCH", {                              /* crushed, zapped, short */
-        HS(HM_DRUM, HW_SINE, 35, 0, 0, 76, 80, 127, 96, 30, 64, 0, HC_ZAP, 90, 120, HF_LP, 112, 20, 50, 0, 0, 40),
-        HS(HM_SNARE, HW_SQR, 57, 0, 0, 52, 80, 109, 50, 20, 64, 0, HC_NOISE, 90, 120, HF_HP, 104, 30, 30, 120, 50, 60),
-        HS(HM_CLAP, HW_NOISE, 60, 0, 0, 60, 0, 122, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 104, 70, 30, 8, 60, 50),
-        HS(HM_HAT, HW_SQR, 78, 0, 0, 36, 100, 117, 0, 0, 64, 0, HC_BLIP, 50, 120, HF_HP, 114, 30, 0, 50, 90, 70),
-        HS(HM_HAT, HW_SQR, 78, 0, 0, 70, 60, 120, 0, 0, 64, 0, HC_BLIP, 50, 120, HF_HP, 114, 30, 0, 50, 90, 70),
-        HS(HM_DRUM, HW_SQR, 45, 0, 0, 62, 80, 127, 80, 24, 64, 0, HC_ZAP, 70, 100, HF_LP, 100, 40, 30, 0, 0, 50),
-        HS(HM_DRUM, HW_SQR, 52, 0, 0, 58, 80, 127, 80, 22, 64, 0, HC_ZAP, 70, 110, HF_LP, 104, 40, 30, 0, 0, 50),
-        HS(HM_CYM, HW_SQR, 70, 0, 0, 96, 50, 91, 0, 0, 64, 80, HC_NOISE, 60, 120, HF_HP, 108, 30, 20, 60, 0, 80),
-        HS(HM_CYM, HW_SQR, 80, 0, 0, 90, 40, 104, 0, 0, 64, 50, HC_BLIP, 60, 124, HF_HP, 110, 40, 0, 20, 0, 60),
-        HS(HM_DRUM, HW_NOISE, 60, 0, 0, 36, 90, 127, 0, 0, 64, 0, HC_OFF, 0, 0, HF_HP, 118, 20, 0, 0, 0, 90),
-        HS(HM_DRUM, HW_TRI, 62, 0, 0, 56, 70, 127, 60, 16, 64, 0, HC_BLIP, 60, 100, HF_OFF, 0, 0, 0, 0, 0, 40),
-        HS(HM_DRUM, HW_SQR, 76, 0, 0, 30, 90, 127, 40, 10, 96, 60, HC_ZAP, 100, 124, HF_BP, 104, 60, 40, 0, 0, 70),
-        HS(HM_DRUM, HW_SQR, 72, 0, 0, 56, 60, 119, 0, 0, 79, 40, HC_BLIP, 50, 110, HF_BP, 100, 60, 20, 0, 0, 60),
-        HS(HM_DRUM, HW_SINE, 92, 0, 0, 34, 70, 127, 30, 10, 64, 0, HC_ZAP, 80, 124, HF_OFF, 0, 0, 0, 0, 0, 30),
-        HS(HM_DRUM, HW_SAW, 31, 0, 0, 80, 70, 127, 110, 24, 64, 30, HC_ZAP, 90, 120, HF_LP, 100, 60, 70, 0, 0, 60),
-        HS(HM_SNARE, HW_NOISE, 60, 0, 0, 48, 90, 96, 0, 0, 64, 0, HC_ZAP, 80, 120, HF_BP, 108, 60, 40, 127, 40, 90)}},
+        HS(HM_DRUM, HW_SINE, 29, -30, 0, 36, 40, 120, 56, 28, 41, 40, HC_KICK, 80, 25, HF_LP2, 100, 40, 70, 0, 60, 0),
+        HS(HM_SNARE, HW_SINE, 53, -20, 0, 18, 30, 127, 30, 20, 110, 80, HC_RIM, 80, 30, HF_BP, 100, 50, 52, 0, 50, 0),
+        HS(HM_CLAP, HW_SINE, 60, 0, 8, 18, 30, 98, 0, 0, 100, 127, HC_CLAP, 70, 25, HF_BP, 82, 70, 70, 4, 50, 0),
+        HS(HM_HAT, HW_SQR, 78, 0, 0, 4, 30, 54, 90, 110, 97, 90, HC_HAT, 50, 25, HF_HP, 110, 40, 60, 19, 40, 0),
+        HS(HM_HAT, HW_SQR, 78, 0, 0, 22, 40, 26, 90, 110, 97, 90, HC_HAT, 50, 25, HF_HP, 110, 40, 60, 19, 40, 0),
+        HS(HM_DRUM, HW_SINE, 40, -20, 0, 26, 40, 92, 30, 30, 59, 40, HC_TOM, 60, 25, HF_LP, 108, 20, 60, 0, 40, 0),
+        HS(HM_DRUM, HW_SINE, 47, -20, 0, 24, 40, 81, 30, 28, 66, 40, HC_TOM, 60, 30, HF_LP, 110, 20, 60, 0, 40, 0),
+        HS(HM_CYM, HW_SQR, 66, 0, 0, 60, 50, 22, 100, 116, 85, 110, HC_HAT, 50, 20, HF_HP, 104, 30, 60, 19, 40, 0),
+        HS(HM_CYM, HW_SINE, 78, 0, 0, 50, 50, 21, 40, 116, 91, 90, HC_TICK, 50, 30, HF_BP, 110, 50, 60, 3, 40, 0),
+        HS(HM_HAT, HW_NOISE, 116, 0, 8, 8, 40, 65, 0, 0, 60, 0, HC_OFFS, 0, 25, HF_BP, 114, 40, 60, 0, 40, 0),
+        HS(HM_DRUM, HW_SINE, 55, -20, 0, 14, 40, 79, 20, 18, 74, 50, HC_TICK, 60, 25, HF_LP, 116, 10, 60, 0, 40, 0),
+        HS(HM_DRUM, HW_SQR, 80, 0, 0, 5, 36, 106, 14, 8, 99, 80, HC_RIM, 110, 30, HF_BP, 108, 60, 72, 0, 60, 0),
+        HS(HM_DRUM, HW_SQR, 73, 0, 0, 12, 34, 107, 0, 0, 80, 80, HC_OFFS, 0, 25, HF_BP, 82, 30, 66, 3, 40, 0),
+        HS(HM_DRUM, HW_SINE, 94, 0, 0, 4, 40, 82, 8, 8, 106, 60, HC_CLK, 60, 30, HF_OFF, 127, 0, 40, 0, 40, 0),
+        HS(HM_DRUM, HW_SAW, 31, -40, 0, 40, 40, 107, 60, 34, 31, 20, HC_KK2, 90, 25, HF_LP2, 92, 60, 80, 0, 80, 0),
+        HS(HM_SNARE, HW_SQR, 50, -20, 0, 16, 30, 72, 30, 20, 105, 100, HC_SNR, 80, 25, HF_HP, 100, 50, 52, 0, 70, 0)}},
+    {"HEX GLITCH", {                              /* crushed, snapped, short */
+        HS(HM_DRUM, HW_SINE, 33, -50, 0, 22, 30, 124, 64, 18, 45, 0, HC_SNAP, 60, 40, HF_LP, 110, 30, 50, 0, 40, 60),
+        HS(HM_SNARE, HW_SQR, 57, -30, 0, 10, 30, 127, 40, 12, 90, 96, HC_CK2, 90, 40, HF_HP, 106, 30, 52, 0, 40, 70),
+        HS(HM_CLAP, HW_SINE, 60, 0, 5, 10, 30, 82, 0, 0, 80, 127, HC_CLAP, 70, 40, HF_BP, 100, 60, 60, 5, 40, 60),
+        HS(HM_HAT, HW_P25, 90, 0, 0, 2, 30, 127, 70, 100, 101, 80, HC_CLK, 50, 50, HF_HP, 116, 30, 66, 22, 30, 80),
+        HS(HM_HAT, HW_P25, 90, 0, 0, 12, 40, 83, 70, 100, 101, 80, HC_CLK, 50, 50, HF_HP, 116, 30, 60, 22, 30, 80),
+        HS(HM_DRUM, HW_SQR, 45, -40, 0, 14, 30, 73, 50, 12, 52, 20, HC_SNAP, 60, 40, HF_LP, 104, 40, 50, 0, 30, 60),
+        HS(HM_DRUM, HW_SQR, 52, -40, 0, 12, 30, 70, 50, 10, 59, 20, HC_SNAP, 60, 40, HF_LP, 106, 40, 50, 0, 30, 60),
+        HS(HM_CYM, HW_SQR, 76, 0, 0, 40, 50, 35, 80, 100, 89, 100, HC_HAT, 50, 50, HF_HP, 110, 30, 50, 22, 30, 90),
+        HS(HM_CYM, HW_P12, 88, 0, 0, 30, 50, 31, 40, 110, 95, 70, HC_TICK, 50, 50, HF_HP, 112, 40, 50, 21, 30, 70),
+        HS(HM_HAT, HW_NOISE, 110, 0, 0, 4, 40, 127, 0, 0, 60, 0, HC_OFFS, 0, 25, HF_HP, 116, 30, 66, 0, 30, 100),
+        HS(HM_DRUM, HW_TRI, 62, -40, 0, 10, 30, 89, 36, 8, 69, 0, HC_SNAP, 50, 50, HF_OFF, 127, 0, 40, 0, 30, 60),
+        HS(HM_DRUM, HW_SQR, 82, 0, 0, 5, 36, 120, 20, 4, 101, 70, HC_RIM, 110, 50, HF_BP, 108, 50, 72, 0, 40, 80),
+        HS(HM_DRUM, HW_P25, 73, 0, 0, 12, 34, 100, 0, 0, 80, 60, HC_OFFS, 0, 25, HF_BP, 82, 30, 66, 11, 30, 70),
+        HS(HM_DRUM, HW_SINE, 104, 0, 0, 2, 40, 78, 20, 4, 104, 40, HC_SNAP, 60, 60, HF_OFF, 127, 0, 40, 0, 30, 50),
+        HS(HM_DRUM, HW_SAW, 31, -50, 0, 30, 30, 103, 70, 16, 43, 30, HC_SNAP, 70, 30, HF_LP, 100, 50, 60, 0, 60, 70),
+        HS(HM_SNARE, HW_NOISE, 100, 0, 0, 8, 30, 127, 0, 0, 70, 127, HC_CK2, 90, 50, HF_BP, 108, 60, 52, 0, 50, 100)}},
     {"HEX ROOM", {                                /* soft, round, warm */
-        HS(HM_DRUM, HW_SINE, 31, 0, 2, 96, 30, 125, 48, 60, 64, 0, HC_POP, 50, 40, HF_LP, 96, 0, 10, 0, 0, 0),
-        HS(HM_SNARE, HW_SINE, 48, 0, 0, 76, 40, 97, 24, 40, 64, 0, HC_TICK, 40, 70, HF_BP, 92, 20, 0, 90, 84, 0),
-        HS(HM_CLAP, HW_NOISE, 60, 0, 4, 84, 0, 120, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 88, 30, 0, 24, 90, 0),
-        HS(HM_HAT, HW_SQR, 68, 0, 2, 56, 60, 118, 0, 0, 64, 0, HC_OFF, 0, 0, HF_HP, 104, 10, 0, 60, 40, 0),
-        HS(HM_HAT, HW_SQR, 68, 0, 2, 90, 30, 100, 0, 0, 64, 0, HC_OFF, 0, 0, HF_HP, 104, 10, 0, 60, 40, 0),
-        HS(HM_DRUM, HW_SINE, 41, 0, 0, 90, 30, 109, 30, 56, 64, 0, HC_POP, 40, 50, HF_LP, 100, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 48, 0, 0, 86, 30, 110, 30, 52, 64, 0, HC_POP, 40, 60, HF_LP, 104, 0, 0, 0, 0, 0),
-        HS(HM_CYM, HW_SQR, 62, 0, 4, 116, 20, 85, 0, 0, 64, 20, HC_OFF, 0, 0, HF_HP, 96, 10, 0, 70, 0, 0),
-        HS(HM_CYM, HW_SQR, 70, 0, 0, 110, 10, 90, 0, 0, 64, 10, HC_TICK, 30, 110, HF_BP, 100, 20, 0, 40, 0, 0),
-        HS(HM_DRUM, HW_NOISE, 60, 0, 30, 56, 40, 108, 0, 0, 64, 0, HC_OFF, 0, 0, HF_BP, 106, 20, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 55, 0, 0, 80, 30, 109, 16, 36, 64, 0, HC_POP, 40, 80, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_TRI, 67, 0, 0, 46, 50, 123, 20, 20, 90, 20, HC_TICK, 60, 90, HF_BP, 92, 30, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 74, 0, 0, 76, 30, 105, 0, 0, 73, 10, HC_OFF, 0, 0, HF_BP, 90, 20, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_SINE, 79, 0, 0, 50, 40, 117, 0, 0, 64, 0, HC_TICK, 40, 100, HF_OFF, 0, 0, 0, 0, 0, 0),
-        HS(HM_DRUM, HW_TRI, 28, 0, 4, 100, 20, 121, 36, 70, 64, 0, HC_POP, 40, 30, HF_LP, 90, 10, 20, 0, 0, 0),
-        HS(HM_SNARE, HW_TRI, 52, 0, 0, 80, 30, 94, 20, 40, 64, 0, HC_OFF, 0, 0, HF_LP, 104, 10, 0, 80, 96, 0)}},
+        HS(HM_DRUM, HW_SINE, 29, -20, 0, 40, 50, 124, 30, 40, 41, 0, HC_KICK, 50, 20, HF_LP, 96, 0, 40, 0, 0, 0),
+        HS(HM_SNARE, HW_SINE, 50, -10, 0, 20, 40, 127, 14, 24, 100, 70, HC_SNR, 50, 20, HF_LP, 104, 10, 52, 0, 0, 0),
+        HS(HM_CLAP, HW_SINE, 60, 0, 10, 20, 40, 119, 0, 0, 90, 127, HC_CLAP, 40, 20, HF_BP, 80, 30, 60, 3, 0, 0),
+        HS(HM_HAT, HW_SQR, 80, 0, 2, 5, 40, 83, 50, 116, 89, 40, HC_OFFS, 0, 25, HF_HP, 108, 0, 40, 22, 0, 0),
+        HS(HM_HAT, HW_SQR, 80, 0, 2, 24, 50, 53, 50, 116, 89, 40, HC_OFFS, 0, 25, HF_HP, 108, 0, 40, 22, 0, 0),
+        HS(HM_DRUM, HW_SINE, 41, -10, 0, 30, 50, 77, 14, 36, 48, 0, HC_TOM, 40, 20, HF_LP, 104, 0, 40, 0, 0, 0),
+        HS(HM_DRUM, HW_SINE, 48, -10, 0, 28, 50, 69, 14, 34, 55, 0, HC_TOM, 40, 25, HF_LP, 106, 0, 40, 0, 0, 0),
+        HS(HM_CYM, HW_TRI, 68, 0, 4, 64, 60, 50, 40, 114, 81, 60, HC_OFFS, 0, 25, HF_HP, 102, 0, 40, 22, 0, 0),
+        HS(HM_CYM, HW_SINE, 80, 0, 0, 54, 60, 40, 20, 114, 87, 40, HC_TICK, 20, 25, HF_BP, 108, 10, 40, 3, 0, 0),
+        HS(HM_HAT, HW_NOISE, 118, 0, 16, 10, 50, 87, 0, 0, 60, 0, HC_OFFS, 0, 25, HF_BP, 112, 10, 40, 0, 0, 0),
+        HS(HM_DRUM, HW_SINE, 55, -10, 0, 20, 50, 62, 8, 24, 62, 0, HC_TICK, 30, 20, HF_LP, 110, 0, 40, 0, 0, 0),
+        HS(HM_DRUM, HW_TRI, 72, 0, 0, 5, 36, 127, 8, 12, 84, 30, HC_RIM, 110, 20, HF_BP, 108, 20, 72, 0, 0, 0),
+        HS(HM_DRUM, HW_SINE, 73, 0, 0, 12, 34, 127, 0, 0, 80, 40, HC_OFFS, 0, 25, HF_BP, 82, 30, 66, 6, 0, 0),
+        HS(HM_DRUM, HW_SINE, 92, 0, 0, 6, 40, 51, 4, 10, 92, 0, HC_TICK, 20, 20, HF_OFF, 127, 0, 40, 0, 0, 0),
+        HS(HM_DRUM, HW_TRI, 26, -20, 4, 50, 60, 127, 24, 50, 38, 0, HC_KICK, 40, 15, HF_LP, 90, 10, 40, 0, 0, 0),
+        HS(HM_SNARE, HW_TRI, 52, -10, 0, 24, 40, 118, 10, 24, 84, 60, HC_OFFS, 0, 25, HF_LP, 106, 10, 52, 0, 0, 0)}},
 };

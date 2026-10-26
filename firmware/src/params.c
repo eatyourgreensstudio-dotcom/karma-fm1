@@ -62,10 +62,18 @@ static const char *const N_GO[] = {"--", "GO"};
 static const char *const N_DGMODE[] = {"OFF", "MAP", "EUCL"};
 static const char *const N_PLDIR[] = {"FWD", "REV", "PEND", "RAND", "WALK"};
 static const char *const N_KNOBS[] = {"GM", "70-77", "1-8", "AUTO", "PANEL"};
-static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};   /* HEX (hex_drums.c) */
-static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS"};
-static const char *const N_HXCLICK[] = {"OFF", "TICK", "NOIS", "POP", "BLIP", "ZAP"};
-static const char *const N_HXFILT[] = {"OFF", "LP", "HP", "BP", "NOTCH"};
+/* HEX (hex_drums.c: the LXR's drum voices, lxr_dsp.c): HM_*, HW_*, HC_* (the transients), HF_* */
+static const char *const N_HXMODEL[] = {"DRUM", "SNARE", "CLAP", "CYM", "HAT"};
+static const char *const N_HXWAVE[] = {"SIN", "TRI", "SAW", "SQR", "NOIS", "P12", "P25", "P37"};
+static const char *const N_HXCLICK[] = {"SNAP", "OFFS", "CLK", "CK2", "TICK", "KICK", "RIM", "DRIP*", "HAT", "CLAP",
+                                        "KK2*", "SNR", "TOM", "SP2*"};   /* *: not in the flash, TICK KICK SNR play */
+static const char *const N_HXFILT[] = {"LP", "HP", "BP", "UBP", "NTCH", "PEAK", "LP2", "OFF"};
+static const char *const N_HXMODW[] = {"FMSIN", "FMTRI", "FMSAW", "FMSQR", "FMNOI", "FMPWM",   /* DRUM: the mod osc */
+                                       "MXSIN", "MXTRI", "MXSAW", "MXSQR", "MXNOI", "MXPWM"};
+static const char *const N_HXWAV2[] = {"SI/SI", "SI/TR", "SI/SA", "SI/SQ", "SI/NO", "SI/PW", "TR/SI", "TR/TR", "TR/SA",
+                                       "TR/SQ", "TR/NO", "TR/PW", "SA/SI", "SA/TR", "SA/SA", "SA/SQ", "SA/NO", "SA/PW",
+                                       "SQ/SI", "SQ/TR", "SQ/SA", "SQ/SQ", "SQ/NO", "SQ/PW", "NO/SI", "NO/TR", "NO/SA",
+                                       "NO/SQ", "NO/NO", "NO/PW", "PW/SI", "PW/TR", "PW/SA", "PW/SQ", "PW/NO", "PW/PW"};
 static const char *const N_AGSCALE[] = {"MIN", "PHRY", "HARM", "MPEN", "DOR", "MAJ"};   /* ACID GEN: TB-3PO's scales */
 static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_OFF .. SL_STUT (slicer.c) */
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
@@ -224,28 +232,28 @@ static const param_desc_t GP[G_COUNT] = {
     [G_AGOCT] = PD("OCT", F_INT, 1, 3, 2),
     [G_AGROOT] = PD("ROOT", F_NOTE, 0, 11, 0),   /* (C, as the tracks: SEQ > HARMONY sets it with them) */
     [G_AGMUT] = PE("VARY", N_GO, 0),
-    [G_HXMODEL] = PE("MODEL", N_HXMODEL, 0),     /* EDIT on the drum track: the HEX sound (ui_studio.c hex_ui_sync) */
-    [G_HXWAVE] = PE("WAVE", N_HXWAVE, 0),
-    [G_HXTUNE] = PD("TUNE", F_INT, 0, 127, 36),
-    [G_HXFINE] = PD("FINE", F_INT, -64, 63, 0),
-    [G_HXATK] = PD("ATK", F_PCT, 0, 127, 0),
-    [G_HXDEC] = PD("DEC", F_PCT, 0, 127, 80),
-    [G_HXSLOPE] = PD("SLOPE", F_PCT, 0, 127, 40),
-    [G_HXLVL] = PD("LEVEL", F_PCT, 0, 127, 100),
-    [G_HXPAMT] = PD("P.AMT", F_PCT, 0, 127, 0),
-    [G_HXPDEC] = PD("P.DEC", F_PCT, 0, 127, 40),
-    [G_HXRATIO] = PD("RATIO", F_PCT, 0, 127, 64),
-    [G_HXFM] = PD("FM", F_PCT, 0, 127, 0),
-    [G_HXCLICK] = PE("CLICK", N_HXCLICK, 0),
-    [G_HXCLVL] = PD("C.LVL", F_PCT, 0, 127, 60),
-    [G_HXCTONE] = PD("TONE", F_PCT, 0, 127, 80),
+    [G_HXMODEL] = PE("MODEL", N_HXMODEL, 0),     /* EDIT on the drum track: the HEX sound (ui_studio.c hex_ui_sync); */
+    [G_HXWAVE] = PE("WAVE", N_HXWAVE, 0),        /* the LXR's 0..127 values. These are the DRUM model's: the pages */
+    [G_HXTUNE] = PD("TUNE", F_INT, 0, 127, 36),  /* show each model's own (hex_desc) */
+    [G_HXFINE] = PD("P.SLP", F_INT, -64, 62, 0),
+    [G_HXATK] = PD("ATK", F_INT, 0, 127, 0),
+    [G_HXDEC] = PD("DEC", F_INT, 0, 127, 30),
+    [G_HXSLOPE] = PD("SLOPE", F_INT, 0, 127, 40),
+    [G_HXLVL] = PD("LEVEL", F_INT, 0, 127, 110),
+    [G_HXPAMT] = PD("P.AMT", F_INT, 0, 127, 0),
+    [G_HXPDEC] = PD("P.DEC", F_INT, 0, 127, 30),
+    [G_HXRATIO] = PD("M.PIT", F_INT, 0, 127, 48),
+    [G_HXFM] = PD("FM", F_INT, 0, 127, 0),
+    [G_HXCLICK] = PE("TRANS", N_HXCLICK, 0),
+    [G_HXCLVL] = PD("T.LVL", F_INT, 0, 127, 60),
+    [G_HXCTONE] = PD("T.PIT", F_INT, 0, 127, 25),
     [G_HXFTYPE] = PE("FILT", N_HXFILT, 0),
-    [G_HXCUT] = PD("CUT", F_PCT, 0, 127, 100),
-    [G_HXRES] = PD("RES", F_PCT, 0, 127, 0),
-    [G_HXDRIVE] = PD("DRIVE", F_PCT, 0, 127, 0),
-    [G_HXAUX1] = PD("AUX A", F_PCT, 0, 127, 0),
-    [G_HXAUX2] = PD("AUX B", F_PCT, 0, 127, 0),
-    [G_HXCRUSH] = PD("CRUSH", F_PCT, 0, 127, 0),
+    [G_HXCUT] = PD("CUT", F_INT, 0, 127, 110),
+    [G_HXRES] = PD("RES", F_INT, 0, 127, 0),
+    [G_HXDRIVE] = PD("DRIVE", F_INT, 0, 127, 40),
+    [G_HXAUX1] = PD("MOD", F_INT, 0, 127, 0),
+    [G_HXAUX2] = PD("DIST", F_INT, 0, 127, 0),
+    [G_HXCRUSH] = PD("CRUSH", F_INT, 0, 126, 0),
     [G_GNON] = PE("GEN", N_ONOFF, 0),                /* SEQ > GEN (gen_seq.c) */
     [G_GNCHG] = PD("DRIFT", F_PCT, 0, 127, 32),
     [G_GNDENS] = PD("DENS", F_PCT, 0, 127, 45),   /* (about a third of the steps: 89 started too busy) */
@@ -486,7 +494,7 @@ static const page_t PAGES[] = {
     {"HEX MOD", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXPAMT, G_HXPDEC, G_HXRATIO, G_HXFM}},      /* its HEX kit (page_shown: */
     {"HEX CLICK", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXCLICK, G_HXCLVL, G_HXCTONE, G_HXCRUSH}}, /* the drum track only) */
     {"HEX FILT", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXFTYPE, G_HXCUT, G_HXRES, G_HXDRIVE}},
-    {"HEX NOISE", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXAUX1, G_HXAUX2, 0xFF, 0xFF}},
+    {"HEX MORE", FAM_EDIT, SC_GLOBAL, GR_HEX, {G_HXAUX1, G_HXAUX2, 0xFF, 0xFF}},
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
     {"EDIT 2", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E4, P_E5, P_E6, P_E7}},
     {"FILTER", FAM_EDIT, SC_TRACK, GR_NONE, {P_FTYPE, P_E4, P_E5, P_E7}},   /* ANALOG only (2.6, Felucca 1.5): TYPE CUT
@@ -553,6 +561,24 @@ static int page_shown(const page_t *pg)
     return pg->id[0] != P_FTYPE || (!is_drum(TSEL) && TSEL->eng_req % NENGINES == 0u);
 }
 
+/* a HEX sound's byte as its model reads it (hex_drums.c): what differs from GP's (the DRUM model's) */
+static const param_desc_t *hex_desc(uint32_t id)
+{
+    static const param_desc_t SN[] = {PD("P.SLP", F_INT, -64, 62, 0), PD("P.AMT", F_INT, 0, 127, 0),
+                                      PD("P.DEC", F_INT, 0, 127, 30), PD("N.FRQ", F_INT, 0, 127, 120),
+                                      PD("MIX", F_INT, 0, 127, 90), PD("REPT", F_INT, 0, 127, 0)};
+    static const param_desc_t CY[] = {PD("FINE", F_INT, -64, 62, 0), PD("MOD2", F_INT, 0, 127, 60),
+                                      PD("PIT2", F_INT, 0, 127, 120), PD("PIT1", F_INT, 0, 127, 90),
+                                      PD("MOD1", F_INT, 0, 127, 60), PE("WAVES", N_HXWAV2, 22)};
+    static const param_desc_t AUX_DRUM = PE("MOD", N_HXMODW, 0);
+    static const uint8_t AT[22] = {9, 9, 9, 0, 9, 9, 9, 9, 1, 2, 3, 4, 9, 9, 9, 9, 9, 9, 9, 5, 9, 9};
+    uint32_t m = (uint32_t)song.g[G_HXMODEL], i = id - G_HXMODEL, a = i < 22u ? AT[i] : 9u;
+    if (a == 9u)
+        return &GP[id];
+    if (m == HM_DRUM)
+        return a == 5u ? &AUX_DRUM : &GP[id];
+    return m <= HM_CLAP ? &SN[a] : &CY[a];
+}
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
@@ -566,7 +592,7 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     }
     if (pg->scope == SC_GLOBAL) {
         *valp = &song.g[id];
-        return &GP[id];
+        return pg->graph == GR_HEX ? hex_desc(id) : &GP[id];
     }
     *valp = &TSEL->p[id];
     return track_desc(TSEL, id);

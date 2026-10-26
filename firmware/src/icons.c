@@ -6,7 +6,9 @@
  * FELUCCA_ICONS=0 turns them off (labels get their full width back). */
 #include "felucca_icons.h"
 #ifndef FELUCCA_ICONS
-#define FELUCCA_ICONS (FELUCCA_ICONS_N > 0)   /* on when the atlas has icons */
+#define FELUCCA_ICONS 0          /* KARMA: off. Its screens draw no icons, and Felucca's icon atlas (all rights reserved,
+                                  * LICENSING.md) stays out of the image: the firmware is GPL code and its own data
+                                  * only (it holds GPL-3.0 code of other authors: X0X, FM-106, the LXR-02) */
 #endif
 #if FELUCCA_ICONS && FELUCCA_ICONS_N == 0
 #error "FELUCCA_ICONS=1 but felucca_icons.h has no icons (assets/icons.png missing?)"

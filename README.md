@@ -22,7 +22,7 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 - **Track 1: ACID or JUNO.** A TB-303 voice (from X0X) or a Juno-106 style polysynth (from FM-106).
 - **Track 2: ELEMENTS.** Physical modelling built on Mutable Instruments' open-source Elements code: strike, pluck, bow or blow a modal resonator; the Ominous Voice.
 - **Track 3: PLAITS.** 24 synthesis models built on Mutable Instruments' open-source Plaits code.
-- **Drums: HEX.** Its own LXR-style drum synthesizer, no samples.
+- **Drums: HEX.** The drum voices of the open-source LXR-02 firmware by Erica Synths, ported: five kits and four of your own, synthesised (no samples but its short transient clicks).
 - **Sequencer.** 64 steps a track, chords of up to 4 notes, ratchets, accents, slides, chance, PLAY modes, a song arranger.
 - **Generators.** GEN writes every synth track's part on one KEY and chord PROGRESSION (SEQ > HARMONY): an acid bass, a voice-led line, a lead motif, evolving as they play. ACID GEN (TB-3PO), DRUM GEN (Grids maps, Euclid).
 - **Effects.** CLOUD granular send (built on Mutable Instruments' Clouds code), reverb, delay, punch-in effects.
@@ -39,12 +39,13 @@ See [BUILDING.md](BUILDING.md): the firmware (`sh build.sh`, JieLi clang in Dock
 KARMA is by Ariel Muchnik. It is a fork of [SLOOP](https://github.com/isod89/sloop-fm1) by isod89, based on
 [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. It uses code from
 [X0X](https://github.com/charlesvestal/fm1-x0x) (Charles Vestal), [FM-106](https://github.com/PatttF/fm-106) (PatttF),
-Mutable Instruments' [Plaits, Elements, Clouds and Grids](https://github.com/pichenettes/eurorack) (Émilie Gillet) and
+Mutable Instruments' [Plaits, Elements, Clouds and Grids](https://github.com/pichenettes/eurorack) (Émilie Gillet), the drum
+voices of the LXR-02 firmware (Erica Synths, GPL-3.0-only) and
 ideas and code from [JIANT FM](https://github.com/juanjiant-bit/JIANT) (Juan Jiant). Details: [LICENSING.md](LICENSING.md).
 
 KARMA is free software under the GNU General Public License, version 3 only ([LICENSE](LICENSE)). If you share KARMA
 or firmware made from it, share its complete source under the same licence.
 
-KARMA is not affiliated with or endorsed by M-VAVE, Mutable Instruments, Korg, Teenage Engineering, Hügelton
-Instruments or Juan Jiant. M-VAVE and FM-1 are trademarks of their owners. The README of SLOOP, which KARMA grew
+KARMA is not affiliated with or endorsed by M-VAVE, Mutable Instruments, Erica Synths, Korg, Teenage Engineering,
+Hügelton Instruments or Juan Jiant. M-VAVE and FM-1 are trademarks of their owners. The README of SLOOP, which KARMA grew
 from, is kept as [SLOOP-README.md](SLOOP-README.md).
