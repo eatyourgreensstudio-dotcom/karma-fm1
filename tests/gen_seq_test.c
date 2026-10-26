@@ -96,6 +96,22 @@ int main(void)
                 struck += i % 16u && i % 4u == 0u && t->step[i].time == ST_NOTE;
         }
         ck(struck > 40u, "LINE: a short sound struck again on the beats");
+        {                                                 /* ELEMENTS PICK with a long release (PICKED BAR): struck */
+            uint8_t eng = t->engine;
+            int16_t m = t->p[P_E0];
+            t->engine = ENGI_ELEM; t->p[P_E0] = EM_PICK; t->p[P_ATK] = 0; t->p[P_REL] = 56;
+            for (r = 0, struck = 0; r < 10u; r++) {
+                gen_new(t);
+                for (i = 0; i < 64u; i++)
+                    struck += i % 16u && i % 4u == 0u && t->step[i].time == ST_NOTE;
+            }
+            ck(struck > 100u, "LINE: ELEMENTS PICK (a long release) struck on the beats, not held");
+            t->p[P_E0] = EM_BOW; gen_new(t);
+            for (i = 0, struck = 0; i < 64u; i++)
+                struck += i % 8u != 0u && t->step[i].time == ST_NOTE;
+            ck(struck == 0u, "LINE: ELEMENTS BOW holds its notes");
+            t->engine = eng; t->p[P_E0] = m;
+        }
     }
     {   /* LEAD */
         uint32_t ok_key = 1, ok_beat = 1, ok_end = 1, ok_rep = 1, ok_reg = 1, r;

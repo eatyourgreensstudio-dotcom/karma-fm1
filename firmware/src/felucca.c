@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* SLOOP (based on FELUCCA): one compilation unit (the HAL is header-only). Order matters. */
 #include <stdint.h>
+#define PR_WAVES_FROM_PLX 1      /* PLAITS WAVE (prism_dsp.c) reads Plaits' own 50 KB wavetable: one copy (plx.cc) */
 #include "fm1_time.h"
 #include "fm1_sys.h"
 #include "fm1_irq.h"

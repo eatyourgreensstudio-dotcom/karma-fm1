@@ -33,10 +33,14 @@ def main():
             v = [max(-32767, min(32767, round(x * 32767))) for x in v]
         v = [int(x) for x in v]
         total += 2 * len(v)
+        if ours == "PR_WAVES":                   # (the firmware reads Plaits' own copy: plx.cc plx_waves)
+            L += ["#ifdef PR_WAVES_FROM_PLX", "extern const int16_t *const plx_waves;", "#define PR_WAVES plx_waves", "#else"]
         L.append(f"static const int16_t {ours}[{len(v)}] = {{   /* {theirs} */")
         for i in range(0, len(v), 16):
             L.append("    " + ", ".join(str(x) for x in v[i:i + 16]) + ",")
         L.append("};")
+        if ours == "PR_WAVES":
+            L.append("#endif")
     L.append("static const int16_t *const PR_WS[5] = {PR_WS_0, PR_WS_1, PR_WS_2, PR_WS_3, PR_WS_4};")
     # ours: half a raised cosine, (cos(pi x) + 1) / 2 for x = 0..1 (the swarm's grain window), Q15
     import math

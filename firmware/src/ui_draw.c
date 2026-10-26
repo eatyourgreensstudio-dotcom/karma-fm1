@@ -970,11 +970,14 @@ static void ui_timers(void)
 }
 
 static void vis_draw(void);                     /* ui_vis.c */
+static int boot_draw(void);                     /* ui_vis.c: the boot animation */
 static int vis_shown(void);
 static uint8_t vis_on, vis_shown_last, vis_name_t;   /* the visualiser (ui_vis.c): on, drawn last frame, its name's time */
 static void ui_draw(void)
 {
     ui.frame++;
+    if (boot_draw())                                    /* (KARMA 3.0: the boot animation first) */
+        return;
     pads_tick();
     if (rec_go) {                                       /* the take started: say so */
         rec_go = 0;

@@ -3,14 +3,16 @@
  * any page closes it; SELECT steps through the twelve styles (the name shows a second); a layer held shows
  * its screen as ever, then the visualiser comes back. The keys, PLAY and REC work as always.
  *   1 OSCILLOSCOPE  2 SPECTRUM  3 SPECTROGRAM  4 LISSAJOUS  5 VU METERS  6 CIRCLE
- *   7 TAPE  8 LCD  9 BOUNCE  10 ORBIT  11 WIRES  12 SLOOP (the logo: the sail's bands are the tracks)
+ *   7 TAPE  8 LCD  9 BOUNCE  10 ORBIT  11 WIRES  12 DANCER
+ * (KARMA 3.0: DANCER, a white silhouette dancing to the song on black, is first: HOME on HOME opens on her; the
+ * oscilloscope moved to the last place, the SLOOP sail is gone)
  * It reads what the audio already leaves for the UI: the scope buffers (audio.c, the mix at 22 kHz, left and
  * right, as if MASTER were all the way up: the picture does not follow the volume knob, even at 0), the tracks' peaks (fx.c / drums.c, as the TRACKS meters read them), the notes that started
  * (voice.c vis_hit) and the transport clock. Everything is drawn in the main loop, every other frame, in two
  * bands of 120 rows (the canvas holds 124): no cost to the audio. */
 #define VIS_N 12u
-static const char *const VIS_NAME[VIS_N] = {"OSCILLOSCOPE", "SPECTRUM", "SPECTROGRAM", "LISSAJOUS", "VU METERS",
-                                            "CIRCLE", "TAPE", "LCD", "BOUNCE", "ORBIT", "WIRES", "KARMA"};
+static const char *const VIS_NAME[VIS_N] = {"DANCER", "SPECTRUM", "SPECTROGRAM", "LISSAJOUS", "VU METERS",
+                                            "CIRCLE", "TAPE", "LCD", "BOUNCE", "ORBIT", "WIRES", "OSCILLOSCOPE"};
 /* vis_on, vis_shown_last, vis_name_t: ui_draw.c; vis_style: panel.c (kept with the settings) */
 #define VIS_FFT 512u
 #define VIS_SG_W 48u                                /* spectrogram: 48 columns of 5 px, 72 rows of 3 px */
@@ -325,9 +327,9 @@ static void vis_update(void)
             }
         }
         break;
-    case 11:                                        /* SLOOP: the sail's bands and the dial fall slowly */
-        for (i = 0; i < 5u; i++)
-            vs.vu[i] = (int16_t)(vs.lvl[i] > vs.vu[i] - 30 ? vs.lvl[i] : vs.vu[i] - 30);
+    case 0:                                         /* DANCER: her energy, the mix's level (fast up, slow down) */
+        vs.vu[4] = (int16_t)(vs.lvl[4] > vs.vu[4] ? vs.vu[4] + (vs.lvl[4] - vs.vu[4]) / 3 : vs.vu[4] - 8);
+        if (vs.vu[4] < 0) vs.vu[4] = 0;
         break;
     default:
         break;
@@ -553,47 +555,93 @@ static void vis_wires(void)
 }
 /* the logo (tools/gen_logo.py at 0.86, centred on 120, 112), alive: the dial is the master, the sail's four
  * bands the tracks (growing with their level, flashing on a note), the boat rocks on the master's wave */
-static void vis_sloop(void)
+/* DANCER (KARMA 3.0): an original figure, a white silhouette on black, dancing to the beat: her weight goes from one
+ * leg to the other on every beat (that knee gives, the hip drops, the other leg straight), the arms take one of four
+ * moves for two bars each (a V waving, pumping, the disco point, a wave), wider the louder the mix; a kick adds a
+ * little bounce; the skirt and the long hair swing behind her. Angles 1024 a turn, from straight down, outward
+ * positive. A limb is a polygon with a muscle's profile (its width at the start, at its widest, at the end) */
+static void vis_limb(int32_t x0, int32_t y0, int32_t a, int32_t len, int32_t r0, int32_t rm, int32_t r1,
+                     int32_t *ex, int32_t *ey)
 {
-    static const int16_t BAND[4][4] = {{691, 1035, 1659, 1938}, {1118, 1462, 2006, 2285}, {1544, 1888, 2353, 2632},
-                                       {1971, 2315, 2700, 2980}};   /* y0, y1, x right at y0, at y1 (1/16 px) */
-    static const uint16_t DIMC[4] = {RGB(9, 27, 56), RGB(7, 45, 25), RGB(56, 44, 5), RGB(56, 22, 6)};
-    uint32_t bq = vis_beat_q8(), i;
-    int32_t ang = (isin(bq) * 11) >> 15;            /* +-4 degrees (1024 a turn), a sway every four beats */
-    int32_t sn = isin((uint32_t)ang), cs = icos((uint32_t)ang);
-    int32_t px[4], py[4], x, sc = vs.scale > 1600 ? vs.scale : 1600, end;
-#define ROT(X, Y, I) do { int32_t dx_ = (X) - 120 * 16, dy_ = (Y) - 170 * 16;                       \
-        px[I] = 120 * 16 + ((dx_ * cs - dy_ * sn) >> 15); py[I] = 170 * 16 + ((dx_ * sn + dy_ * cs) >> 15); } while (0)
-    /* the dial: 270 degrees, lit to the master's level */
-    end = vs.vu[4] * 768 / 1000;
-    for (x = 0; x <= 768; x += 6) {
-        uint32_t a = (uint32_t)(384 + x) & 1023u;
-        vis_ellipse(120 + ((icos(a) * 99) >> 15), 112 + ((isin(a) * 99) >> 15), 5, 5, x <= end && vs.vu[4] ? C_WHITE : RGB(40, 40, 46));
+    int32_t s = isin((uint32_t)a), c = icos((uint32_t)a), px[6], py[6];
+    int32_t x1 = x0 * 16 + ((s * len * 16) >> 15), y1 = y0 * 16 + ((c * len * 16) >> 15);
+    int32_t xm = x0 * 16 + ((s * len * 6) >> 15), ym = y0 * 16 + ((c * len * 6) >> 15);   /* (the widest: 3/8 down) */
+    px[0] = x0 * 16 + ((c * r0 * 16) >> 15), py[0] = y0 * 16 - ((s * r0 * 16) >> 15);
+    px[1] = xm + ((c * rm * 16) >> 15), py[1] = ym - ((s * rm * 16) >> 15);
+    px[2] = x1 + ((c * r1 * 16) >> 15), py[2] = y1 - ((s * r1 * 16) >> 15);
+    px[3] = x1 - ((c * r1 * 16) >> 15), py[3] = y1 + ((s * r1 * 16) >> 15);
+    px[4] = xm - ((c * rm * 16) >> 15), py[4] = ym + ((s * rm * 16) >> 15);
+    px[5] = x0 * 16 - ((c * r0 * 16) >> 15), py[5] = y0 * 16 + ((s * r0 * 16) >> 15);
+    vis_poly(px, py, 6, C_WHITE);
+    *ex = (x1 + 8) >> 4, *ey = (y1 + 8) >> 4;
+    vis_ellipse(*ex, *ey, r1, r1, C_WHITE);                     /* (the joint, round) */
+}
+static void vis_dancer(void)
+{
+    uint32_t bq = vis_beat_q8(), mv = (bq >> 11) & 3u;          /* a move every two bars */
+    int32_t e = 350 + vs.vu[4] * 65 / 100;                      /* energy 350..1000 */
+    int32_t w = (isin(bq * 2u) * e) >> 15;                      /* her weight: on the right leg (+) or the left, a beat each */
+    int32_t g = (w < 0 ? -w : w), kick = vs.kick * 3 / 255;     /* g: how far it has gone over */
+    int32_t hx = 120 + w * 9 / 1000, hy = 122 + g * 6 / 1000 + kick, tilt = w * 26 / 1000;   /* the hips: over the leg */
+    int32_t lean = -w * 30 / 1000, cx, cy, wx, wy, x, y, side, k, beat = isin(bq * 4u + 256u);
+    int32_t px[8], py[8];
+    vis_ellipse(120 + w * 5 / 1000, 229, 42, 4, RGB(36, 36, 42));   /* her shadow */
+    /* the legs: the weight leg straight under her, the other knee given; a heel each */
+    for (side = -1; side <= 1; side += 2) {
+        int32_t on = side * w > 0, kb = on ? 6 : 40 + g * 40 / 1000, hip = hy + side * tilt / 8;
+        vis_limb(hx + side * 9, hip, side * (26 + kb / 2) + (on ? -side * 10 : 0), 50, 10, 9, 6, &x, &y);   /* thigh */
+        vis_limb(x, y, side * (26 - kb / 2) + (on ? -side * 10 : side * 6), 47, 6, 7, 3, &x, &y);            /* calf */
+        px[0] = (x - 3) * 16, py[0] = y * 16, px[1] = (x + 3) * 16, py[1] = y * 16;                         /* the shoe */
+        px[2] = (x + side * 9) * 16, py[2] = (y + 7) * 16, px[3] = (x - side * 2) * 16, py[3] = (y + 7) * 16;
+        vis_poly(px, py, 4, C_WHITE);
     }
-    /* the mast */
-    ROT(1443, 627, 0); ROT(1571, 627, 1); ROT(1571, 2507, 2); ROT(1443, 2507, 3);
-    vis_poly(px, py, 4, C_WHITE);
-    /* the sail: each band dim, then lit to its track's level */
-    for (i = 0; i < 4u; i++) {
-        int32_t g = 256 * (250 + 750 * vs.vu[i] / 1000) / 1000, xr0 = 1659 + (BAND[i][2] - 1659) * g / 256,
-                xr1 = 1659 + (BAND[i][3] - 1659) * g / 256;
-        uint16_t col = vs.flash[i] ? mix565(TE_COL[i], C_WHITE, vs.flash[i] * 13) : TE_COL[i];
-        ROT(1659, BAND[i][0], 0); ROT(BAND[i][2], BAND[i][0], 1); ROT(BAND[i][3], BAND[i][1], 2); ROT(1659, BAND[i][1], 3);
-        vis_poly(px, py, 4, DIMC[i]);
-        ROT(1659, BAND[i][0], 0); ROT(xr0, BAND[i][0], 1); ROT(xr1, BAND[i][1], 2); ROT(1659, BAND[i][1], 3);
-        vis_poly(px, py, 4, col);
+    /* the torso: shoulders, the bust, a narrow waist, the hips, leaning against the weight */
+    cx = hx + ((isin((uint32_t)(512 + lean)) * 62) >> 15), cy = hy + ((icos((uint32_t)(512 + lean)) * 62) >> 15);
+    wx = (cx * 9 + hx * 11) / 20, wy = (cy * 9 + hy * 11) / 20;
+    px[0] = (cx - 14) * 16, py[0] = (cy + 1) * 16, px[1] = (cx + 14) * 16, py[1] = (cy + 1) * 16;
+    px[2] = (cx + 13) * 16, py[2] = (cy + 17) * 16, px[3] = (wx + 8) * 16, py[3] = wy * 16;
+    px[4] = (hx + 17) * 16, py[4] = (hy + tilt / 8 - 2) * 16, px[5] = (hx - 17) * 16, py[5] = (hy - tilt / 8 - 2) * 16;
+    px[6] = (wx - 8) * 16, py[6] = wy * 16, px[7] = (cx - 13) * 16, py[7] = (cy + 17) * 16;
+    vis_poly(px, py, 8, C_WHITE);
+    vis_ellipse(cx - 7, cy + 15, 7, 6, C_WHITE);                /* the bust */
+    vis_ellipse(cx + 7, cy + 15, 7, 6, C_WHITE);
+    vis_ellipse(cx, cy + 3, 15, 5, C_WHITE);                    /* the shoulders, round */
+    /* the skirt: from the hips, flared, its hem swinging behind her and fluttering */
+    {
+        int32_t sk = -w * 20 / 1000, f = (isin(bq * 8u) * 2) >> 15;
+        px[0] = (hx - 17) * 16, py[0] = (hy - tilt / 8 - 4) * 16, px[1] = (hx + 17) * 16, py[1] = (hy + tilt / 8 - 4) * 16;
+        px[2] = (hx + 31 + sk) * 16, py[2] = (hy + 22 + f) * 16, px[3] = (hx + 15 + sk) * 16, py[3] = (hy + 26 - f) * 16;
+        px[4] = (hx + sk) * 16, py[4] = (hy + 24 + f) * 16, px[5] = (hx - 15 + sk) * 16, py[5] = (hy + 26 - f) * 16;
+        px[6] = (hx - 31 + sk) * 16, py[6] = (hy + 22 + f) * 16;
+        vis_poly(px, py, 7, C_WHITE);
     }
-    /* the hull */
-    ROT(62 * 16, 2635, 0); ROT(178 * 16, 2635, 1); ROT(170 * 16, 2811, 2); ROT(70 * 16, 2811, 3);
-    vis_poly(px, py, 4, C_WHITE);
-#undef ROT
-    /* the sea: the master's wave */
-    for (x = 0; x < 240; x++) {
-        int32_t s = x ? (vis_l[x - 1] + 2 * vis_l[x] + vis_l[x + 1]) / 4 : vis_l[0];   /* (smoothed: a sea, not a hiss) */
-        int32_t y = 182 + s * 5 / sc + ((isin((uint32_t)(x * 9) + bq) * 3) >> 15);
-        cv_rect(x, y, 1, 240 - y, RGB(12, 34, 76));
-        cv_rect(x, y, 1, 2, TE_COL[0]);
+    /* the arms: each move's angles (upper arm, then the elbow), mirrored */
+    for (side = -1; side <= 1; side += 2) {
+        int32_t up, el, sd = side > 0 ? beat : -beat;           /* (Q15: the arms alternate on the beat) */
+        switch (mv) {
+        case 0: up = 400 + ((sd * 60) >> 15); el = 60; break;   /* a V, waving */
+        case 1: up = sd > 0 ? 470 : 140; el = sd > 0 ? 30 : 210; break;   /* pumping, a fist up on its beat */
+        case 2: up = side > 0 ? (beat > 0 ? 420 : 190) : 90; el = side > 0 ? 10 : -230; break;   /* the disco point */
+        default: up = 250 + ((isin(bq * 2u + (side > 0 ? 0u : 256u)) * 60) >> 15); el = (isin(bq * 4u) * 120) >> 15; break;
+        }
+        up = 70 + (up - 70) * e / 1000;                          /* (quieter: smaller moves) */
+        vis_limb(cx + side * 13, cy + 4, side * up, 31, 6, 6, 4, &x, &y);              /* the upper arm */
+        vis_limb(x, y, side * (up + el), 27, 4, 4, 2, &x, &y);                         /* the forearm */
+        vis_limb(x, y, side * (up + el), 8, 3, 4, 2, &x, &y);                          /* the hand */
     }
+    /* the neck, the head, the long hair falling behind and swinging with her */
+    vis_limb(cx - lean / 8, cy - 1, 512, 10, 5, 4, 4, &x, &y);
+    k = x - w * 4 / 1000;
+    {                                                           /* the hair: from the sides of the head down past */
+        int32_t hs = -w * 16 / 1000;                            /* the shoulders, swinging behind her, its ends uneven */
+        px[0] = (k - 9) * 16, py[0] = (y - 16) * 16, px[1] = (k + 9) * 16, py[1] = (y - 16) * 16;
+        px[2] = (k + 13 + hs) * 16, py[2] = (y + 2) * 16, px[3] = (k + 12 + hs * 2) * 16, py[3] = (y + 22) * 16;
+        px[4] = (k + 5 + hs * 2) * 16, py[4] = (y + 15) * 16, px[5] = (k - 2 + hs * 2) * 16, py[5] = (y + 19) * 16;
+        px[6] = (k - 12 + hs * 2) * 16, py[6] = (y + 22) * 16, px[7] = (k - 13 + hs) * 16, py[7] = (y + 2) * 16;
+        vis_poly(px, py, 8, C_WHITE);
+    }
+    vis_ellipse(k, y - 10, 9, 12, C_WHITE);                     /* the head */
+    vis_ellipse(k, y - 16, 11, 9, C_WHITE);                     /* the hair over it, round */
 }
 
 /* the visualiser, every other frame: the update, then both bands */
@@ -611,7 +659,7 @@ static void vis_draw(void)
         cv_begin(240, 120, C_BLACK);
         cv_oy = -(int32_t)(pass * 120u);
         switch (vis_style % VIS_N) {
-        case 0: vis_scope(); break;
+        case 0: vis_dancer(); break;
         case 1: vis_spectrum(); break;
         case 2: vis_spectrogram(); break;
         case 3: vis_lissajous(); break;
@@ -622,7 +670,7 @@ static void vis_draw(void)
         case 8: vis_bounce(); break;
         case 9: vis_orbit(); break;
         case 10: vis_wires(); break;
-        default: vis_sloop(); break;
+        default: vis_scope(); break;
         }
         if (!pass && (vis_name_t || ui.msg_t)) {    /* the style's name a second (or a message) */
             char n[8];
@@ -648,4 +696,58 @@ static void vis_select(int32_t s)
     vis_name_t = 30;
     ui.force = 1;
     settings_later = 1;                                 /* (kept with the settings, once stopped) */
+}
+
+/* ---- the boot animation (KARMA 3.0): the KARMA letters pop in a cell at a time in the tracks' colours, the four
+ * tracks' bars sweep in, the version, then it fades into the UI; ~2 s at the UI's frame rate, a button or a key skips
+ * it. boot_t: started at 0 by the boot (main.c, the browser simulator's web_boot); 0xFFFF: none (the host tests) */
+static uint16_t boot_t = 0xFFFFu;
+#define BOOT_END 116u
+static int boot_draw(void)
+{
+    static const uint32_t ROW[7] = {0x0E44F391u, 0x116D1449u, 0x11551445u, 0x1F54F7C3u, 0x11445445u, 0x11449449u,
+                                    0x11451451u};                /* tools/gen_logo.py KARMA_CELLS, a bit a cell */
+    static const uint16_t COL[5] = {RGB(40, 124, 255), RGB(30, 204, 112), RGB(228, 228, 236), RGB(255, 98, 26),
+                                    RGB(141, 130, 236)};
+    uint32_t t = boot_t, pass, x, y;
+    int32_t fade;
+    if (t >= BOOT_END)
+        return 0;
+    if (fm1_in.buttons || fm1_in.notes || ++boot_t >= BOOT_END) {
+        boot_t = 0xFFFFu;
+        lcd_fill(0, 0, 240, 240, C_BLACK);
+        ui.force = 1;
+        return 0;
+    }
+    fade = t > 96u ? (int32_t)(t - 96u) * 256 / 20 : 0;   /* (the last 20 frames: to black) */
+    for (pass = 0; pass < 2u; pass++) {
+        cv_begin(240, 120, C_BLACK);
+        cv_oy = -(int32_t)(pass * 120u);
+        for (y = 0; y < 7u; y++)
+            for (x = 0; x < 29u; x++) {
+                uint32_t d = ((x * 7u + y * 13u) * 2654435761u >> 26) % 44u, s;   /* (each cell its own moment) */
+                uint16_t c;
+                if (!((ROW[y] >> x) & 1u) || t < d)
+                    continue;
+                s = t - d >= 3u ? 6u : (t - d + 1u) * 2u;
+                c = t - d < 4u ? C_WHITE : COL[x / 6u];
+                c = mix565(c, C_BLACK, fade);
+                cv_rect(18 + (int32_t)(x * 7u) + (6 - (int32_t)s) / 2, 76 + (int32_t)(y * 7u) + (6 - (int32_t)s) / 2,
+                        (int32_t)s, (int32_t)s, c);
+            }
+        for (x = 0; x < 4u; x++) {                              /* the tracks' bars */
+            int32_t w = clamp(((int32_t)t - 50 - (int32_t)x * 4) * 5, 0, 44);
+            if (w)
+                cv_rect(26 + (int32_t)x * 48 + (44 - w) / 2, 150, w, 5, mix565(COL[x], C_BLACK, fade));
+        }
+        if (t >= 72u) {
+            const char *v = FELUCCA_VERSION;
+            if (v[0] == 'K' && v[5] == ' ')
+                v += 6;
+            cv_text(120 - text_w(&FONT_S, v) / 2, 172, &FONT_S, v, mix565(RGB(196, 196, 204), C_BLACK, fade));
+        }
+        cv_oy = 0;
+        cv_blit(0, pass * 120u);
+    }
+    return 1;
 }

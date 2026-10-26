@@ -196,7 +196,11 @@ static int32_t gen_line_tone(uint32_t c, int32_t prev, int32_t lo, int32_t hi, i
 }
 static void gen_line_span(track_t *t, uint32_t a, int32_t prev, int32_t not)
 {
-    uint32_t i, c = gk_chord(a), dens = (uint32_t)song.g[G_GNDENS], pulse = t->p[P_ATK] < 12 && t->p[P_REL] < 40;
+    uint32_t i, c = gk_chord(a), dens = (uint32_t)song.g[G_GNDENS];
+    /* struck: ELEMENTS' BOUNCE and PICK (a bar, a chime: it rings out), or any short sound; the bowed, blown, OMIN and
+     * slow sounds hold (2026-10-27: PICKED BAR's long release had it held, a strike each half bar) */
+    uint32_t pulse = t->engine == ENGI_ELEM ? (t->p[P_E0] == EM_BOUNCE || t->p[P_E0] == EM_PICK)
+                                            : (t->p[P_ATK] < 12 && t->p[P_REL] < 40);
     int32_t lo = 55 + gen_oct(), hi = lo + 19, n = gen_line_tone(c, prev, lo, hi, not);
     for (i = 0; i < gk.cst && a + i < NSTEP; i++) {
         step_t *s = &t->step[a + i];
@@ -204,8 +208,8 @@ static void gen_line_span(track_t *t, uint32_t a, int32_t prev, int32_t not)
                                                      * bar, DENS: half way too; one note a chord stayed for bars) */
         memset(s, 0, sizeof *s);
         s->time = ST_TIE;
-        if (pulse && i && i % 4u == 0u && rng() % 127u < 50u + dens / 2u)
-            move = 2;                                /* (a short sound, struck: again on the beat) */
+        if (pulse && i && ((i % 4u == 0u && rng() % 127u < 110u) || (i % 4u == 2u && rng() % 127u < dens * 2u / 3u)))
+            move = 2;                                /* (struck: again on every beat, DENS: the eighths between) */
         if (!i || move) {
             if (move == 1 || (move == 2 && (rng() & 1u)))
                 n = gen_line_tone(c, n, lo, hi, n);  /* (another tone of the chord) */

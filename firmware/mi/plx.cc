@@ -83,6 +83,8 @@ template <class E> Base *make(void *mem, unsigned n, const uint8_t *user, float 
 
 extern "C" {
 
+extern const int16_t *const plx_waves = plaits::wav_integrated_waves;   /* (prism_dsp.c's WAVE model reads it: one copy) */
+
 unsigned plx_size(int model)
 {
   switch (model) {

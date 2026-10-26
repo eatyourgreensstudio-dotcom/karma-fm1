@@ -141,7 +141,8 @@ static void fm1_main(void)
 #endif
     settings_init();
     lcd_init();
-    sloop_splash();                                     /* the SLOOP logo (splash.c) */
+    sloop_splash();                                     /* the KARMA logo (splash.c), while it starts */
+    boot_t = 0;                                         /* then the boot animation (ui_vis.c), the UI's first ~2 s */
     if (felucca_dbg.magic != DBG_MAGIC) {
         memset(&felucca_dbg, 0, sizeof felucca_dbg);
         felucca_dbg.magic = DBG_MAGIC;

@@ -132,6 +132,10 @@ static const int16_t PR_FOLD[516] = {   /* lut_fold */
     32142, 32180, 32217, 32254, 32290, 32327, 32363, 32398, 32434, 32469, 32503, 32537, 32571, 32605, 32638, 32671,
     32703, 32735, 32767, 32767,
 };
+#ifdef PR_WAVES_FROM_PLX                    /* (the firmware: Plaits' own copy, the same 50 KB: plx.cc plx_waves) */
+extern const int16_t *const plx_waves;
+#define PR_WAVES plx_waves
+#else
 static const int16_t PR_WAVES[25344] = {   /* wav_integrated_waves */
     -20556, -20706, -20806, -20857, -20857, -20806, -20706, -20556, -20356, -20107, -19810, -19465, -19073, -18635, -18152, -17626,
     -17057, -16447, -15798, -15110, -14386, -13627, -12835, -12013, -11162, -10283, -9380, -8454, -7508, -6544, -5564, -4571,
@@ -1718,6 +1722,7 @@ static const int16_t PR_WAVES[25344] = {   /* wav_integrated_waves */
     763, 1723, 2618, 3449, 4216, 4919, 5550, 6116, 6618, 7056, 7429, 7738, 7983, 8164, 8280, 8333,
     8312, 8228, 8080, 7867, 7590, 7248, 6843, 6373, 5839, 5240, 4578, 3843, 3044, 2181, 1253, 261,
 };
+#endif
 static const int16_t *const PR_WS[5] = {PR_WS_0, PR_WS_1, PR_WS_2, PR_WS_3, PR_WS_4};
 static const int16_t PR_SINE[1025] = {   /* sin(2 pi i / 1024), one more for the interpolation */
     0, 201, 402, 603, 804, 1005, 1206, 1407, 1608, 1809, 2009, 2210, 2410, 2611, 2811, 3012,

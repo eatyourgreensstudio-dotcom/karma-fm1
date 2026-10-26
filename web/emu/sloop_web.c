@@ -101,6 +101,7 @@ EXPORT void web_boot(void)
     TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
     go_home();
     ui.force = 1;
+    boot_t = 0;                                       /* (KARMA 3.0: the boot animation) */
     web_booted = 1;
 }
 
