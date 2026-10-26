@@ -181,6 +181,19 @@ p { margin: 0; }
 .feat ul { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: .95rem; display: grid; gap: .3rem; }
 .feat ul b { color: var(--fg); font-weight: 600; }
 
+/* ---------- how to play ---------- */
+.howto { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.howto > li { background: var(--panel); border: 1px solid var(--line); border-top: 3px solid var(--c, var(--lav)); padding: 1.1rem 1.1rem 1.2rem; display: grid; gap: .55rem; align-content: start; min-width: 0; }
+.howto .lbl { font-family: var(--f-pixel); font-size: .8rem; letter-spacing: .08em; color: var(--c, var(--lav)); }
+.howto h3 { font-size: 1.05rem; }
+.howto ul { margin: 0; padding-left: 1.05rem; color: var(--muted); font-size: .9rem; display: grid; gap: .3rem; }
+.howto b { color: var(--fg); font-weight: 600; }
+.howto kbd { font-family: var(--f-mono); font-size: .78rem; color: var(--fg); border: 1px solid var(--line); padding: 0 .3em; white-space: nowrap; }
+.howto-more { margin-top: 2rem; display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; }
+.howto-more p { color: var(--muted); font-family: var(--f-mono); font-size: var(--s-1); flex: 1 1 18rem; min-width: 0; }
+.btn.lav { border-color: var(--lav); color: var(--lav); }
+.btn.lav:hover { background: var(--lav); color: var(--on-accent); }
+
 /* ---------- cast ---------- */
 .cast { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.5rem 1.25rem; }
 .cast figure { margin: 0; display: grid; gap: .6rem; min-width: 0; }
@@ -255,11 +268,15 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
   .tag.typing::after { content: ""; display: inline-block; width: .5em; height: .8em; margin-left: .15em; background: currentColor; vertical-align: -.05em; animation: caret .5s steps(1, end) infinite; }
   @keyframes caret { 50% { opacity: 0; } }
   .eng .shot img { transition: opacity .6s ease; }
+  /* the how-to-play cards step in one after another, a beat apart (JS sets .rv, then .in) */
+  .howto.rv > li { opacity: 0; transform: translateY(12px); transition: opacity .45s ease, transform .45s ease; transition-delay: calc(var(--n, 0) * var(--beat) / 4); }
+  .howto.rv.in > li { opacity: 1; transform: none; }
+  .howto > li:hover .lbl { animation: caret calc(var(--beat) / 2) steps(1, end) 2; }
 }
 
 /* ---------- narrow ---------- */
 @media (max-width: 64rem) {
-  .engines, .cast { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .engines, .cast, .howto { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .feats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 48rem) {
@@ -278,7 +295,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
   .credits td:first-child { white-space: normal; }
 }
 @media (max-width: 30rem) {
-  .engines { grid-template-columns: minmax(0, 1fr); }
+  .engines, .howto { grid-template-columns: minmax(0, 1fr); }
   .cast { gap: 1.25rem .75rem; }
   .btn { flex: 1 1 100%; }
 }
@@ -291,7 +308,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
     <div class="id"><span class="beat" aria-hidden="true"><i></i><i></i><i></i><i></i></span>KARMA / FM-1</div>
     <div class="bar-r">
       <nav aria-label="Sections">
-        <a href="#start">Start</a><a href="#inside">Inside</a><a href="#cast">Characters</a><a href="#faq">FAQ</a><a href="#support">Support</a><a href="#credits">Credits</a>
+        <a href="#start">Start</a><a href="#inside">Inside</a><a href="#play">How to play</a><a href="#cast">Characters</a><a href="#faq">FAQ</a><a href="#support">Support</a><a href="#credits">Credits</a>
       </nav>
       <a class="kofi-s" href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener">Ko-fi ↗</a>
     </div>
@@ -456,7 +473,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
         <ul>
           <li>Class-compliant stereo USB audio at 44.1 or 48 kHz</li>
           <li>USB MIDI in and out</li>
-          <li>Per-track <b>STEMS</b> over USB: coming next, in progress</li>
+          <li><b>STEMS</b>: six channels into your DAW, tracks 1–3, drums and the FX return, each on its own</li>
         </ul>
       </div>
       <div class="feat">
@@ -467,6 +484,91 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
           <li>In the simulator, Web MIDI works when you run it from your own computer.</li>
         </ul>
       </div>
+    </div>
+  </div>
+</section>
+
+<section id="play">
+  <div class="wrap">
+    <div class="head">
+      <span class="tag c2">HOW TO PLAY</span>
+      <h2>The essentials on one screen</h2>
+      <p class="lede">Tap a button to open its pages, hold it to turn the keys into its tools. The rest follows from that.</p>
+    </div>
+    <ol class="howto">
+      <li style="--c: var(--lav)">
+        <span class="lbl">01 · GETTING AROUND</span>
+        <h3>Tap for pages, hold for keys</h3>
+        <ul>
+          <li><b>HOME</b>: the song's tape reels. Hold it for the MENU.</li>
+          <li><b>SELECT</b> walks the pages, <b>ALGORITHM</b> picks the track, <b>PRESETS</b> its sounds.</li>
+          <li>Hold a button and the keys become its layer: steps, effects, mixer, note repeat.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--t1)">
+        <span class="lbl">02 · TRACKS</span>
+        <h3>Four tracks, four characters</h3>
+        <ul>
+          <li><b>1</b> ACID or JUNO, with the Buddha.</li>
+          <li><b>2</b> ELEMENTS, the gorilla. <b>3</b> PLAITS, the saucer.</li>
+          <li><b>DRUM</b> HEX kits, the drummer. The wizard runs the effects.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--t2)">
+        <span class="lbl">03 · GEN</span>
+        <h3>Let the band write</h3>
+        <ul>
+          <li><kbd>SEQ</kbd>, then SELECT to <b>GEN</b>: turn it ON and a part is written at once.</li>
+          <li>Press a key there: GEN starts and every GEN track moves to that key.</li>
+          <li>DRIFT 0 locks it; higher, it varies but keeps its shape.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--lav)">
+        <span class="lbl">04 · HARMONY</span>
+        <h3>One key, one progression</h3>
+        <ul>
+          <li><b>KEY</b>, <b>MODE</b> and <b>PROG</b>: from a drone to i – bVI – III – bVII.</li>
+          <li>Bass on the roots, a line of chord tones, a lead motif that develops.</li>
+          <li>Turn a knob and every GEN track is rewritten to match.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--t4)">
+        <span class="lbl">05 · DRUMS</span>
+        <h3>GRID, KIT, DRUM GEN</h3>
+        <ul>
+          <li>On the drum screen the <b>white keys are the 16 steps</b>; KNOB 1 picks the sound.</li>
+          <li><kbd>SEQ</kbd> steps GRID → KIT → DRUM GEN.</li>
+          <li>DRUM GEN: a Grids-style map with X / Y, or Euclidean rhythms.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--t3)">
+        <span class="lbl">06 · FX AND PUNCH-IN</span>
+        <h3>Hold FX, play the keys</h3>
+        <ul>
+          <li>Hold <kbd>FX</kbd>: each key is an effect on the whole mix, while you hold it.</li>
+          <li>Tap FX for the pages: delay, reverb, slicer, inserts, CLOUD grains.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--t4)">
+        <span class="lbl">07 · RECORD AND UNDO</span>
+        <h3>Nothing is lost</h3>
+        <ul>
+          <li><kbd>REC</kbd> records into the selected track; hold it to clear the track.</li>
+          <li><kbd>EDIT</kbd> + <kbd>OCT−</kbd> undoes, also after GEN. Hold <kbd>SAVE</kbd> to save the project.</li>
+        </ul>
+      </li>
+      <li style="--c: var(--t1)">
+        <span class="lbl">08 · USB</span>
+        <h3>An audio interface, with stems</h3>
+        <ul>
+          <li>Class-compliant USB audio and USB MIDI, no drivers.</li>
+          <li>MENU › AUDIO › USB AUDIO = <b>STEMS</b>: six channels into your DAW, each track on its own.</li>
+        </ul>
+      </li>
+    </ol>
+    <div class="howto-more">
+      <a class="btn lav" href="emu/cheatsheet.html" target="_blank" rel="noopener">OPEN THE FULL CHEAT SHEET<small>Every page and knob · printable</small></a>
+      <p>The same sheet opens from inside the simulator.</p>
     </div>
   </div>
 </section>
@@ -524,7 +626,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
       </details>
       <details>
         <summary>Can I use it as an audio interface?</summary>
-        <div class="a"><p>Yes. Over USB the FM-1 shows up as a class-compliant stereo audio interface at 44.1 or 48 kHz, and as a MIDI device. Separate stems per track are being built now.</p></div>
+        <div class="a"><p>Yes. Over USB the FM-1 shows up as a class-compliant stereo audio interface at 44.1 or 48 kHz, and as a MIDI device. Set MENU › AUDIO › USB AUDIO to STEMS and it becomes a six-channel interface: each track on its own channel, plus the effects in stereo.</p></div>
       </details>
     </div>
   </div>
@@ -702,6 +804,17 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
       var r = t.getBoundingClientRect();
       if (r.top > window.innerHeight) io.observe(t);   // labels already on screen stay as they are
     });
+  }
+
+  /* ---- the how-to-play cards step in, a beat apart, when the list scrolls into view ---- */
+  var howto = document.querySelector(".howto");
+  if (howto && "IntersectionObserver" in window && howto.getBoundingClientRect().top > window.innerHeight) {
+    howto.querySelectorAll(":scope > li").forEach(function (li, i) { li.style.setProperty("--n", i); });
+    howto.classList.add("rv");
+    var hio = new IntersectionObserver(function (es) {
+      if (es[0].isIntersecting) { howto.classList.add("in"); hio.disconnect(); }
+    }, { rootMargin: "0px 0px -10% 0px" });
+    hio.observe(howto);
   }
 
   /* ---- the four track cards fade through their pages ---- */

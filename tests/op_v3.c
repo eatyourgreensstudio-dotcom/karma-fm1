@@ -4,12 +4,54 @@
  * the drummer as the kick comes in; the mixer, track 1 comes in; its EDIT; its GEN page; HOME; the mixer, PLAITS
  * fading in; PLAITS' EDIT; FX; LFO; HOME; the KARMA boot screen as the sound fades. Same harness and output as op_tour.c
  * (TAKE=op_v3 sh tools/op_tour.sh). */
+#include <stdint.h>
+#define FM1_NCOL 11u
+static const int8_t FM1_KEYMAP[6][FM1_NCOL] = {      /* as hal/fm1_input.h (the LEDs, as web/emu/sloop_web.c reads them) */
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+    { 5, 11,  4, 10,  3,  9,  2,  8, -1, -1, -1},
+    {34, 35, 36, 37, 38, 40, 39, 13,  7,  6, 12},
+    {23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33},
+    { 0,  1, 15, 14, 17, 16, 19, 18, 20, 21, 22},
+    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
+};
 #define UI_PAGES_HARNESS_ONLY 1
 #include "ui_pages_test.c"
 #define PROJ_HOST 1
 #include "../firmware/src/project.c"
 
-static FILE *fv, *fa;
+static FILE *fv, *fa, *fs;
+/* (the simulator-page video, tools/sim_video.py) each frame: the LEDs as the page draws them (lit / glow, buttons in the
+ * page's order, keys), the buttons held, the keys down, what the pointer does (a button clicked, a knob turned) */
+static int32_t ptr_btn = -1, ptr_knob = -1, ptr_t;   /* a click on button (page order) / a knob turned (0..7), frames */
+static uint32_t led_on(const uint8_t *l, uint32_t id)
+{
+    uint32_t c, r;
+    for (c = 0; c < FM1_NCOL; c++)
+        for (r = 1; r < 5u; r++)
+            if (FM1_KEYMAP[r][c] == (int8_t)id)
+                return (l[c] >> r) & 1u;
+    return 0;
+}
+static uint32_t led_b(const uint8_t *l) { uint32_t b, m = 0; for (b = 0; b < NB; b++) m |= led_on(l, panel.btn[b]) << b; return m; }
+static uint32_t led_k(const uint8_t *l) { uint32_t k, m = 0; for (k = 0; k < 27u; k++) m |= led_on(l, 14u + k) << k; return m; }
+static void st_write(void)
+{
+    uint32_t v[8], b, held = 0;
+    if (!fs)
+        return;
+    for (b = 0; b < NB; b++)
+        held |= ((fm1_in.buttons >> panel.btn[b]) & 1u) << b;
+    v[0] = led_b(fm1_led); v[1] = led_k(fm1_led);
+    v[2] = led_b(fm1_led_dim) | led_b(fm1_led_bg); v[3] = led_k(fm1_led_dim) | led_k(fm1_led_bg);
+    v[4] = held; v[5] = fm1_in.notes;
+    v[6] = (uint32_t)(ptr_t > 0 ? ptr_btn : -1); v[7] = (uint32_t)(ptr_t > 0 ? ptr_knob : -1);
+    if (ptr_t > 0)
+        ptr_t--;
+    fwrite(v, sizeof v, 1, fs);
+}
+static void click_btn(int32_t b) { ptr_btn = b; ptr_knob = -1; ptr_t = 14; }      /* (page order: FX 0 .. OCT+ 13) */
+static void turn_knob(int32_t k, int32_t frames) { ptr_knob = k; ptr_btn = -1; ptr_t = frames; }   /* 0 MASTER 1 SELECT
+                                                         * 2 PRESETS 3 ALGORITHM 4..7 KNOB 1..4 */
 static uint32_t nframe;
 static void vframe(void)                            /* frame() of the harness, the picture and the audio kept */
 {
@@ -36,6 +78,7 @@ static void vframe(void)                            /* frame() of the harness, t
     }
     ui_input(); ui_leds(); ui_draw(); fm1_ms += 16;
     nframe++;
+    st_write();
 }
 
 /* the take is counted in bars (of the pattern's tempo): a part runs until the take is that many bars old, so the cuts fall
@@ -149,6 +192,7 @@ static void splash_frames(uint32_t n)                /* the boot screen held, th
         }
         fm1_ms += 16;
         nframe++;
+        st_write();
     }
 }
 
@@ -185,13 +229,17 @@ int main(int argc, char **argv)
     song.batt_raw = 620;
     snprintf(p, sizeof p, "%s/tour.rgb", dir); fv = fopen(p, "wb");
     snprintf(p, sizeof p, "%s/tour.pcm", dir); fa = fopen(p, "wb");
+    snprintf(p, sizeof p, "%s/tour.state", dir); fs = fopen(p, "wb");
     assert(fv && fa);
 
     song.sel = 1; go_home(); frames(2);
     transport_req = 1;
     part(2, 0, 0, 0, 0);                            /* 1. HOME: ELEMENTS alone */
+    click_btn(4); vframe();
     open_family(FAM_EDIT);
+    turn_knob(5, 200);
     part(2, 0, 10, 12, 8);                          /* 2. ELEMENTS' EDIT */
+    turn_knob(3, 14); vframe();                     /* (ALGORITHM: the track) */
     song.sel = TRK_DRUM; studio_open(SC_DRUM); drum_page = 0; drum_lane = 0; drum_cursor = 0; ui.force = 1;
     vframe();
     TDRUM->p[P_MUTE] = 0;                           /* 3. the drummer, the kick comes in */
@@ -202,14 +250,19 @@ int main(int argc, char **argv)
     tap_key(0);
     part(2, 0, 0, 0, 0);
     let_go(B_GLO);
+    turn_knob(3, 10); vframe();
+    click_btn(4); vframe();
     song.sel = 0; open_family(FAM_EDIT);
+    turn_knob(6, 200);
     part(2, 0, 14, 18, 12);                         /* 5. track 1's EDIT */
+    click_btn(9); vframe();
     open_family(FAM_SEQ);
     for (k = 0; k < NPAGES; k++)
         if (!strcmp(PAGES[k].title, "GEN"))
             ui.page = (uint8_t)k;
     ui.home = 0; page_entered(); ui.force = 1; vframe();
     part(2, 0, 0, 0, 0);                            /* 6. its GEN page */
+    click_btn(6); vframe();
     go_home();
     part(2, 0, 0, 0, 0);                            /* 7. HOME */
     song.sel = 2; go_home();
@@ -217,12 +270,18 @@ int main(int argc, char **argv)
     vframe(); vframe();
     plaits_fade_in(4);                              /* 8. the mixer: PLAITS fading in */
     let_go(B_GLO);
+    click_btn(4); vframe();
     open_family(FAM_EDIT);
+    turn_knob(5, 200);
     part(2, 0, 10, 12, 8);                          /* 9. PLAITS' EDIT */
+    click_btn(0); vframe();
     open_family(FAM_FX);
+    turn_knob(6, 200);
     part(2, 0, 12, 16, 0);                          /* 10. FX */
+    click_btn(3); vframe();
     open_family(FAM_LFO);
     part(2, 0, 0, 0, 0);                            /* 11. LFO */
+    click_btn(6); vframe();
     go_home();
     part(2, 0, 0, 0, 0);                            /* 12. HOME */
     splash_frames(150);                             /* 13. the boot screen, ~2.4 s, as it fades out */
