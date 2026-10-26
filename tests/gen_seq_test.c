@@ -61,7 +61,7 @@ int main(void)
         ck(ok_reg, "BASS: from C2, under two octaves");
     }
     {   /* LINE: a slow sound held, a short one struck on the beats */
-        uint32_t ok_tone = 1, ok_held = 1, ok_reg = 1, struck = 0, r;
+        uint32_t ok_tone = 1, ok_held = 1, ok_reg = 1, struck = 0, r, moves = 0, notes2 = 0;
         t = &trk[1];
         t->p[P_ATK] = 20; t->p[P_REL] = 60;
         for (r = 0; r < 30u; r++) {
@@ -73,7 +73,12 @@ int main(void)
                     uint32_t rel = (pc + 12u - c) % 12u;
                     ok_tone &= c ? (rel == 0u || rel == 4u || rel == 7u || rel == 10u || rel == 2u)
                                  : (rel == 0u || rel == 3u || rel == 7u || rel == 10u);
-                    ok_held &= i % 16u == 0u;
+                    ok_held &= i % 8u == 0u;
+                    {                                     /* (not the note before again) */
+                        int32_t pv = gen_held(t, i, -1);
+                        notes2 += pv >= 0;
+                        moves += pv >= 0 && pv != s->note[0];
+                    }
                     ok_reg &= s->note[0] >= 55u && s->note[0] <= 74u;
                 } else {
                     ok_held &= s->time == ST_TIE;
@@ -81,7 +86,8 @@ int main(void)
             }
         }
         ck(ok_tone, "LINE: chord tones of each chord (i: C Eb G Bb; bVII: Bb D F Ab, C)");
-        ck(ok_held, "LINE: a slow sound: long notes held (TIE), a change at most each bar");
+        ck(ok_held, "LINE: a slow sound: long notes held (TIE), a change each bar (DENS: half way)");
+        ck(notes2 > 0u && moves * 10u >= notes2 * 9u, "LINE: each new note another than the one before (no note stuck)");
         ck(ok_reg, "LINE: G3 .. D5");
         t->p[P_ATK] = 0; t->p[P_REL] = 10;
         for (r = 0; r < 10u; r++) {
@@ -184,13 +190,24 @@ int main(void)
             key(4); frames(2);
             ck(gen_on == 4u && song.g[G_GNON] == 1, "a key on the GEN page (track 3): GEN ON");
             ck(trk[2].step[0].time == ST_NOTE && trk[2].step[0].n, "... the lead written");
+            {                                             /* HARMONY: a key sets the KEY only, GEN stays off */
+                uint32_t pk = ui.page;
+                for (kk = 0; kk < NPAGES; kk++)
+                    if (!strcmp(PAGES[kk].title, "HARMONY"))
+                        ui.page = (uint8_t)kk;
+                song.sel = 1; gen_on = 4u; frames(3);
+                key(9); frames(3);
+                ck(gen_on == 4u && trk[0].p[P_ROOT] == (int16_t)(last_note % 12u),
+                   "a key on the HARMONY page: the KEY moves, GEN not turned on");
+                ui.page = (uint8_t)pk; frames(2);
+            }
             ck(trk[0].p[P_ROOT] == (int16_t)(last_note % 12u) && trk[2].p[P_ROOT] == trk[0].p[P_ROOT] &&
                song.g[G_AGROOT] == trk[0].p[P_ROOT], "... its note the KEY of every synth track and ACID GEN");
             gen_on = 2u; song.sel = 1; ui.page = (uint8_t)pg; frames(2);
         }
         {                                                 /* HARMONY: KEY turned: every synth track and GEN part in D */
             uint32_t ok = 1, j;
-            gen_on = 7u; frames(2);
+            gen_on = 7u; song.g[G_GKROOT] = 4; frames(2);   /* (from another key: the change is seen) */
             song.g[G_GKROOT] = 2; frames(2);
             for (j = 0; j < NPART; j++) {
                 ok &= trk[j].p[P_ROOT] == 2;

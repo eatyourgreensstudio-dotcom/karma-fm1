@@ -8,8 +8,8 @@
  *            octave, seventh, fifth, third, second: an acid line's weights), the chord's root where a chord begins;
  *            ACC and SLIDE their flags. DRIFT picks a hit's tone again, in every bar at once (the line keeps its
  *            shape and follows the chords), now and then a hit moves.
- *   track 2  LINE: long notes, a chord tone a chord (third, fifth, seventh, root), each the nearest to the one
- *            before (voice leading), held to the chord's end; DENS: a second tone half way; a short sound (ATK and
+ *   track 2  LINE: long notes, chord tones (third, fifth, seventh, root), each the nearest to the one before
+ *            (voice leading) but not the same note again, a new one each bar; DENS: half way too; a short sound (ATK and
  *            REL short: a struck ELEMENTS) struck again on the beats, the tone or another of the chord. DRIFT: a
  *            chord's tone again as it comes round.
  *   track 3  LEAD: a one-bar motif (a rhythm cell, DENS how busy; steps, a third, a leap turned back) developed
@@ -196,12 +196,12 @@ static int32_t gen_line_tone(uint32_t c, int32_t prev, int32_t lo, int32_t hi, i
 }
 static void gen_line_span(track_t *t, uint32_t a, int32_t prev, int32_t not)
 {
-    uint32_t i, c = gk_chord(a), dens = (uint32_t)song.g[G_GNDENS];
-    uint32_t half = gk.cst >= 32u && rng() % 127u < dens, pulse = t->p[P_ATK] < 12 && t->p[P_REL] < 40;
+    uint32_t i, c = gk_chord(a), dens = (uint32_t)song.g[G_GNDENS], pulse = t->p[P_ATK] < 12 && t->p[P_REL] < 40;
     int32_t lo = 55 + gen_oct(), hi = lo + 19, n = gen_line_tone(c, prev, lo, hi, not);
     for (i = 0; i < gk.cst && a + i < NSTEP; i++) {
         step_t *s = &t->step[a + i];
-        int move = half && i == gk.cst / 2u;
+        int move = i && (i % 16u == 0u || (i % 16u == 8u && rng() % 127u < dens));   /* (2026-10-26: a new tone each
+                                                     * bar, DENS: half way too; one note a chord stayed for bars) */
         memset(s, 0, sizeof *s);
         s->time = ST_TIE;
         if (pulse && i && i % 4u == 0u && rng() % 127u < 50u + dens / 2u)
@@ -227,7 +227,7 @@ static void gen_line(track_t *t)
 {
     uint32_t a;
     for (a = 0; a < gk.len; a += gk.cst)
-        gen_line_span(t, a, gen_held(t, a, 64 + gen_oct()), -1);
+        gen_line_span(t, a, gen_held(t, a, 64 + gen_oct()), a ? gen_held(t, a, -1) : -1);   /* (not the same note again) */
 }
 
 /* ---- LEAD ---- */

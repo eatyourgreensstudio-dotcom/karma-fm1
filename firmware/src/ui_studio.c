@@ -275,7 +275,7 @@ static void gen_ui_sync(void)
         song.g[G_GNON] = (int16_t)((gen_on & bit) != 0u);
         on_was = song.g[G_GNON];
     }
-    gen_keys = (uint8_t)((str_eq(cur_page()->title, "GEN") || str_eq(cur_page()->title, "HARMONY")) && !ui.menu);
+    gen_keys = (uint8_t)((str_eq(cur_page()->title, "GEN") ? 1u : str_eq(cur_page()->title, "HARMONY") ? 2u : 0u) * !ui.menu);
     {   /* SEQ > HARMONY: KEY and MODE are track 1's ROOT and SCL (a project loaded shows its key); turned, they set the
          * three synth tracks and ACID GEN; any of the four turned: every GEN track's part again, the chords said */
         static int16_t kr = -1, km = -1, kp = -1, kb = -1;
@@ -296,7 +296,7 @@ static void gen_ui_sync(void)
         gk_load();
         if (changed) {
             static const char *const RN[12] = {"I", "bII", "II", "bIII", "III", "IV", "bV", "V", "bVI", "VI", "bVII", "VII"};
-            char m[32];
+            char m[40];
             uint32_t i, j = 0, q;
             undo_sess++;
             for (i = 0; i < NPART; i++)
@@ -311,6 +311,14 @@ static void gen_ui_sync(void)
                 for (q = 0; r[q] && j < 30u; q++)
                     m[j++] = (char)(minor && r[q] != 'b' ? r[q] - 'A' + 'a' : r[q]);
             }
+            if (gen_on & 7u) {                       /* the tracks rewritten: GEN 1 2 3 */
+                static const char T[] = " GEN";
+                for (q = 0; T[q] && j < 28u; q++)
+                    m[j++] = T[q];
+                for (i = 0; i < NPART && j < 30u; i++)
+                    if ((gen_on >> i) & 1u)
+                        m[j++] = ' ', m[j++] = (char)('1' + i);
+            }
             m[j] = 0;
             ui_message(m);
             ui.force = 1;
@@ -319,13 +327,15 @@ static void gen_ui_sync(void)
     if (gen_seed) {                                  /* a key on the GEN page: GEN on, a new loop from that note */
         uint32_t n = gen_seed - 1u;
         gen_seed = 0;
-        if (bit && gen_keys) {
+        if (bit && gen_keys == 1u) {                 /* GEN: this track's GEN on, a new part (and the KEY) */
             undo_sess++;
             undo_mark(TSEL, undo_sess);
             gen_on |= (uint8_t)bit;
             song.g[G_GNON] = on_was = 1;
             gen_new_from(TSEL, n);
             ui.force = 1;
+        } else if (gen_keys == 2u) {                 /* HARMONY: the KEY only (GEN stays as it is: 2026-10-26) */
+            song.g[G_GKROOT] = (int16_t)(n % 12u);
         }
     }
     if (song.g[G_GNON] != on_was) {
