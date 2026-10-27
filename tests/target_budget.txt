@@ -3,9 +3,10 @@
 # Rewritten by BUDGET_UPDATE=1.
 # KARMA 3.0 (reviewed 2026-10-27): drums_mix +50 % for the LXR-02's drum voices (lxr_dsp.c: two oscillators,
 # FM, transients, a ZDF filter, distortion per voice); fm1_alnk0_irq +56 % for the half acked first (audio_lost)
-# and USB STEMS (fx_stems). The old engines' lines are gone with them. To be measured on the FM-1 itself.
+# and USB STEMS (fx_stems). The old engines' lines are gone with them. Measured on the FM-1 (2026-10-28): see
+# ELEMENTS OMIN (firmware/mi/elx.cc, now at half rate).
 slicer_track 828
-drums_mix 9243
+drums_mix 9226
 juno_render 444
 juno_post 151
 fm1_alnk0_irq 272

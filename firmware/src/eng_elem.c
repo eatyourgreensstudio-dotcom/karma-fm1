@@ -85,6 +85,8 @@ static void elem_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     }
 }
 
+/* (2026-10-28: OMIN played 11.1 semitones sharp before; OMINOUS and OMEN BELL +12, DARK DRONE 0 keep their register,
+ * in tune now) */
 static const preset_t ELEM_PRESETS[] = {
     /* name, {MODEL, STRC, BRIT, DAMP, POS, ACC, .., ..}, {A D S R}, fenv, mono */
     /* BOUNC: {MODEL, STRC, BRIT, DAMP, POS, ACC, LAST, EXC}; PICK: {.., GAP, EXC} (Elements' strikes) */
@@ -101,9 +103,9 @@ static const preset_t ELEM_PRESETS[] = {
     {"BREATHY", {EM_BLOW, 34, 70, 90, 12, 80, 50, 90}, {30, 90, 127, 70}, 0, 0, FX(0, 16, 20, 56)},
     {"BLOWN BELL", {EM_BLOW, 70, 100, 120, 12, 100, 110, 110}, {10, 90, 127, 100}, 0, 0, FX(0, 20, 24, 66)},
     /* OMIN: {MODEL, RATIO, FM, FDBK, DTUNE, BRIT, SHAPE, SPACE} (her Ominous Voice; one note) */
-    {"OMINOUS", {EM_OMIN, 64, 70, 50, 30, 60, 40, 60}, {60, 90, 127, 90}, 0, 1, FX(0, 20, 20, 60)},
-    {"DARK DRONE", {EM_OMIN, 30, 90, 80, 50, 40, 20, 90}, {90, 90, 127, 110}, 0, 1, FX(0, 30, 24, 70), XP(P_TRANS + 1, -12)},
-    {"OMEN BELL", {EM_OMIN, 100, 60, 20, 10, 90, 70, 30}, {0, 90, 60, 90}, 0, 1, FX(0, 10, 26, 56)},
+    {"OMINOUS", {EM_OMIN, 64, 70, 50, 30, 60, 40, 60}, {60, 90, 127, 90}, 0, 1, FX(0, 20, 20, 60), XP(P_TRANS + 1, 12)},
+    {"DARK DRONE", {EM_OMIN, 30, 90, 80, 50, 40, 20, 90}, {90, 90, 127, 110}, 0, 1, FX(0, 30, 24, 70)},
+    {"OMEN BELL", {EM_OMIN, 100, 60, 20, 10, 90, 70, 30}, {0, 90, 60, 90}, 0, 1, FX(0, 10, 26, 56), XP(P_TRANS + 1, 12)},
 };
 
 static const engine_t ENG_ELEM = {
