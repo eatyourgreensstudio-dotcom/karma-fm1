@@ -229,6 +229,19 @@ static void con_prof(void)
         con_kv(NAME[k], (int32_t)(prof_ticks[k] / FM1_TICKS_PER_US));
         prof_ticks[k] = 0;
     }
+    for (k = 0; k < PF_N; k++) {                        /* each part's worst block (us) */
+        char n[16] = "max_";
+        str_cpy(n + 4, NAME[k], sizeof n - 4);
+        con_kv(n, (int32_t)(prof_max[k] / FM1_TICKS_PER_US));
+        prof_max[k] = 0;
+    }
+    for (k = 0; k < PF_N; k++) {                        /* the worst block, part by part (us) */
+        char n[16] = "worst_";
+        str_cpy(n + 6, NAME[k], sizeof n - 6);
+        con_kv(n, (int32_t)(prof_worst[k] / FM1_TICKS_PER_US));
+    }
+    con_kv("worst_block", (int32_t)(prof_blk_max / FM1_TICKS_PER_US));
+    prof_blk_max = 0;
     prof_blocks = 0;
 }
 static void con_crash(void)

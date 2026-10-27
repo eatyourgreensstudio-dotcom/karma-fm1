@@ -718,7 +718,7 @@ static void vis_select(int32_t s)
  * tracks' bars sweep in, the version, then it fades into the UI; ~2 s at the UI's frame rate, a button or a key skips
  * it. boot_t: started at 0 by the boot (main.c, the browser simulator's web_boot); 0xFFFF: none (the host tests) */
 static uint16_t boot_t = 0xFFFFu;
-#define BOOT_END 145u                                   /* (~2.5 s; 2026-10-28: half a second longer, the logo screen gone) */
+#define BOOT_END 124u                                   /* (~2.1 s; 2026-10-28: the logo screen gone; 2.5 s felt slow) */
 static int boot_draw(void)
 {
     const uint32_t *ROW = KARMA_ROW;

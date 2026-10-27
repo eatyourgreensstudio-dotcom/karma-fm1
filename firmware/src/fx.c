@@ -1069,13 +1069,14 @@ static __attribute__((noinline)) void stem_take(uint32_t k, uint32_t n, int post
 /* where a block's time goes (2026-10-28: the FM-1 overloaded with HEX drums and three tracks): the timer's ticks summed
  * per part of mix_block since the last read (console.c `prof`, which zeroes them). The host has no timer: 0 */
 enum { PF_EVENTS, PF_T1, PF_T2, PF_T3, PF_DRUMS, PF_BUSES, PF_CLOUD, PF_OUT, PF_N };
-static uint32_t prof_ticks[PF_N], prof_blocks;
+static uint32_t prof_ticks[PF_N], prof_blocks, prof_max[PF_N], prof_blk_max, prof_blk[PF_N], prof_worst[PF_N];   /* (and the worst block) */
 #ifdef FM1_TICKS_PER_US
 #define PROF_NOW() fm1_ticks()
 #else
 #define PROF_NOW() 0u
 #endif
-#define PROF(k) do { uint32_t pt_ = PROF_NOW(); prof_ticks[k] += pt_ - prof_t0; prof_t0 = pt_; } while (0)
+#define PROF(k) do { uint32_t pt_ = PROF_NOW(), d_ = pt_ - prof_t0; prof_ticks[k] += d_; prof_blk[k] = d_; \
+                     if (d_ > prof_max[k]) prof_max[k] = d_; prof_t0 = pt_; } while (0)
 static void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i, prof_t0 = PROF_NOW();
@@ -1200,4 +1201,14 @@ static void mix_block(int32_t *out, uint32_t n)
             }
         }
     }    PROF(PF_OUT);
+    {   /* the worst block whole, and what each part took in it */
+        uint32_t k, all = 0;
+        for (k = 0; k < PF_N; k++)
+            all += prof_blk[k];
+        if (all > prof_blk_max) {
+            prof_blk_max = all;
+            for (k = 0; k < PF_N; k++)
+                prof_worst[k] = prof_blk[k];
+        }
+    }
 }
