@@ -1230,6 +1230,76 @@ static void t_fill(void)
         run_block();
 }
 
+/* edits stick (2026-10-28): a hit erased while section A plays in a chain stays erased when the chain comes back to A,
+ * and in song mode too (and STOP brings the loop from before the song back) */
+static void t_edits_stick(void)
+{
+    uint32_t i, bar = (uint32_t)((double)FS * 60.0 / 120.0 * 4.0 / CTL + 0.5), ok;
+    reset(120);
+    for (i = 0; i < NTRK; i++) {
+        trk[i].p[P_SLEN] = 16;
+        trk[i].p[P_SDIV] = 2;
+    }
+    dstep_set(&TDRUM->dstep[0], 0, LV_NORM, 0);
+    dstep_set(&TDRUM->dstep[4], 2, LV_NORM, 0);
+    proj_capture(&proj_slot[0]);                     /* A: kick on 1, snare on 5 */
+    dstep_clr(&TDRUM->dstep[4], 2);
+    dstep_set(&TDRUM->dstep[8], 4, LV_NORM, 0);
+    proj_capture(&proj_slot[1]);                     /* B: kick on 1, hat on 9 */
+    proj_slot[2].magic = proj_slot[3].magic = 0;
+    proj_apply(&proj_slot[0], 1);
+    live_sec = 0;
+    arrangement_enabled = 0;
+    sec_kept = 0;
+    transport_req = 1;
+    run_block();
+    chain_n = 0;
+    chain_sec[0] = 0;
+    chain_sec[1] = 1;
+    chain_i = 0;
+    chain_bars = 1;
+    chain_n = 2;
+    bar_run(1);
+    while (live_sec != 0 && blk < 40000u)            /* (on A) */
+        run_block();
+    dstep_clr(&TDRUM->dstep[4], 2);                  /* the snare erased while A plays */
+    while (live_sec != 1 && blk < 40000u)
+        run_block();
+    while (live_sec != 0 && blk < 40000u)            /* B, then A again */
+        run_block();
+    ok = !dstep_has(&TDRUM->dstep[4], 2) && dstep_has(&TDRUM->dstep[0], 0) && !dstep_has(&proj_slot[0].t[TRK_DRUM].dstep[4], 2) &&
+         (sec_kept & 1u) && !dstep_has(&proj_slot[1].t[TRK_DRUM].dstep[4], 2) && dstep_has(&proj_slot[1].t[TRK_DRUM].dstep[8], 4);
+    check(ok, "edits stick: a hit erased while A plays in a chain stays erased when A comes back (and in A's slot)");
+    transport_req = 2;
+    run_block();
+    chain_n = 0;
+    /* song mode: A B; the hat of B erased while B plays; STOP: B keeps it, the loop from before the song comes back */
+    dstep_set(&TDRUM->dstep[12], 5, LV_NORM, 0);     /* (the loop before the song: a mark on 13) */
+    live_sec = -1;
+    arrangement.count = 2;
+    arrangement.loop = 1;
+    arrangement.entry[0].scene = 0, arrangement.entry[0].bars = 1;
+    arrangement.entry[1].scene = 1, arrangement.entry[1].bars = 1;
+    arrangement_enabled = 1;
+    sec_kept = 0;
+    transport_req = 1;
+    run_block();
+    for (i = 0; i < 4u * bar && live_sec != 1; i++)
+        run_block();
+    dstep_clr(&TDRUM->dstep[8], 4);
+    for (i = 0; i < bar / 2u; i++)
+        run_block();
+    transport_req = 2;
+    run_block();
+    ok = !song.playing && !dstep_has(&proj_slot[1].t[TRK_DRUM].dstep[8], 4) && (sec_kept & 2u) &&
+         dstep_has(&TDRUM->dstep[12], 5) && live_sec == -1;
+    check(ok, "edits stick in song mode: B keeps the erased hat; STOP brings back the loop from before the song");
+    arrangement_enabled = 0;
+    for (i = 0; i < (uint32_t)(FS / CTL); i++)
+        run_block();
+    reset(120);
+}
+
 /* SLOOP 2.4: the quick chain (SAVE held + two or more section keys, ui_layers.c chain_release). Sections A (1 bar:
  * 16 steps of 1/16) and B (2 bars: the drum track 32 steps) in proj_slot[0..1]; the chain A B asked for while
  * playing: A on the next bar, B a bar later, A two bars after that, round again; a single tap ends the chain */
@@ -1678,6 +1748,7 @@ int main(void)
     t_plock();
     t_fill();
     t_chain();
+    t_edits_stick();
     t_recmode();
     t_mclk();
     t_fixes24();

@@ -1215,6 +1215,14 @@ static void sections_flush(void)                        /* main loop */
         settings_later = 0;
         song_dirty = 1;                                 /* (settings_save when quiet, with the song) */
     }
+#if FELUCCA_ARRANGER
+    if (sec_kept) {                                     /* sections that kept edits while they played (the ISR) */
+        fm1_irq_off();
+        sec_dirty |= sec_kept;
+        sec_kept = 0;
+        fm1_irq_on();
+    }
+#endif
     if ((!sec_dirty && !song_dirty) || song.playing || transport_req || !audio_quiet() || fm1_ms - ui_input_ms < 1500u ||
         fm1_ms - tried < 5000u)
         return;
