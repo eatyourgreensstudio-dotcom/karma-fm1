@@ -632,6 +632,7 @@ static void proj_fetch(uint32_t slot)
 }
 #endif
 
+static void persist_flush_now(void);               /* (below) */
 static void project_save(uint32_t slot)
 {
     project_t *p = &proj_slot[slot & 3u];
@@ -641,7 +642,13 @@ static void project_save(uint32_t slot)
     proj_capture(p);
 #if FELUCCA_FLASH
     if (flash_ok) {
-        ui_message(st_save(OBJ_PROJECT0 + (slot & 3u), p, sizeof *p) ? "SAVE ERROR" : "SAVED");
+        int err = st_save(OBJ_PROJECT0 + (slot & 3u), p, sizeof *p);
+        if (!err) {                                 /* (2026-10-28, Ariel: the kit came back as before) what power-on */
+            if (dsu_dirty)                          /* loads, now too: the working project (else only autosaved when */
+                song_dirty = 1;                     /* idle, 20 s apart) and an edited HEX kit with the settings */
+            persist_flush_now();
+        }
+        ui_message(err ? "SAVE ERROR" : "SAVED");
         return;
     }
 #endif
