@@ -357,6 +357,10 @@ static void project_new(void)
     cloud_resync = 1;
     transport_req = 2;
     panic_req = (1u << NTRK) - 1u;
+#if FELUCCA_ARRANGER
+    live_sec = -1;                                      /* (no section's any more: edits stick would keep the empty
+                                                         * project in the one last played) */
+#endif
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         undo_mark(t, (undo_sess += 4u) | 3u);
