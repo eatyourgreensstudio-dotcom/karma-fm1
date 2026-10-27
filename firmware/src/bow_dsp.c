@@ -87,6 +87,7 @@ static inline int32_t el_bow_table(int32_t x, int32_t velocity)
 static void el_bow_run(el_bow_t *E, const el_bowg_t *G, uint32_t nw, const int32_t *in, int32_t v0, int32_t v1,
                        int32_t *out, uint32_t n)
 {
+#if defined(EL_BOW_FIXED)
     uint32_t i, k, wp = E->wp;
     int32_t push = E->push, dv = n ? (v1 - v0) / (int32_t)n : 0;
     for (i = 0; i < n; i++) {
@@ -119,6 +120,53 @@ static void el_bow_run(el_bow_t *E, const el_bowg_t *G, uint32_t nw, const int32
     }
     E->wp = wp;
     E->push = push;
+#else
+    /* in float (2026-10-28: the FM-1's FPU; 64-bit integer multiplies made BOW STRING overload a busy section): the
+     * band-passes' states in Q22 units as floats for the block, back to integers after it; the lines stay 16 bits */
+    uint32_t i, k, wp = E->wp;
+    int32_t push = E->push, dv = n ? (v1 - v0) / (int32_t)n : 0;
+    float fg[EL_BOW_N], frpg[EL_BOW_N], fgh[EL_BOW_N], fr[EL_BOW_N], fw[EL_BOW_N], s1[EL_BOW_N], s2[EL_BOW_N];
+    for (k = 0; k < nw; k++) {
+        fg[k] = (float)G[k].g * (1.0f / 268435456.0f);
+        frpg[k] = (float)G[k].rpg * (1.0f / 268435456.0f);
+        fgh[k] = (float)G[k].gh * (1.0f / 1073741824.0f);
+        fr[k] = (float)G[k].r * (1.0f / 268435456.0f);
+        fw[k] = (float)G[k].w * (1.0f / 67108864.0f);   /* (Q24, the sum >> 26) */
+        s1[k] = (float)E->s[k][0];
+        s2[k] = (float)E->s[k][1];
+    }
+    for (i = 0; i < n; i++) {
+        int32_t sum = 0;
+        float x = (float)(in[i] + push), acc = 0.0f;
+        for (k = 0; k < nw; k++) {
+            uint32_t base = EL_BOW_AT[k], mask = (uint32_t)(EL_BOW_AT[k + 1] - EL_BOW_AT[k]) - 1u;
+            int32_t si = (E->line[base + ((wp + G[k].delay) & mask)] * 16220) >> 8, o;   /* 0.99 of it, Q16 -> Q22 */
+            float t, v, y;
+            sum += si;
+            t = fgh[k] * (x + (float)si - frpg[k] * s1[k] - s2[k]);
+            v = s1[k] + t;
+            s1[k] = v + t;
+            s2[k] += 2.0f * fg[k] * v;
+            y = v * fr[k];                            /* the band-pass at its peak: 1 */
+            acc += y * fw[k];
+            y *= 1.0f / 64.0f;
+            o = (int32_t)(y > 32767.0f ? 32767.0f : y < -32768.0f ? -32768.0f : y + (y < 0.0f ? -0.5f : 0.5f));
+            E->line[base + (wp & mask)] = (int16_t)o;
+        }
+        wp--;
+        v0 += dv;
+        push = el_bow_table(sum, v0);
+        out[i] += (int32_t)acc;
+    }
+    for (k = 0; k < nw; k++) {                        /* (a wild state cannot overflow the sums above) */
+        float a1 = s1[k] > 268435456.0f ? 268435456.0f : s1[k] < -268435456.0f ? -268435456.0f : s1[k];
+        float a2 = s2[k] > 268435456.0f ? 268435456.0f : s2[k] < -268435456.0f ? -268435456.0f : s2[k];
+        E->s[k][0] = (int32_t)(a1 < 0.0f ? a1 - 0.5f : a1 + 0.5f);
+        E->s[k][1] = (int32_t)(a2 < 0.0f ? a2 - 0.5f : a2 + 0.5f);
+    }
+    E->wp = wp;
+    E->push = push;
+#endif
 }
 
 /* --------------------------------------------------------------- flow --- */

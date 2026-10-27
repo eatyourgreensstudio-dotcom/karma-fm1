@@ -29,8 +29,9 @@ static uint32_t section_bars(uint32_t s)
  * start. The song keeps one tempo and global FX across every section (only the drum
  * level and reverb come from it). */
 /* edits stick (2026-10-28, Ariel: erased hits came back each time the chain came round): the section playing (live_sec)
- * takes what was changed while it played, as a SAVE + 5..8 would, before another (or itself again) is applied, and
- * when the song stops. In the audio ISR: sec_kept tells the main loop (project.c), which writes it to flash when quiet */
+ * takes what was changed while it played, as a SAVE + 5..8 would: in the main loop a moment after the panel was last
+ * touched, mid-bar (project.c section_keep_ui; at the section change it cost 0.6 ms on the downbeat, measured on the
+ * FM-1), and here when the song stops. sec_kept tells the main loop to write it to flash when quiet */
 static volatile uint8_t sec_kept;
 static void section_keep(void)
 {
@@ -43,10 +44,28 @@ static void section_keep(void)
     if (proj_slot[s].sum != was)
         sec_kept |= (uint8_t)(1u << s);
 }
+static uint32_t prof_keep_max, prof_apply_max;
+/* main loop: while a section plays, what was changed in it goes into it 0.3 s after the panel was last touched
+ * (input_ms), in a bar's 2nd or 3rd beat (a section changes on a bar: never mid-copy) */
+static void section_keep_ui(uint32_t now, uint32_t input_ms)
+{
+    static uint32_t kept_ms;
+    int32_t s = live_sec;
+    uint32_t b = clk_beat & 3u, pt0 = PROF_NOW(), was;
+    if (!song.playing || s < 0 || s > 3 || input_ms == kept_ms || now - input_ms <= 300u || (b != 1u && b != 2u) ||
+        !proj_ok(&proj_slot[s]))
+        return;
+    kept_ms = input_ms;
+    was = proj_slot[s].sum;
+    proj_capture(&proj_slot[s]);
+    if (proj_slot[s].sum != was)
+        sec_kept |= (uint8_t)(1u << s);
+    if (PROF_NOW() - pt0 > prof_keep_max)
+        prof_keep_max = PROF_NOW() - pt0;
+}  /* (console `prof`: a section change's two halves, the worst, ticks) */
 static void arrangement_apply(uint32_t scene)
 {
-    uint32_t k;
-    section_keep();
+    uint32_t k, pt1 = PROF_NOW();
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];
         seq_release(t);
@@ -55,6 +74,8 @@ static void arrangement_apply(uint32_t scene)
         t->rskip_lanes = 0;
     }
     proj_apply(&proj_slot[scene], 0);
+    if (PROF_NOW() - pt1 > prof_apply_max)
+        prof_apply_max = PROF_NOW() - pt1;
     live_sec = (int8_t)(scene & 3u);                /* (the song's section too: what it keeps, what HOME shows) */
     sync_reload = 1;
     ui.force = 1;

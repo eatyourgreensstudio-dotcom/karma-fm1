@@ -1216,6 +1216,7 @@ static void sections_flush(void)                        /* main loop */
         song_dirty = 1;                                 /* (settings_save when quiet, with the song) */
     }
 #if FELUCCA_ARRANGER
+    section_keep_ui(fm1_ms, ui_input_ms);              /* edits stick (arranger_scene.c) */
     if (sec_kept) {                                     /* sections that kept edits while they played (the ISR) */
         fm1_irq_off();
         sec_dirty |= sec_kept;

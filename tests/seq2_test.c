@@ -1230,8 +1230,9 @@ static void t_fill(void)
         run_block();
 }
 
-/* edits stick (2026-10-28): a hit erased while section A plays in a chain stays erased when the chain comes back to A,
- * and in song mode too (and STOP brings the loop from before the song back) */
+/* edits stick (2026-10-28): a hit erased while section A plays in a chain stays erased when the chain comes back to A
+ * (kept by the main loop a moment after the edit, mid-bar), and in song mode (kept at STOP too; STOP brings the loop
+ * from before the song back) */
 static void t_edits_stick(void)
 {
     uint32_t i, bar = (uint32_t)((double)FS * 60.0 / 120.0 * 4.0 / CTL + 0.5), ok;
@@ -1262,7 +1263,10 @@ static void t_edits_stick(void)
     bar_run(1);
     while (live_sec != 0 && blk < 40000u)            /* (on A) */
         run_block();
-    dstep_clr(&TDRUM->dstep[4], 2);                  /* the snare erased while A plays */
+    dstep_clr(&TDRUM->dstep[4], 2);                  /* the snare erased while A plays (a key, at 1000 ms) */
+    while ((clk_beat & 3u) != 1u && live_sec == 0 && blk < 40000u)
+        run_block();
+    section_keep_ui(1400u, 1000u);                   /* (the main loop, 0.4 s later, on beat 2) */
     while (live_sec != 1 && blk < 40000u)
         run_block();
     while (live_sec != 0 && blk < 40000u)            /* B, then A again */

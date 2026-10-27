@@ -241,6 +241,11 @@ static void con_prof(void)
         con_kv(n, (int32_t)(prof_worst[k] / FM1_TICKS_PER_US));
     }
     con_kv("worst_block", (int32_t)(prof_blk_max / FM1_TICKS_PER_US));
+#if FELUCCA_ARRANGER
+    con_kv("section_keep", (int32_t)(prof_keep_max / FM1_TICKS_PER_US));
+    con_kv("section_apply", (int32_t)(prof_apply_max / FM1_TICKS_PER_US));
+    prof_keep_max = prof_apply_max = 0;
+#endif
     prof_blk_max = 0;
     prof_blocks = 0;
 }
