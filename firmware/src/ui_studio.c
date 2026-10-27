@@ -277,7 +277,8 @@ static void gen_ui_sync(void)
     }
     gen_keys = (uint8_t)((str_eq(cur_page()->title, "GEN") ? 1u : str_eq(cur_page()->title, "HARMONY") ? 2u : 0u) * !ui.menu);
     {   /* SEQ > HARMONY: KEY and MODE are track 1's ROOT and SCL (a project loaded shows its key); turned, they set the
-         * three synth tracks and ACID GEN; any of the four turned: every GEN track's part again, the chords said */
+         * three synth tracks and ACID GEN; any of the four turned: every GEN track's part again, the chords said;
+         * BARS also sets their loops (GEN never changes LEN otherwise: 2026-10-27) */
         static int16_t kr = -1, km = -1, kp = -1, kb = -1;
         int16_t *g = song.g;
         int changed = 0;
@@ -292,6 +293,12 @@ static void gen_ui_sync(void)
         }
         if (kp >= 0 && (g[G_GKPROG] != kp || g[G_GKBARS] != kb))
             changed = 1;
+        if (kb >= 0 && g[G_GKBARS] != kb) {          /* BARS turned: every GEN track's loop that long, together */
+            uint32_t i;
+            for (i = 0; i < NPART; i++)
+                if ((gen_on >> i) & 1u)
+                    trk[i].p[P_SLEN] = (int16_t)(16 << clamp(g[G_GKBARS], 0, 2));
+        }
         kr = g[G_GKROOT], km = g[G_GKMODE], kp = g[G_GKPROG], kb = g[G_GKBARS];
         gk_load();
         if (changed) {

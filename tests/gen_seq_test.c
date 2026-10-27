@@ -23,11 +23,13 @@ int main(void)
     for (i = 0; i < NPART; i++) {                        /* C minor; PROG SWAY (i bVII), a chord every 2 bars */
         trk[i].p[P_ROOT] = 0;
         trk[i].p[P_SCALE] = 2;
+        trk[i].p[P_SLEN] = 64;                           /* (GEN keeps a track's LEN: these tests on 64 steps) */
     }
     song.g[G_GKPROG] = 1; song.g[G_GKBARS] = 1;
     song.g[G_GNDENS] = 45; song.g[G_GNRANGE] = 2; song.g[G_GNOCT] = 3; song.g[G_GNACC] = 25; song.g[G_GNSLD] = 13;
     gk_load();
-    ck(gk.len == 64u && gk.cst == 32u && gk.n == 2u && gk.deg[1] == 6u, "HARMONY: SWAY, 2 bars: i bVII over 64 steps");
+    gk_fit(&gk_ui, &trk[0]);
+    ck(gk_ui.len == 64u && gk_ui.cst == 32u && gk.n == 2u && gk.deg[1] == 6u, "HARMONY: SWAY on 64 steps: i bVII, 32 each");
     {   /* BASS */
         uint32_t ok_key = 1, ok_root = 1, ok_rh = 1, ok_reg = 1, r;
         t = &trk[0];
@@ -57,7 +59,7 @@ int main(void)
         }
         ck(ok_key, "BASS: every note in the key (C minor)");
         ck(ok_root, "BASS: a chord's first hit is its root (C, then Bb)");
-        ck(ok_rh, "BASS: one rhythm in every bar; LEN set to the plan (64)");
+        ck(ok_rh, "BASS: one rhythm in every bar; LEN kept (64)");
         ck(ok_reg, "BASS: from C2, under two octaves");
     }
     {   /* LINE: a slow sound held, a short one struck on the beats */
@@ -245,8 +247,34 @@ int main(void)
             }
             ck(ok && song.g[G_AGROOT] == 2, "HARMONY: KEY D: the three tracks' ROOT, ACID GEN's, every GEN part in D minor");
             song.g[G_GKPROG] = 0; frames(2);
-            ck(gk.n == 1u && trk_len(&trk[0]) == gk.len, "HARMONY: PROG DRONE: one chord, the parts written again");
+            ck(gk.n == 1u && trk_len(&trk[0]) == 64u, "HARMONY: PROG DRONE: one chord, the parts written again, LEN kept");
             gen_on = 2u; song.g[G_GKPROG] = 1; song.g[G_GKROOT] = 0; frames(2);
+        }
+        {                                                 /* GEN keeps LEN (2026-10-27: it jumped 16 -> 64); BARS sets it */
+            uint32_t ok = 1, j, seen = 0, r;
+            gen_on = 3u;
+            for (r = 0; r < 20u; r++) {
+                trk[0].p[P_SLEN] = 16;
+                gen_new(&trk[0]);
+                ok &= trk_len(&trk[0]) == 16u;
+                for (j = 8; j < 16u && !seen; j++)        /* SWAY on 16 steps: C for 8, Bb for 8 */
+                    if (trk[0].step[j].time == ST_NOTE && trk[0].step[j].n)
+                        seen = 1, ok &= trk[0].step[j].note[0] % 12u == 10u;
+                seen = 0;
+            }
+            ck(ok, "GEN keeps the track's LEN (16); SWAY's two chords 8 steps each, the second's first hit its root");
+            song.g[G_GKBARS] = 2; frames(2);
+            ck(trk_len(&trk[0]) == 64u && trk_len(&trk[1]) == 64u && trk_len(&trk[2]) == 64u && trk[2].p[P_SLEN] == 64,
+               "HARMONY: BARS 4: the GEN tracks' loops 64 steps");
+            trk[2].p[P_SLEN] = 16; gen_on = 3u;
+            song.g[G_GKBARS] = 0; frames(2);
+            ck(trk_len(&trk[0]) == 16u && trk_len(&trk[1]) == 16u && trk_len(&trk[2]) == 16u, "HARMONY: BARS 1: 16 steps (GEN tracks only)");
+            trk[2].p[P_SLEN] = 64;
+            song.g[G_GKBARS] = 1; frames(2);
+            ck(trk_len(&trk[0]) == 32u && trk_len(&trk[2]) == 64u, "HARMONY: BARS 2: 32 steps; a track without GEN keeps its own");
+            gen_on = 2u;
+            for (j = 0; j < NPART; j++)
+                trk[j].p[P_SLEN] = 64;
         }
         song.sel = NPART; frames(2);
         song.g[G_GNON] = 1; frames(2);

@@ -2,8 +2,8 @@
  * Portions Copyright (C) 2026 Juan Ignacio Antonucci (Juan Jiant): the harmony's idea (one key and one plan of chords
  * that every part reads, each part in its role) and the pitch helpers, after gen.c of JIANT FM (GPL-3.0-only). */
 /* SEQ > GEN (2026-10-26: composed, not thrown). One KEY (SEQ > HARMONY: KEY and MODE are track 1's ROOT and SCL,
- * set for the three synth tracks and ACID GEN together, so they are kept in the project) and a PROGRESSION of chords,
- * one every BARS bars, that every GEN track follows, each in its role:
+ * set for the three synth tracks and ACID GEN together, so they are kept in the project) and a PROGRESSION of chords
+ * spread evenly over each GEN track's loop, that every GEN track follows, each in its role:
  *   track 1  BASS: one rhythm of DENS hits reused every bar, each hit a tone of the bar's chord (the root mostly, its
  *            octave, seventh, fifth, third, second: an acid line's weights), the chord's root where a chord begins;
  *            ACC and SLIDE their flags. DRIFT picks a hit's tone again, in every bar at once (the line keeps its
@@ -16,8 +16,11 @@
  *            over the loop (AAAA', AABA', ABAB'), each bar's motif moved to its chord, chord tones on the beats,
  *            the phrase ending on the key's tonic. DRIFT: the last bar varied again (now and then a new motif).
  * OCT moves every register by octaves (3: bass from C2, line G3, lead Bb3); RANGE how wide the lead goes. The loop is
- * the progression's (the track's LEN set to it, at most 64 steps). A key on the GEN or HARMONY page: the KEY's root,
- * GEN on, a new part. GEN is on per track (gen_on: not kept; what it wrote is the track's pattern and is kept). */
+ * the track's own (2026-10-27, Ariel: GEN never changes LEN; it jumped 16 -> 64 as GEN wrote a part): the chords
+ * share it, an even number of steps each, the last one the rest (16 steps, POP: 4 each; 16, EPIC: 4, 4, 8). HARMONY's
+ * BARS, turned, sets the loop of every GEN track at once (1, 2 or 4 bars), so they stay together. A key on the GEN
+ * page: GEN on, a new part (on HARMONY: the KEY). GEN is on per track (gen_on: not kept; what it wrote is the track's
+ * pattern and is kept). */
 static volatile uint8_t gen_on;                      /* bit n: GEN changes synth track n's loop */
 
 #define GK_NMODE 5
@@ -35,9 +38,17 @@ static const uint8_t GK_AG[GK_NMODE] = {0, 4, 1, 5, 5};    /* ACID GEN's SCALE *
 static const uint8_t GK_PROG[GK_NPROG][4] = {{0}, {0, 6}, {0, 3}, {0, 5, 6}, {0, 5, 2, 6}, {0, 3, 5, 4}};
 static const uint8_t GK_PN[GK_NPROG] = {1, 2, 2, 3, 4, 4};
 static struct {
-    uint8_t root, mode, n, cst, len;                 /* the key; chords; steps a chord; the loop */
+    uint8_t root, mode, n;                           /* the key; chords */
     uint8_t deg[4];
-} gk = {0, 0, 1, 16, 16, {0}};
+} gk = {0, 0, 1, {0}};
+/* the loop being written and its chords' span: gen_new's (the UI's) or gen_tick's (the audio's, which puts the UI's
+ * back when it is done: it can come in the middle of a gen_new) */
+typedef struct {
+    uint32_t len, cst;
+} gk_fit_t;
+static gk_fit_t gk_ui = {16, 16}, *gkf = &gk_ui;
+#define GK_LEN (gkf->len)
+#define GK_CST (gkf->cst)
 
 static uint32_t gk_mode_of(int32_t scl)              /* a track's SCL as a mode of seven (CHR, the rest: MIN) */
 {
@@ -80,7 +91,7 @@ static int32_t gk_fold(int32_t n, int32_t lo, int32_t hi)   /* into [lo, hi] by 
 static void gk_load(void)                            /* the plan, from the key and HARMONY's knobs */
 {
     const int16_t *g = song.g;
-    uint32_t p = (uint32_t)clamp(g[G_GKPROG], 0, GK_NPROG - 1), k, st = 16u << clamp(g[G_GKBARS], 0, 2);
+    uint32_t p = (uint32_t)clamp(g[G_GKPROG], 0, GK_NPROG - 1), k;
     gk.root = (uint8_t)((uint32_t)trk[0].p[P_ROOT] % 12u);
     gk.mode = (uint8_t)gk_mode_of(trk[0].p[P_SCALE]);
     gk.n = GK_PN[p];
@@ -90,12 +101,21 @@ static void gk_load(void)                            /* the plan, from the key a
             d = gk_note(8) - gk_note(4) == 7 && d != 4u ? 4u : 0u;
         gk.deg[k] = (uint8_t)d;
     }
-    while (st > 16u && st * gk.n > NSTEP)
-        st /= 2u;
-    gk.cst = (uint8_t)st;
-    gk.len = (uint8_t)(st * gk.n);
 }
-static uint32_t gk_chord(uint32_t step) { return gk.deg[(step % gk.len) / gk.cst]; }
+static void gk_fit(gk_fit_t *f, const track_t *t)    /* a track's loop, the chords over it */
+{
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), n = gk.n ? gk.n : 1u;
+    f->len = len;
+    f->cst = (len / n) & ~1u;                        /* (even: on the beat; the last chord the rest) */
+    if (!f->cst)
+        f->cst = 1;
+}
+static uint32_t gk_span(uint32_t step)              /* which chord a step is in */
+{
+    uint32_t i = (step % GK_LEN) / GK_CST;
+    return i < gk.n ? i : gk.n - 1u;
+}
+static uint32_t gk_chord(uint32_t step) { return gk.deg[gk_span(step)]; }
 static int gk_is_tone(int32_t d, uint32_t c)         /* degree d a tone of the triad on c */
 {
     int32_t r = ((d - (int32_t)c) % 7 + 7) % 7;
@@ -146,9 +166,9 @@ static void gen_bass_step(track_t *t, uint32_t i)
         s->note[0] = (uint8_t)root;
         return;
     }
-    for (k = 0; k < 16u && !((m >> k) & 1u); k++)
-        ;
-    first = i % gk.cst < 16u && sl == k;             /* the chord's first hit: its root */
+    for (k = gk_span(i) * GK_CST, first = 1; k < i; k++)   /* the chord's first hit: its root */
+        if ((m >> (k % 16u)) & 1u)
+            first = 0;
     k = first ? GB_R : gpart[0].pick[sl];
     n = k == GB_OCT ? root + 12 : gk_fold(gk_note((int32_t)(c + TONE[k])), root, root + 11);
     s->time = ST_NOTE;
@@ -173,7 +193,7 @@ static void gen_bass(track_t *t)
     }
     for (i = 0; i < 16u; i++)
         gen_bass_pick(i);
-    for (i = 0; i < gk.len; i++)
+    for (i = 0; i < GK_LEN; i++)
         gen_bass_step(t, i);
 }
 
@@ -202,7 +222,7 @@ static void gen_line_span(track_t *t, uint32_t a, int32_t prev, int32_t not)
     uint32_t pulse = t->engine == ENGI_ELEM ? (t->p[P_E0] == EM_BOUNCE || t->p[P_E0] == EM_PICK)
                                             : (t->p[P_ATK] < 12 && t->p[P_REL] < 40);
     int32_t lo = 55 + gen_oct(), hi = lo + 19, n = gen_line_tone(c, prev, lo, hi, not);
-    for (i = 0; i < gk.cst && a + i < NSTEP; i++) {
+    for (i = 0; i < GK_CST && a + i < NSTEP; i++) {
         step_t *s = &t->step[a + i];
         int move = i && (i % 16u == 0u || (i % 16u == 8u && rng() % 127u < dens));   /* (2026-10-26: a new tone each
                                                      * bar, DENS: half way too; one note a chord stayed for bars) */
@@ -232,7 +252,7 @@ static int32_t gen_held(const track_t *t, uint32_t i, int32_t dflt)   /* the not
 static void gen_line(track_t *t)
 {
     uint32_t a;
-    for (a = 0; a < gk.len; a += gk.cst)
+    for (a = 0; a < GK_LEN; a += GK_CST)
         gen_line_span(t, a, gen_held(t, a, 64 + gen_oct()), a ? gen_held(t, a, -1) : -1);   /* (not the same note again) */
 }
 
@@ -269,7 +289,7 @@ static void gen_lead_motif(void)
 /* bar b of the lead: the motif (or its variation), moved to the bar's chord; returns its first note */
 static int32_t gen_lead_bar(track_t *t, uint32_t b, int32_t prev, uint32_t var)
 {
-    uint32_t i, a = b * 16u, c = gk_chord(a), last = (b + 1u) * 16u >= gk.len, n = gpart[2].mn;
+    uint32_t i, a = b * 16u, c = gk_chord(a), last = (b + 1u) * 16u >= GK_LEN, n = gpart[2].mn;
     int32_t lo = 58 + gen_oct(), hi = lo + 21, anchor, first = -1;
     int8_t md[8];
     uint8_t mp[8];
@@ -303,8 +323,9 @@ static int32_t gen_lead_bar(track_t *t, uint32_t b, int32_t prev, uint32_t var)
     for (i = 0; i < n; i++) {
         step_t *s = &t->step[a + mp[i]];
         int32_t d = anchor + md[i], note;
-        if (mp[i] % 4u == 0u && !gk_is_tone(d, c))
-            d += gk_is_tone(d - 1, c) ? -1 : 1;     /* (on the beat: a chord tone) */
+        uint32_t cn = gk_chord(a + mp[i]);           /* (the chord at this note: a short loop has more a bar) */
+        if (mp[i] % 4u == 0u && !gk_is_tone(d, cn))
+            d += gk_is_tone(d - 1, cn) ? -1 : 1;    /* (on the beat: a chord tone) */
         if (last && i + 1u == n)
             d = gk_deg(gk_near(gk_note(d), 0));      /* (the phrase's end: the key's tonic) */
         note = gk_fold(gk_note(d), lo, hi);
@@ -320,7 +341,7 @@ static int32_t gen_lead_bar(track_t *t, uint32_t b, int32_t prev, uint32_t var)
 }
 static uint32_t gen_lead_var(uint32_t b)             /* the form: which bars vary (0 A, 1 2 B, 3 A') */
 {
-    uint32_t nb = gk.len / 16u, f = gpart[2].form;
+    uint32_t nb = GK_LEN / 16u, f = gpart[2].form;
     if (b + 1u == nb && nb > 1u)
         return 3u;
     if (f == 1u && b == 2u)
@@ -333,7 +354,7 @@ static void gen_lead(track_t *t)
 {
     uint32_t b;
     int32_t prev = 67 + gen_oct();
-    for (b = 0; b * 16u < gk.len; b++)
+    for (b = 0; b * 16u < GK_LEN; b++)
         prev = gen_lead_bar(t, b, prev, gen_lead_var(b));
 }
 
@@ -344,6 +365,8 @@ static void gen_new(track_t *t)                      /* NEW, ON, a key: the trac
     if (ti >= NPART)
         return;
     gk_load();
+    gk_fit(&gk_ui, t);
+    gkf = &gk_ui;
     if (ti == 0u) {
         gen_bass(t);
     } else if (ti == 1u) {
@@ -352,7 +375,6 @@ static void gen_new(track_t *t)                      /* NEW, ON, a key: the trac
         gen_lead_motif();
         gen_lead(t);
     }
-    t->p[P_SLEN] = gk.len;
     t->seq_active = 1;
 }
 static void gen_key_set(uint32_t root, uint32_t mode)   /* one key: the synth tracks' ROOT and SCL, ACID GEN's */
@@ -386,24 +408,27 @@ static void gen_new_from(track_t *t, uint32_t note)
 static void gen_tick(track_t *t, uint32_t idx)
 {
     uint32_t c = (uint32_t)song.g[G_GNCHG], ti = (uint32_t)(t - trk), k;
-    if (ti >= NPART || !((gen_on >> ti) & 1u) || !c || !gk.len)
+    gk_fit_t f, *was = gkf;
+    if (ti >= NPART || !((gen_on >> ti) & 1u) || !c || !gk.n)
         return;
+    gk_fit(&f, t);
+    gkf = &f;
     if (ti == 0u) {                                  /* BASS: a hit's tone again, in every bar */
         uint32_t sl = idx % 16u;
         if (rng() % 16129u < c * c) {
             if (sl && rng() % 4u == 0u)
                 gpart[0].mask ^= (uint16_t)(1u << sl);   /* (now and then the hit moves) */
             gen_bass_pick(sl);
-            for (k = sl; k < gk.len; k += 16u)
+            for (k = sl; k < GK_LEN; k += 16u)
                 gen_bass_step(t, k);
         }
     } else if (ti == 1u) {                           /* LINE: the chord's tone again */
-        if (idx % gk.cst == 0u && idx < gk.len && rng() % 16129u < c * c * 4u) {
+        if (idx % GK_CST == 0u && idx < GK_LEN && rng() % 16129u < c * c * 4u) {
             int32_t was = t->step[idx].note[0];
             gen_line_span(t, idx, gen_held(t, idx, was), was);
         }
     } else if (idx == 0u && rng() % 16129u < c * c * 8u) {   /* LEAD: its last bar varied again */
-        uint32_t nb = gk.len / 16u;
+        uint32_t nb = GK_LEN / 16u;
         if (rng() % 4u == 0u) {
             gen_lead_motif();                        /* (now and then a new motif) */
             gen_lead(t);
@@ -411,6 +436,7 @@ static void gen_tick(track_t *t, uint32_t idx)
             gen_lead_bar(t, nb - 1u, gen_held(t, (nb - 1u) * 16u, 67), 1u + rng() % 3u);
         }
     }
+    gkf = was;
 }
 
 /* ----------------------------------------------------------- DRUM GEN --- */
