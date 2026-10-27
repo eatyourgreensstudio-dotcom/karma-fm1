@@ -38,6 +38,16 @@ int main(void)
     proj_apply(&p, 1);
     for (l = 0; l < DRUM_LANES; l++) same &= drum_send[l][0] == (l * 5u + 3u) % 16u && drum_send[l][1] == (l * 3u + 1u) % 8u;
     check("apply: the 16 sounds' reverb and delay sends come back", same);
+    {   /* the kit itself (2026-10-28: a load, power-on and every section put it back to HEX BOOM) */
+        static const int16_t K[3] = {5, 15, 45};       /* 808, HOUSE, MY HEX 4 */
+        int ok = 1; uint32_t j;
+        for (j = 0; j < 3u; j++) {
+            TDRUM->p[P_E0] = K[j]; proj_capture(&p); TDRUM->p[P_E0] = 0; proj_apply(&p, 1); ok &= TDRUM->p[P_E0] == K[j];
+            TDRUM->p[P_E0] = K[j]; proj_capture(&p); TDRUM->p[P_E0] = 0; proj_apply(&p, 0); ok &= TDRUM->p[P_E0] == K[j];
+        }
+        check("the drum kit comes back with a load and a section (808, HOUSE, MY HEX 4)", ok);
+        TDRUM->p[P_E0] = DRUM_DEFAULT_KIT;
+    }
     check("apply: the kit is still the kit", TDRUM->p[P_E0] == DRUM_DEFAULT_KIT);
     p.rsv[0] &= (uint8_t)~0x40u;
     proj_apply(&p, 1);

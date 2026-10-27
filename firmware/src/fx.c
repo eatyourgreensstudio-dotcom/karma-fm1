@@ -1066,9 +1066,19 @@ static __attribute__((noinline)) void stem_take(uint32_t k, uint32_t n, int post
             stem_buf[k][i] = (mix_l[i] + mix_r[i] - stem_pre[i]) >> 1;
 }
 
+/* where a block's time goes (2026-10-28: the FM-1 overloaded with HEX drums and three tracks): the timer's ticks summed
+ * per part of mix_block since the last read (console.c `prof`, which zeroes them). The host has no timer: 0 */
+enum { PF_EVENTS, PF_T1, PF_T2, PF_T3, PF_DRUMS, PF_BUSES, PF_CLOUD, PF_OUT, PF_N };
+static uint32_t prof_ticks[PF_N], prof_blocks;
+#ifdef FM1_TICKS_PER_US
+#define PROF_NOW() fm1_ticks()
+#else
+#define PROF_NOW() 0u
+#endif
+#define PROF(k) do { uint32_t pt_ = PROF_NOW(); prof_ticks[k] += pt_ - prof_t0; prof_t0 = pt_; } while (0)
 static void mix_block(int32_t *out, uint32_t n)
 {
-    uint32_t i;
+    uint32_t i, prof_t0 = PROF_NOW();
     int32_t m0, m1;
     for (i = 0; i < n; i++)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
@@ -1079,12 +1089,15 @@ static void mix_block(int32_t *out, uint32_t n)
     }
     events_block(n);
     duck_block(n * (uint32_t)song.g[G_BPM]);
+    prof_blocks++;
+    PROF(PF_EVENTS);
     for (i = 0; i < NPART; i++) {
         if (fx_stems)
             stem_take(i, n, 0);
         mix_part(&trk[i], n);
         if (fx_stems)
             stem_take(i, n, 1);
+        PROF(PF_T1 + i);
     }
     if (fx_stems)
         stem_take(TRK_DRUM, n, 0);
@@ -1126,6 +1139,7 @@ static void mix_block(int32_t *out, uint32_t n)
     }
     if (fx_stems)
         stem_take(TRK_DRUM, n, 1);                      /* the drums' stem */
+    PROF(PF_DRUMS);
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
     if (fx_stems)                                       /* the FX return: what is added from here (not the metronome) */
         for (i = 0; i < n; i++)
@@ -1137,7 +1151,9 @@ static void mix_block(int32_t *out, uint32_t n)
         mix_l[i] += wet_l[i];
         mix_r[i] += wet_r[i];
     }
+    PROF(PF_BUSES);
     cloud_process(cloud_bus, mix_l, mix_r, n);          /* the CLOUD: grains of what the tracks sent it (cloud.c) */
+    PROF(PF_CLOUD);
     if (fx_stems)                                       /* ... what the buses, the CLOUD and TEXTURE added */
         for (i = 0; i < n; i++)
             stem_fx[0][i] = mix_l[i] - stem_fx[0][i], stem_fx[1][i] = mix_r[i] - stem_fx[1][i];
@@ -1183,5 +1199,5 @@ static void mix_block(int32_t *out, uint32_t n)
                 usb_out[2u * i + 1u] = knee(ur[i]);
             }
         }
-    }
+    }    PROF(PF_OUT);
 }

@@ -63,6 +63,8 @@ if [ -f "$LXR/Core/Src/Soundengine/DSPAudio/DrumVoice.c" ]; then
     run "HEX: the LXR-02's drum voices as its firmware plays them (tests/lxr_ref)" env LXR="$LXR" sh tests/lxr_ref/build.sh
 fi
 run "SEQ > GEN: a loop that changes as it plays (CHANGE, SCALE, RANGE, ON per track)" "$OUT/gen_seq_test"
+$CC -O1 -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal -Itests -o "$OUT/drum_send_test" tests/drum_send_test.c $PLX -lm
+run "drums: each sound's sends and the kit through a project (load, power-on, section)" "$OUT/drum_send_test"
 $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq2_test" tests/seq2_test.c $PLX -lm
 run "sequencer 2.0: no drift, ratchets, roll, erase / undo, ghost / hard, chords, mute / solo, nudge, locks" "$OUT/seq2_test"
 

@@ -219,6 +219,18 @@ static void con_dbg(void)
         con_kx(NAMES[i], w[i]);
 }
 
+/* `prof`: the microseconds each part of the mix took since the last `prof` (fx.c mix_block), then zeroed */
+static void con_prof(void)
+{
+    static const char *const NAME[PF_N] = {"events", "track1", "track2", "track3", "drums", "fx_buses", "cloud", "out"};
+    uint32_t k, b = prof_blocks;
+    con_kv("blocks", (int32_t)b);
+    for (k = 0; k < PF_N; k++) {
+        con_kv(NAME[k], (int32_t)(prof_ticks[k] / FM1_TICKS_PER_US));
+        prof_ticks[k] = 0;
+    }
+    prof_blocks = 0;
+}
 static void con_crash(void)
 {
     if (fm1_crash.magic != FM1_CRASH_MAGIC) {
@@ -250,11 +262,13 @@ static void con_params(void)
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("status  dbg  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
+        con_puts("status  dbg  prof  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
     else if (con_word(&p, "status"))
         con_status();
     else if (con_word(&p, "dbg"))
         con_dbg();
+    else if (con_word(&p, "prof"))
+        con_prof();
     else if (con_word(&p, "crash"))
         con_crash();
     else if (con_word(&p, "params"))

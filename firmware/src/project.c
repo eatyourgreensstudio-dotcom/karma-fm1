@@ -598,7 +598,10 @@ static void proj_apply(const project_t *p, int all)
                 for (j = 0; j < 4u; j++)
                     st->note[j] &= 127u;
             }
-        if (!eng_allowed(t, t->eng_req)) {              /* an engine gone, or not this track's: its own, as it starts */
+        if (k != TRK_DRUM && !eng_allowed(t, t->eng_req)) {   /* an engine gone, or not this track's: its own, as it
+                                                         * starts (not the drum track: it has none, and this put its
+                                                         * kit back to HEX BOOM at every load, power-on and section
+                                                         * until 2026-10-28) */
             uint32_t k2;
             t->eng_req = (uint8_t)eng_default(t);
             for (k2 = 0; k2 < 8u; k2++)

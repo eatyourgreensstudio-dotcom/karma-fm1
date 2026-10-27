@@ -318,6 +318,7 @@ static float lx_amp_eg(lx_voice_t *v, const lx_par_t *p)  /* slopeEg2_calc */
 /* ------------------------------------------------------------------------------------------ the filter --- */
 typedef struct {
     float f, g, q, drive, R, ff, g0, f1, if1, fl2, ql2;   /* SVF_directSetFilterValue, SVF_setReso, SVF_setDrive; per block */
+    float din;                                        /* drive / 0x7fff: the input's scale (a multiply a sample, not a divide) */
     uint32_t type;
 } lx_svf_t;
 static float lx_fast_tan(float x)
@@ -336,6 +337,7 @@ static void lx_svf_set(lx_svf_t *c, const lx_par_t *p)
     q = 1 - p->fres / 127.f;
     c->q = q < 0.1f ? 0.02f : q;
     c->drive = 0.4f + (d) * (d) * 6;
+    c->din = c->drive * (1.0f / (float)0x7fff);
     c->R = c->f >= 0.4499f ? 1 : c->q;
     c->ff = c->g * c->g;
     c->g0 = 1.f / (1.f + c->g * 2 * c->R);
@@ -365,7 +367,7 @@ static inline int16_t lx_svf(lx_voice_t *v, const lx_svf_t *c, int16_t in)
     float x, y0, y1, xx, s1c;
     if (c->type == LF_OFF)
         return in;
-    x = lx_soft_clip2((in / ((float)0x7fff)) * c->drive);
+    x = lx_soft_clip2((float)in * c->din);           /* (2026-10-28: theirs divides; the FM-1's FPU divides slowly) */
     switch (c->type) {
     case LF_LP2:                                      /* the naive two-pole low-pass */
         v->fa += c->fl2 * ((x - v->fa) + c->ql2 * (v->fa - v->fb));
@@ -548,7 +550,7 @@ static int lx_render(lx_voice_t *v, const lx_par_t *p, int16_t *out, uint32_t n,
                 b = lx_svf(v, &c, b);
                 b = lx_i16(b * (v->lastGain + (float)(v->pos + k) * dg));        /* bufferTool_addGainInterpolated */
                 b = lx_i16(b * v->velo);
-                x = b / 32767.f;                      /* calcDistBlockFiltered */
+                x = b * (1.0f / 32767.f);             /* calcDistBlockFiltered */
                 x = (1 + shape) * x / (1 + shape * lx_fabsf(x));
                 b = lx_i16(x * 32767);
                 out[i + k] = lx_i16(b * vol);
@@ -564,7 +566,7 @@ static int lx_render(lx_voice_t *v, const lx_par_t *p, int16_t *out, uint32_t n,
                 int16_t b;
                 tmp += lx_transient(v, tw, tvol, tpitch);
                 b = lx_i16(cv * tmp);
-                x = b / 32767.f;                      /* calcDistBlock */
+                x = b * (1.0f / 32767.f);             /* calcDistBlock */
                 x = (1 + shape) * x / (1 + shape * lx_fabsf(x));
                 out[i + k] = lx_i16(x * 32767);
             }
@@ -581,14 +583,17 @@ static int lx_render(lx_voice_t *v, const lx_par_t *p, int16_t *out, uint32_t n,
                 b = lx_svf(v, &c, b);
                 b = lx_sat16(b + lx_transient(v, tw, tvol, tpitch));
                 b = lx_i16(b * cv);
-                x = b / 32767.f;
+                x = b * (1.0f / 32767.f);
                 x = (1 + shape) * x / (1 + shape * lx_fabsf(x));
                 out[i + k] = lx_i16(x * 32767);
             }
             break;
         }
         }
-        for (k = 0; k < m; k++) {                     /* mixer_decimateBlock */
+        if (drate >= 1.0f) {                          /* (no decimation: every sample held as it is) */
+            v->dheld = out[i + m - 1u];
+            v->dcnt = 0.0f;
+        } else for (k = 0; k < m; k++) {              /* mixer_decimateBlock */
             v->dcnt += drate;
             if (v->dcnt >= 1.f) {
                 v->dcnt -= 1.f;
