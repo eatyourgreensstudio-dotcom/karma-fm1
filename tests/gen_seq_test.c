@@ -106,6 +106,18 @@ int main(void)
                     struck += i % 16u && i % 4u == 0u && t->step[i].time == ST_NOTE;
             }
             ck(struck > 100u, "LINE: ELEMENTS PICK (a long release) struck on the beats, not held");
+            {
+                uint32_t ties = 0, same = 0, notes = 0, j, last = 0;
+                for (j = 0; j < 64u; j++) {
+                    ties += t->step[j].time == ST_TIE;
+                    if (t->step[j].time == ST_NOTE && t->step[j].n) {
+                        same += notes && t->step[j].note[0] == last;
+                        last = t->step[j].note[0];
+                        notes++;
+                    }
+                }
+                ck(!ties && notes > 12u && same * 2u < notes, "LINE: struck: short notes (no ties), mostly moving through the chord");
+            }
             t->p[P_E0] = EM_BOW; gen_new(t);
             for (i = 0, struck = 0; i < 64u; i++)
                 struck += i % 8u != 0u && t->step[i].time == ST_NOTE;

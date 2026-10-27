@@ -207,11 +207,13 @@ static void gen_line_span(track_t *t, uint32_t a, int32_t prev, int32_t not)
         int move = i && (i % 16u == 0u || (i % 16u == 8u && rng() % 127u < dens));   /* (2026-10-26: a new tone each
                                                      * bar, DENS: half way too; one note a chord stayed for bars) */
         memset(s, 0, sizeof *s);
-        s->time = ST_TIE;
+        s->time = pulse ? ST_REST : ST_TIE;          /* (struck: short notes, rests between; held: tied) */
+        s->note[0] = (uint8_t)clamp(n, 0, 127);
         if (pulse && i && ((i % 4u == 0u && rng() % 127u < 110u) || (i % 4u == 2u && rng() % 127u < dens * 2u / 3u)))
             move = 2;                                /* (struck: again on every beat, DENS: the eighths between) */
         if (!i || move) {
-            if (move == 1 || (move == 2 && (rng() & 1u)))
+            if (move == 1 || (move == 2 && rng() % 4u))   /* (struck: mostly another tone, a broken chord, 2026-10-27:
+                                                     * the same one again and again rang as one long note) */
                 n = gen_line_tone(c, n, lo, hi, n);  /* (another tone of the chord) */
             s->time = ST_NOTE;
             s->n = 1;
