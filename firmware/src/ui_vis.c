@@ -523,19 +523,82 @@ static void vis_wires(void)
  * bands the tracks (growing with their level, flashing on a note), the boat rocks on the master's wave */
 /* TAPE (KARMA 3.0; 2026-10-27, Ariel: the deck on top of the home screen, big, instead of the dancer): the bar in
  * large digits, KARMA, the song's sections A..D (the one playing filled); the two reels turning while it plays, the
- * tape going from the left one to the right one over the selected track's loop, past the head; under the deck the
- * stereo out, left and right, its peaks running along with the tape (newest at the left, four seconds across) */
+ * tape going from the left one to the right one over the selected track's loop, past the head (still when it
+ * stops); under the deck two VU meters, the stereo out left and right (2026-10-27, Ariel): a needle on a VU scale
+ * (-20 .. +3, red past 0; its marks where a VU meter has them, the needle following the level's amplitude, not
+ * its dB), at 0 VU an RMS of 18000 (-5 dBFS: the mix runs hot, so loud parts touch the red), rising in a third of
+ * a picture's way and falling slower; the level in dB under it; a lamp for the peaks (near full scale). Silence: the
+ * needles rest at the left */
 static const uint32_t KARMA_ROW[7] = {0x0E44F391u, 0x116D1449u, 0x11551445u, 0x1F54F7C3u, 0x11445445u, 0x11449449u,
                                       0x11451451u};             /* tools/gen_logo.py KARMA_CELLS, a bit a cell */
 static const uint16_t KARMA_COL[5] = {RGB(40, 124, 255), RGB(30, 204, 112), RGB(228, 228, 236), RGB(255, 98, 26),
                                       RGB(141, 130, 236)};       /* (a letter each) */
-static uint8_t reel_pk[2][111], reel_n;                         /* the stereo out's peaks, a column a picture */
+#define VU_REF 18000                                            /* the RMS at 0 VU */
+static int32_t vu_amp[2];                                       /* the needles: the RMS, with the meter's ballistics */
+static uint8_t vu_lamp[2];                                      /* pictures the peak lamp stays lit */
+static const uint16_t VU_DB[47] = {180, 202, 227, 254, 285, 320, 359, 403, 452, 507, 569, 639, 717, 804, 902, 1012, 1136, 1274, 1430, 1604, 1800, 2020, 2266, 2543, 2853, 3201, 3591, 4030, 4521, 5073, 5692, 6387, 7166, 8040, 9021, 10122, 11357, 12743, 14298, 16043, 18000, 20196, 22661, 25426, 28528, 32009, 35915};   /* VU_REF at -40 .. +6 dB */
+static uint32_t vu_sqrt(uint32_t v)
+{
+    uint32_t r = 0, b = 1u << 30;
+    while (b > v)
+        b >>= 2;
+    while (b) {
+        if (v >= r + b)
+            v -= r + b, r = (r >> 1) + b;
+        else
+            r >>= 1;
+        b >>= 2;
+    }
+    return r;
+}
+/* one meter: frame, scale, marks, the needle (pos 0..1000 along the scale), its dB, the lamp */
+static void vu_meter(int32_t x0, const char *ch, int32_t amp, int lamp)
+{
+    static const int16_t MARK[11] = {0, 165, 264, 352, 463, 529, 603, 686, 779, 883, 1000};   /* -20 -10 -7 -5 -3 -2 -1 0 1 2 3 */
+    static const char *const LAB[11] = {"20", "", "7", "", "3", "", "", "0", "", "", "3"};
+    int32_t cx = x0 + 56, py = 262, k, pos, d;
+    uint32_t a;
+    char b[8];
+    op_box(x0, 176, 112, 62, OP_PUR);
+    for (a = 654u; a < 882u; a += 6u) {                         /* the scale: 768 is straight up, 40 degrees a side */
+        uint32_t a1 = a + 6u > 882u ? 882u : a + 6u;
+        uint16_t c = a >= 654u + 686u * 228u / 1000u ? TE_RED : OP_PUR;
+        cv_line(cx + ((icos(a) * 70) >> 15), py + ((isin(a) * 70) >> 15), cx + ((icos(a1) * 70) >> 15), py + ((isin(a1) * 70) >> 15), c);
+        cv_line(cx + ((icos(a) * 69) >> 15), py + ((isin(a) * 69) >> 15), cx + ((icos(a1) * 69) >> 15), py + ((isin(a1) * 69) >> 15), c);
+    }
+    for (k = 0; k < 11; k++) {
+        uint32_t m = 654u + (uint32_t)MARK[k] * 228u / 1000u;
+        int32_t r1 = LAB[k][0] ? 77 : 74;
+        uint16_t c = k > 7 ? TE_RED : k == 7 ? C_WHITE : OP_PUR;
+        cv_line(cx + ((icos(m) * 70) >> 15), py + ((isin(m) * 70) >> 15), cx + ((icos(m) * r1) >> 15), py + ((isin(m) * r1) >> 15), c);
+        if (LAB[k][0])
+            cv_text(cx + ((icos(m) * 58) >> 15) - text_w(&FONT_S, LAB[k]) / 2, py + ((isin(m) * 58) >> 15) - 6, &FONT_S, LAB[k], c);
+    }
+    cv_text(x0 + 5, 222, &FONT_S, ch, TE_G3);
+    cv_text(cx - text_w(&FONT_S, "VU") / 2, 212, &FONT_S, "VU", TE_G3);
+    for (d = 46; d > 0 && amp < VU_DB[d]; d--)                  /* the level, to the dB */
+        ;
+    if (amp < VU_DB[0])
+        str_cpy(b, "--", sizeof b);
+    else
+        fmt_int(b, d - 40);
+    str_cpy(b + str_len(b), "dB", 3);
+    cv_text(x0 + 107 - text_w(&FONT_S, b), 222, &FONT_S, b, amp >= VU_REF ? TE_RED : TE_G4);
+    if (lamp)
+        vis_ellipse(x0 + 102, 186, 3, 3, TE_RED);
+    else
+        vis_circle(x0 + 102, 186, 3, OP_PUR_D);
+    pos = clamp((amp * 1000 / VU_REF - 100) * 1000 / 1313, -20, 1040);   /* (the amplitude's own scale; a little past the ends) */
+    a = (uint32_t)(654 + pos * 228 / 1000) & 1023u;
+    cv_line(cx + ((icos(a) * 28) >> 15), py + ((isin(a) * 28) >> 15), cx + ((icos(a) * 74) >> 15), py + ((isin(a) * 74) >> 15), C_WHITE);
+    cv_line(cx + 1 + ((icos(a) * 28) >> 15), py + ((isin(a) * 28) >> 15), cx + 1 + ((icos(a) * 74) >> 15), py + ((isin(a) * 74) >> 15), C_WHITE);
+}
 static void vis_reel(void)
 {
     track_t *ts = TSEL;
     uint32_t s, x, y, i, playing = song.playing, slen = trk_len(ts), spos = ts->seq_idx % slen, ready = arrangement_ready();
     uint32_t bar = playing ? spos / 16u + 1u : 1u, a = playing ? (ui.frame * 12u) & 1023u : 0u;
-    int32_t done = playing ? (int32_t)(spos * 1000u / slen) : 0, sc = vs.scale ? vs.scale : 1, pack[2];
+    int32_t done = playing ? (int32_t)(spos * 1000u / slen) : 0, pack[2];
     uint16_t lit = playing ? C_WHITE : TE_G3;
     te_digit(8, 10, 20, 40, 4, bar / 10u, lit);                 /* the bar (a 1: a bar) */
     te_digit(34, 10, bar % 10u == 1u ? 8 : 20, 40, 4, bar % 10u, lit);
@@ -576,32 +639,26 @@ static void vis_reel(void)
     cv_rect(107, 154, 26, 16, C_BLACK);
     op_box(107, 154, 26, 16, lit);
     op_box(108, 155, 24, 14, lit);
-    /* the stereo out (its peaks once a picture, at the top band) */
+    /* the VU meters (their needles moved once a picture, at the top band) */
     if (cv_oy == 0) {
         for (s = 0; s < 2u; s++) {
             const int16_t *w = s ? vis_r : vis_l;
-            int32_t pk = 0, v;
-            for (i = 0; i < VIS_FFT; i += 2u) {
-                v = w[i] < 0 ? -w[i] : w[i];
+            uint32_t q = 0, pk = 0, v;
+            int32_t rms;
+            for (i = 0; i < VIS_FFT; i++) {
+                int32_t t = w[i] >> 4;
+                q += (uint32_t)(t * t);
+                v = (uint32_t)(w[i] < 0 ? -w[i] : w[i]);
                 if (v > pk)
                     pk = v;
             }
-            reel_pk[s][reel_n] = (uint8_t)clamp(pk * 10 / sc, 0, 12);
+            rms = (int32_t)vu_sqrt(q / VIS_FFT) * 16;
+            vu_amp[s] += (rms - vu_amp[s]) * (rms > vu_amp[s] ? 3 : 1) / (rms > vu_amp[s] ? 10 : 6);
+            vu_lamp[s] = pk >= 31000u ? 12u : vu_lamp[s] ? (uint8_t)(vu_lamp[s] - 1u) : 0u;
         }
-        reel_n = (uint8_t)((reel_n + 1u) % 111u);
     }
-    for (s = 0; s < 2u; s++) {
-        int32_t cy = s ? 222 : 194;
-        uint16_t c = s ? TE_COL[3] : TE_COL[0], cd = mix565(c, C_BLACK, 150);
-        cv_text(3, cy - 6, &FONT_S, s ? "R" : "L", TE_G3);
-        for (i = 0; i < 111u; i++) {
-            int32_t h = reel_pk[s][(reel_n + 110u - i) % 111u];
-            uint16_t e = i ? c : C_WHITE;                       /* (the newest, white: just past the head) */
-            cv_rect(14 + (int32_t)i * 2, cy - h, 2, 2 * h + 1, cd);
-            cv_rect(14 + (int32_t)i * 2, cy - h, 2, 1, e), cv_rect(14 + (int32_t)i * 2, cy + h, 2, 1, e);
-        }
-        cv_rect(14, cy, 222, 1, OP_PUR_D);
-    }
+    vu_meter(4, "L", vu_amp[0], vu_lamp[0] != 0);
+    vu_meter(124, "R", vu_amp[1], vu_lamp[1] != 0);
 }
 
 /* the visualiser, every other frame: the update, then both bands */
