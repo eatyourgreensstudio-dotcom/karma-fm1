@@ -476,6 +476,7 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
         M->e2 = px_clamp(e2, -(1 << 30), 1 << 30);
         M->rng = rs;
     }
+#if defined(PX_MODES_FIXED)
     for (i = 0; i < n; i++) {                            /* the modes, band-pass */
         int64_t acc = 0;
         const px_mode_t *c = B->m;
@@ -491,6 +492,37 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
         }
         out[i] = (int32_t)(acc >> 30);                   /* Q28 * Q22 -> Q20 */
     }
+#else
+    {   /* the modes in float (2026-10-28: the FM-1's FPU; in 64-bit integers each multiply took several instructions and
+         * a busy ELEMENTS pattern overloaded the downbeat): the states in Q22 units as floats for the block, back to
+         * integers after it; the coefficients scaled to plain numbers */
+        float fg[PX_NMODE], frpg[PX_NMODE], fgh[PX_NMODE], fa[PX_NMODE], s1[PX_NMODE], s2[PX_NMODE];
+        for (k = 0; k < nm; k++) {
+            fg[k] = (float)B->m[k].g * (1.0f / 268435456.0f);
+            frpg[k] = (float)B->m[k].rpg * (1.0f / 268435456.0f);
+            fgh[k] = (float)B->m[k].gh * (1.0f / 1073741824.0f);
+            fa[k] = (float)B->m[k].a * (1.0f / 268435456.0f * 0.25f);   /* (Q28 x Q22 >> 30: a quarter) */
+            s1[k] = (float)M->s[k][0];
+            s2[k] = (float)M->s[k][1];
+        }
+        for (i = 0; i < n; i++) {
+            float acc = 0.0f, xi = (float)x[i];
+            for (k = 0; k < nm; k++) {
+                float t = fgh[k] * (xi - frpg[k] * s1[k] - s2[k]), v = s1[k] + t;
+                s1[k] = v + t;
+                s2[k] += 2.0f * fg[k] * v;
+                acc += fa[k] * v;
+            }
+            out[i] = (int32_t)acc;
+        }
+        for (k = 0; k < nm; k++) {
+            float a1 = s1[k] > 1.0e9f ? 1.0e9f : s1[k] < -1.0e9f ? -1.0e9f : s1[k];   /* (in int32's range) */
+            float a2 = s2[k] > 1.0e9f ? 1.0e9f : s2[k] < -1.0e9f ? -1.0e9f : s2[k];
+            M->s[k][0] = (int32_t)(a1 < 0.0f ? a1 - 0.5f : a1 + 0.5f);
+            M->s[k][1] = (int32_t)(a2 < 0.0f ? a2 - 0.5f : a2 + 0.5f);
+        }
+    }
+#endif
 }
 
 /* ------------------------------------------------------- Bow and blow --- */
