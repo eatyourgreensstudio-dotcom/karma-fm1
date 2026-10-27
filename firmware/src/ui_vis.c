@@ -594,46 +594,57 @@ static void vis_limb(int32_t x0, int32_t y0, int32_t a, int32_t len, int32_t r0,
     *ex = (x1 + 8) >> 4, *ey = (y1 + 8) >> 4;
     vis_ellipse(*ex, *ey, r1, r1, col);                         /* (the joint, round) */
 }
-/* one move's pose at phase f (0..1023 over its two beats) and energy e (0..1000) */
-static void dz_move(uint32_t mv, int32_t f, int32_t bt, int32_t e, dz_pose_t *p)
+/* one move's pose: f the phase over two beats (0..1023), m over the move's two bars (0..2047), e the energy (0..1000).
+ * Slow and sensual (2026-10-27, Ariel: a club dancer's moves; fully clothed, nothing explicit) */
+static void dz_move(uint32_t mv, int32_t f, int32_t m, int32_t bt, int32_t e, dz_pose_t *p)
 {
-    int32_t sw = isin((uint32_t)f), cw = icos((uint32_t)f), k, side;
+    int32_t sw = isin((uint32_t)f), cw = icos((uint32_t)f), k, side, a;
     memset(p, 0, sizeof *p);
-    p->hx = (sw * 11 * e / 1000) >> 15;                         /* the hips sway (a side a beat) ... */
-    p->hy = (cw * 3 * e / 1000) >> 15;                          /* ... and roll */
-    p->tilt = (sw * 22) >> 15;
-    p->cx = -(sw * 5) >> 15;                                    /* the chest against them */
-    p->hair = -(sw * 14) >> 15;
-    p->hd = -(sw * 3) >> 15;
+    p->hx = (sw * 13 * e / 1000) >> 15;                         /* the hips: a slow figure, a side a beat ... */
+    p->hy = (cw * 4 * e / 1000) >> 15;                          /* ... and round */
+    p->tilt = (sw * 28) >> 15;
+    p->cx = -(sw * 6) >> 15;                                    /* the chest against them */
+    p->hair = -(sw * 10) >> 15;
+    p->hd = -(sw * 4) >> 15;
     for (side = 0; side < 2; side++) {
-        int32_t on = (side ? sw : -sw) > 0;                     /* her weight on this leg */
-        p->th[side] = on ? 14 : 34 + ((sw < 0 ? -sw : sw) * 30 >> 15);
-        p->kn[side] = on ? 4 : 50 + bt * 20 / 1000;
+        int32_t on = (side ? sw : -sw) > 0;                     /* her weight on this leg, the other knee in */
+        p->th[side] = on ? 12 : 30 + ((sw < 0 ? -sw : sw) * 26 >> 15);
+        p->kn[side] = on ? 6 : 60 + bt * 30 / 1000;
     }
     switch (mv) {
-    case 0:                                                     /* a hip roll, a hand on her head, the other on her hip */
-        p->hy = (cw * 5 * e / 1000) >> 15;
-        p->up[1] = 430, p->el[1] = 210;
-        p->up[0] = 80, p->el[0] = -300;
-        break;
-    case 1:                                                     /* a body wave, the wrists crossed over her head */
-        p->cx = (isin((uint32_t)(f - 256)) * 9 * e / 1000) >> 15;   /* (the wave: the chest after the hips) */
-        p->hd = (isin((uint32_t)(f - 512)) * 6 * e / 1000) >> 15;
-        for (side = 0; side < 2; side++)
-            p->up[side] = 470 + ((isin((uint32_t)(f + side * 512)) * 25) >> 15), p->el[side] = 95;
-        break;
-    case 2:                                                     /* the hands slide up her body and open out */
-        k = f < 512 ? f : 1024 - f;                             /* (0 .. 512 .. 0) */
-        for (side = 0; side < 2; side++) {
-            p->up[side] = 60 + k * 420 / 512;
-            p->el[side] = k < 256 ? -260 + k * 260 / 256 : (k - 256) * 120 / 256;
+    case 0:                                                     /* hip circles, her hands down her body: from her */
+        a = m < 1024 ? m : 2048 - m;                            /* hair to her hips and back up, over the two bars */
+        for (side = 0; side < 2; side++) {                      /* (close to her body: hair, chest, hips) */
+            if (a < 512)
+                p->up[side] = 440 - a * 300 / 512, p->el[side] = 230 + a * 60 / 512;     /* (the hair .. the chest) */
+            else
+                p->up[side] = 140 - (a - 512) * 70 / 512, p->el[side] = 290 - (a - 512) * 590 / 512;   /* (.. the hips) */
         }
+        p->hy = (cw * 6 * e / 1000) >> 15;
         break;
-    default:                                                    /* a hair toss, a hand in her hair, the other reaching */
-        p->hair = (sw * 13) >> 15;
-        p->hd = (sw * 6) >> 15;
-        p->up[1] = 450, p->el[1] = 240;
-        p->up[0] = 180 + ((cw * 60) >> 15), p->el[0] = 40;
+    case 1:                                                     /* a slow drop: down over a bar, knees wide, back up */
+        k = isin((uint32_t)(m / 4)) < 0 ? 0 : isin((uint32_t)(m / 4));   /* (0 .. 1 .. 0 over the move) */
+        k = k * e / 32767;
+        p->hy += k * 30 / 1000;
+        for (side = 0; side < 2; side++) {
+            p->th[side] = 26 + k * 34 / 1000;                    /* (knees forward, not out) */
+            p->kn[side] = 30 + k * 110 / 1000;
+        }
+        p->up[1] = 460, p->el[1] = 250;                          /* a hand behind her head */
+        p->up[0] = 60 + k * 20 / 1000, p->el[0] = -40 - k * 60 / 1000;   /* the other down her thigh */
+        p->hx /= 2;
+        break;
+    case 2:                                                     /* a hair flip, a hand behind her head, a hip pop */
+        p->hair = (sw * 16) >> 15;                              /* on the beat */
+        p->hd = (sw * 7) >> 15;
+        p->hx += bt * 6 / 1000 * (sw > 0 ? 1 : -1);
+        p->up[1] = 460, p->el[1] = 260;
+        p->up[0] = 120 + ((cw * 50) >> 15), p->el[0] = -120;
+        break;
+    default:                                                    /* the arms crossed high, the hips popping side to side */
+        p->hx += bt * 7 / 1000 * (sw > 0 ? 1 : -1);
+        for (side = 0; side < 2; side++)
+            p->up[side] = 470 + ((isin((uint32_t)(f + side * 512)) * 15) >> 15), p->el[side] = 165;   /* (wrists crossed) */
         break;
     }
     for (side = 0; side < 2; side++)                            /* (quieter: smaller moves) */
@@ -704,9 +715,9 @@ static void vis_dancer(void)
     dz_pose_t p, q;
     int32_t px[4], py[4];
     bt = bt > 0 ? bt * 1000 / 32767 : 0;                        /* (the beat's push, for the knees) */
-    dz_move(mv, f, bt, e, &p);
+    dz_move(mv, f, (int32_t)in, bt, e, &p);
     if (in < 256u) {                                            /* the first beat of a move: from the last one */
-        dz_move((mv + 3u) & 3u, f, bt, e, &q);
+        dz_move((mv + 3u) & 3u, f, 2047, bt, e, &q);
         dz_mix(&q, &p, (int32_t)in);
         p = q;
     }
@@ -720,23 +731,32 @@ static void vis_dancer(void)
     p.tilt += (p.tilt > 0 ? kick : -kick) * 2;
     if (e > 750)
         p.hy += ((isin(bq * 8u) < 0 ? -isin(bq * 8u) : isin(bq * 8u)) * (e - 750) / 250) >> 14;   /* (eighths, up to 2 px) */
-    /* the light behind her (2026-10-27, Ariel: backlit, not a beam): a glow from soft dark at the edges to a bright
-     * lavender white behind her body, brighter on the kick and the louder the music; a pool of it on the floor */
+    /* the light behind her (2026-10-27, Ariel: backlit, and the light changing as she moves): it follows her hips,
+     * rises and opens as her arms go up, takes each move's tint (lavender, blue-violet, magenta-pink, warm orange,
+     * blending at the change), swells with the music and flashes on the kick; a pool of it on the floor */
     {
-        int32_t i, lift = vs.kick / 4 + e / 20;                 /* (0 .. ~110) */
+        static const uint16_t TINT[4] = {RGB(206, 198, 240), RGB(150, 170, 255), RGB(236, 150, 214), RGB(255, 186, 150)};
+        int32_t i, arms = (p.up[0] + p.up[1]) / 2, gx = 120 + p.hx * 3 / 2, gy = 118 - clamp(arms - 200, 0, 300) / 12;
+        int32_t lift = vs.kick / 4 + e / 20 + clamp(arms - 200, 0, 300) / 6;
+        uint16_t tint = in < 256u ? mix565(TINT[(mv + 3u) & 3u], TINT[mv], (int32_t)in) : TINT[mv];
         for (i = 0; i < 22; i++) {                              /* (22 rings, 5 px apart: no bands to see) */
-            int32_t r = 124 - i * 5, k = i * 11 + lift;         /* (brighter toward the middle) */
-            vis_ellipse(120, 112, r, r * 9 / 8, mix565(RGB(10, 9, 22), RGB(206, 198, 240), clamp(k * k / 256 + 4, 0, 256)));
+            int32_t r = 124 - i * 5, k = i * 11 + lift;
+            vis_ellipse(gx, gy, r, r * 9 / 8, mix565(RGB(10, 9, 22), tint, clamp(k * k / 256 + 4, 0, 256)));
         }
-        vis_ellipse(120, 230, 76, 7, mix565(RGB(40, 36, 70), RGB(150, 140, 210), clamp(lift * 2, 0, 256)));
+        vis_ellipse(120, 230, 76, 7, mix565(RGB(40, 36, 70), tint, clamp(lift * 2, 0, 200)));
+        /* the rims: wider and brighter on the side she leans to, brighter with her arms up and the music */
+        {
+            int32_t lean = p.hx, bl = 60 + e / 5 + clamp(arms - 200, 0, 300) / 4;
+            rimb = mix565(RGB(30, 60, 140), RGB(110, 170, 255), clamp(bl + (lean < 0 ? -lean * 6 : 0), 0, 256));
+            rimo = mix565(RGB(130, 60, 30), RGB(255, 150, 90), clamp(bl + (lean > 0 ? lean * 6 : 0), 0, 256));
+            dz_draw(&p, -2 - (lean < -4), kick, rimb);
+            dz_draw(&p, 2 + (lean > 4), kick, rimo);
+        }
+        /* her body dark against it, catching a little of the light where it is brightest */
+        vis_g0 = 20, vis_g1 = 230;
+        vis_g0c = mix565(RGB(14, 12, 22), tint, clamp(lift / 6, 0, 40)), vis_g1c = RGB(26, 22, 42);
+        dz_draw(&p, 0, kick, VIS_GRAD);
     }
-    /* the rims (blue on her left, orange on her right), then her body, soft white to lavender */
-    rimb = mix565(RGB(30, 60, 140), RGB(90, 150, 255), 60 + e / 5);   /* the rims brighter the louder */
-    rimo = mix565(RGB(130, 60, 30), RGB(255, 140, 80), 60 + e / 5);
-    dz_draw(&p, -2, kick, rimb);
-    dz_draw(&p, 2, kick, rimo);
-    vis_g0 = 20, vis_g1 = 230, vis_g0c = RGB(14, 12, 22), vis_g1c = RGB(30, 26, 48);   /* her body: dark against it */
-    dz_draw(&p, 0, kick, VIS_GRAD);
 }
 
 /* the visualiser, every other frame: the update, then both bands */
