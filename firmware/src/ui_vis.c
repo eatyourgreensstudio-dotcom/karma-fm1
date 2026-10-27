@@ -718,7 +718,7 @@ static void vis_select(int32_t s)
  * tracks' bars sweep in, the version, then it fades into the UI; ~2 s at the UI's frame rate, a button or a key skips
  * it. boot_t: started at 0 by the boot (main.c, the browser simulator's web_boot); 0xFFFF: none (the host tests) */
 static uint16_t boot_t = 0xFFFFu;
-#define BOOT_END 116u
+#define BOOT_END 145u                                   /* (~2.5 s; 2026-10-28: half a second longer, the logo screen gone) */
 static int boot_draw(void)
 {
     const uint32_t *ROW = KARMA_ROW;
@@ -733,7 +733,7 @@ static int boot_draw(void)
         ui.force = 1;
         return 0;
     }
-    fade = t > 96u ? (int32_t)(t - 96u) * 256 / 20 : 0;   /* (the last 20 frames: to black) */
+    fade = t > BOOT_END - 20u ? (int32_t)(t - (BOOT_END - 20u)) * 256 / 20 : 0;   /* (the last 20 frames: to black) */
     for (pass = 0; pass < 2u; pass++) {
         cv_begin(240, 120, C_BLACK);
         cv_oy = -(int32_t)(pass * 120u);

@@ -730,6 +730,7 @@ static void layer_unlock(void)
 /* #39 of Felucca: a layer that showed lets go; KNOB 1..4 belong to no page for LY_QUIET_MS after (the knob still
  * turning as the button comes up is the layer's, not the page's under it). fm1_ms | 1, 0 = none */
 #define LY_QUIET_MS 250u
+#define GLO_KEEP_MS 700u                                  /* GLO held this long, untouched, then let go: the mixer kept */
 static uint32_t ly_quiet_t;
 static int ly_quiet(void)
 {
@@ -764,6 +765,11 @@ static int layers_input(uint32_t note_edges, uint32_t *pressed, uint32_t home)
             used[l] = 1;                                  /* a key while held: not a tap */
         if (!d && down[l] && !used[l] && now - t0[l] < TAP_MS && !ui.menu && !ui.confirm)
             layer_tap(l);
+        if (!d && down[l] && !used[l] && l == LY_MIX && now - t0[l] >= GLO_KEEP_MS && ly_lock == LY_PLAY && !ui.menu && !ui.confirm) {
+            ly_lock = LY_MIX;                             /* GLO held a while, nothing touched: the mixer stays (2026-10-28,
+                                                           * Ariel); any other button, or GLO again, lets it go */
+            ui.force = 1;
+        }
         if (!d && down[l] && l == LY_SONG)
             chain_release();                              /* SAVE let go: the section taps of the hold (ui_layers.c) */
         down[l] = (uint8_t)d;

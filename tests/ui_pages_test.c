@@ -346,6 +346,17 @@ int main(int argc, char **argv)
     release(B_GLO);
     fm1_in.notes = 1u << key_of_white(8); frame();     /* (no layer: a plain key, no fill) */
     check(fill_held == 0u, "key 9 without GLO: no fill");
+    fm1_in.notes = 0; frames(2);
+    press(B_GLO); frames(45); release(B_GLO); frames(2);           /* (2026-10-28) ~0.7 s, nothing touched */
+    check(ui.layer == LY_MIX && ly_lock == LY_MIX, "GLO held 0.7 s, untouched, let go: the mixer stays");
+    key(0); check(trk[0].p[P_MUTE] == 1 && ui.layer == LY_MIX, "... its keys still mute (track 1)");
+    key(0); check(!trk[0].p[P_MUTE], "... and unmute");
+    tap(B_GLO); frames(2);
+    check(ui.layer == LY_PLAY && ly_lock == LY_PLAY, "... GLO again: it goes (and no GLO pages open)");
+    press(B_GLO); frames(45); encs[panel.enc[EN_K1]] = 1; frame(); release(B_GLO); frames(2);
+    check(ly_lock == LY_PLAY && ui.layer == LY_PLAY, "GLO held with a knob turned: it goes on release, as before");
+    press(B_GLO); frames(32); release(B_GLO); frames(2);
+    check(ly_lock == LY_PLAY && ui.layer == LY_PLAY, "GLO held 0.5 s: a look, it goes on release");
     fm1_in.notes = 0; frame();
     trk[0].p[P_CHORD] = 0;
 
@@ -972,7 +983,7 @@ int main(int argc, char **argv)
         { int16_t bpm = song.g[G_BPM], lv = trk[0].p[P_LEVEL];
           encs[panel.enc[EN_K2]] = 5; frame();
           check(trk[0].p[P_LEVEL] == lv && song.g[G_BPM] == bpm, "visualiser: KNOB 2 (the hidden TRACKS screen) edits nothing, SELECT is not the tempo"); }
-        press(B_GLO); frames(40);                  /* (held past a tap) */
+        press(B_GLO); frames(32);                  /* (held past a tap, not long enough to keep it) */
         check(ui.layer == LY_MIX, "visualiser: a layer held shows its screen");
         release(B_GLO); frames(4);
         check(vis_shown(), "visualiser: ... and it comes back");

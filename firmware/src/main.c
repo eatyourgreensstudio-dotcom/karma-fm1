@@ -141,8 +141,9 @@ static void fm1_main(void)
 #endif
     settings_init();
     lcd_init();
-    sloop_splash();                                     /* the KARMA logo (splash.c), while it starts */
-    boot_t = 0;                                         /* then the boot animation (ui_vis.c), the UI's first ~2 s */
+    lcd_fill(0, 0, 240, 240, C_BLACK);                  /* (no logo screen first: 2026-10-28, Ariel; the credits are in
+                                                         * MENU > ABOUT) */
+    boot_t = 0;                                         /* the boot animation (ui_vis.c), the UI's first ~2.5 s */
     if (felucca_dbg.magic != DBG_MAGIC) {
         memset(&felucca_dbg, 0, sizeof felucca_dbg);
         felucca_dbg.magic = DBG_MAGIC;
