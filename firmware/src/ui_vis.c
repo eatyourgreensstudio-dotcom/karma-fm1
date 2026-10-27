@@ -566,9 +566,9 @@ static void vis_wires(void)
 }
 /* the logo (tools/gen_logo.py at 0.86, centred on 120, 112), alive: the dial is the master, the sail's four
  * bands the tracks (growing with their level, flashing on a note), the boat rocks on the master's wave */
-/* DANCER (KARMA 3.0): an original dancer, a silhouette on a stage, in KARMA's colours: a soft spotlight and a glow on
- * the floor behind her, her body in a soft white going lavender to the feet, a rim of light on her edges (blue on one
- * side, orange on the other, as if lit from the stage). She dances in flowing moves (our own choreography, after the
+/* DANCER (KARMA 3.0): an original dancer, a silhouette on a stage, in KARMA's colours: lit from behind (a glow from
+ * dark at the edges to a bright lavender white behind her, a pool of it on the floor), her body dark against it, a
+ * rim of light on her edges (blue on one side, orange on the other). She dances in flowing moves (our own choreography, after the
  * style of a slow, sensual stage dance): a hip roll with a hand on her head, a body wave with her wrists crossed over
  * her head, her hands sliding up her body and opening out, a hair toss with a hand in her hair; one move each two
  * bars, each blending into the next over a beat; the knees give on the beat; wider the louder the mix. The pose is
@@ -720,17 +720,22 @@ static void vis_dancer(void)
     p.tilt += (p.tilt > 0 ? kick : -kick) * 2;
     if (e > 750)
         p.hy += ((isin(bq * 8u) < 0 ? -isin(bq * 8u) : isin(bq * 8u)) * (e - 750) / 250) >> 14;   /* (eighths, up to 2 px) */
-    /* the stage: a soft spotlight from above, a glow on the floor */
-    px[0] = 104 * 16, py[0] = 0, px[1] = 136 * 16, py[1] = 0, px[2] = 200 * 16, py[2] = 232 * 16, px[3] = 40 * 16, py[3] = 232 * 16;
-    vis_poly(px, py, 4, mix565(RGB(14, 13, 26), RGB(46, 40, 86), vs.kick / 2));   /* (it flashes on the kick) */
-    vis_ellipse(120, 230, 70, 7, mix565(RGB(30, 27, 52), RGB(80, 70, 140), vs.kick / 2));
-    vis_ellipse(120 + p.hx / 2, 230, 44, 4, RGB(52, 46, 86));
+    /* the light behind her (2026-10-27, Ariel: backlit, not a beam): a glow from soft dark at the edges to a bright
+     * lavender white behind her body, brighter on the kick and the louder the music; a pool of it on the floor */
+    {
+        int32_t i, lift = vs.kick / 4 + e / 20;                 /* (0 .. ~110) */
+        for (i = 0; i < 22; i++) {                              /* (22 rings, 5 px apart: no bands to see) */
+            int32_t r = 124 - i * 5, k = i * 11 + lift;         /* (brighter toward the middle) */
+            vis_ellipse(120, 112, r, r * 9 / 8, mix565(RGB(10, 9, 22), RGB(206, 198, 240), clamp(k * k / 256 + 4, 0, 256)));
+        }
+        vis_ellipse(120, 230, 76, 7, mix565(RGB(40, 36, 70), RGB(150, 140, 210), clamp(lift * 2, 0, 256)));
+    }
     /* the rims (blue on her left, orange on her right), then her body, soft white to lavender */
-    rimb = mix565(RGB(24, 44, 100), RGB(70, 130, 255), 60 + e / 5);   /* the rims brighter the louder */
-    rimo = mix565(RGB(100, 46, 26), RGB(255, 130, 70), 60 + e / 5);
-    dz_draw(&p, -3, kick, rimb);
-    dz_draw(&p, 3, kick, rimo);
-    vis_g0 = 20, vis_g1 = 230, vis_g0c = RGB(240, 238, 248), vis_g1c = RGB(150, 140, 210);
+    rimb = mix565(RGB(30, 60, 140), RGB(90, 150, 255), 60 + e / 5);   /* the rims brighter the louder */
+    rimo = mix565(RGB(130, 60, 30), RGB(255, 140, 80), 60 + e / 5);
+    dz_draw(&p, -2, kick, rimb);
+    dz_draw(&p, 2, kick, rimo);
+    vis_g0 = 20, vis_g1 = 230, vis_g0c = RGB(14, 12, 22), vis_g1c = RGB(30, 26, 48);   /* her body: dark against it */
     dz_draw(&p, 0, kick, VIS_GRAD);
 }
 
