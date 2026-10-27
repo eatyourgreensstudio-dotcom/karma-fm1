@@ -275,7 +275,7 @@ static void t_fuzz(uint32_t nframes)
             mix_block(o, CTL);
             for (i = 0; i < CTL * 2u; i++) if ((o[i] < 0 ? -o[i] : o[i]) > q) q = o[i] < 0 ? -o[i] : o[i];
         }
-        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, visualiser styles seen %u/12, chords %u, strum changes %u\n",
+        printf("fuzz: %u frames (%.1f min), peak %d, tail %d, visualiser styles seen %u/11, chords %u, strum changes %u\n",
                nf, nf * 16.0 / 60000.0, peak, q, (unsigned)__builtin_popcount(vis_seen), mods, strums);
         scheck(q < 64, "end: silence after stop");
     }

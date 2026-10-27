@@ -102,13 +102,13 @@ static uint8_t usb_stems_set;                   /* menu USB AUDIO = STEMS: the 6
 #ifndef USB_STEMS_NOW
 #define USB_STEMS_NOW 0                         /* (a build without usb.c: the host tests of the UI) */
 #endif
-static uint8_t vis_style;                       /* the visualiser's style, 0..11 (ui_vis.c) */
+static uint8_t vis_style;                       /* the visualiser's style, 0..10 (ui_vis.c) */
 static uint32_t lights_word(void)
 {
     return (uint32_t)lights_lvl | (uint32_t)lights_keys << 4 | (uint32_t)(lights_notes != 0u) << 8 |
            (uint32_t)(rec_tempo != 0u) << 9 | (uint32_t)(rec_count != 0u) << 10 | (uint32_t)(usb_full != 0u) << 11 |
            (uint32_t)(lights_sync % 3u) << 12 | (uint32_t)(lights_mout != 0u) << 14 | (uint32_t)(lights_min == 1u) << 15 |
-           (uint32_t)(usb_serial != 0u) << 16 | (uint32_t)(vis_style % 12u) << 17 |
+           (uint32_t)(usb_serial != 0u) << 16 | (uint32_t)(vis_style % 11u) << 17 |
            (uint32_t)(lights_min >= 2u && lights_min <= 17u ? lights_min - 1u : 0u) << 21 |  /* 2.6: CH n (n 1..16; 0 none) */
            (uint32_t)((midi_knobs ^ 4u) & 7u) << 26 |                                  /* KNOBS (2026-10-20; 0: PANEL) */
            (uint32_t)(usb_stems_set != 0u) << 29;                                      /* USB AUDIO = STEMS (KARMA 3.0) */
@@ -133,7 +133,7 @@ static void lights_from_word(uint32_t w)
     usb_stems_set = (uint8_t)((w >> 29) & 1u);
     if (usb_stems_set)
         usb_full = 0;
-    vis_style = (uint8_t)(((w >> 17) & 15u) % 12u);   /* the visualiser (ui_vis.c); 0 in 2.3 = OSCILLOSCOPE */     /* menu USB SERIAL (usb.c usb_cdc_on, at the next start); 0 in 2.3 = OFF */
+    vis_style = (uint8_t)(((w >> 17) & 15u) % 11u);   /* the visualiser (ui_vis.c); 0 in 2.3 = OSCILLOSCOPE */     /* menu USB SERIAL (usb.c usb_cdc_on, at the next start); 0 in 2.3 = OFF */
 }
 
 static void settings_save(void);              /* project.c: flash copy (FELUCCA_FLASH) */
