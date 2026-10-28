@@ -38,7 +38,8 @@ See [BUILDING.md](BUILDING.md): the firmware (`sh build.sh`, JieLi clang in Dock
 
 KARMA is by Ariel Muchnik. It is a fork of [SLOOP](https://github.com/isod89/sloop-fm1) by isod89, based on
 [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita, Hügelton Instruments. It uses code from
-[X0X](https://github.com/charlesvestal/fm1-x0x) (Charles Vestal), [FM-106](https://github.com/PatttF/fm-106) (PatttF),
+[X0X](https://github.com/charlesvestal/fm1-x0x) (Charles Vestal), [FM-106](https://github.com/PatttF/fm-106) (PatttF), the dual-core
+audio of [Melodee](https://github.com/keremimo/melodee) (Kerem Kilic),
 Mutable Instruments' [Plaits, Elements, Clouds and Grids](https://github.com/pichenettes/eurorack) (Émilie Gillet), the drum
 voices of the LXR-02 firmware (Erica Synths, GPL-3.0-only) and
 ideas and code from [JIANT FM](https://github.com/juanjiant-bit/JIANT) (Juan Jiant). Details: [LICENSING.md](LICENSING.md).

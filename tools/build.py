@@ -388,8 +388,8 @@ def main():
     (OUT / name).write_bytes(pkg)
     if not a.release:               # the same package by the firmware's name (felucca.fwsc stays for the tests/tools)
         karma = "karma-rxclock.fwsc" if os.environ.get("FM1_AUDIO_RX_CLOCK", "0") not in ("", "0") else "karma.fwsc"
-        if os.environ.get("KARMA_DUAL_CORE", "0") not in ("", "0"):
-            karma = karma.replace(".fwsc", "-dual.fwsc")   # (the dual-core build: its own name)
+        if os.environ.get("KARMA_DUAL_CORE", "") == "0":
+            karma = karma.replace(".fwsc", "-single.fwsc")   # (one core: its own name; dual core is the default)
         (OUT / karma).write_bytes(pkg)
         print(f"package  {OUT / karma}  (the same: flash this one)")
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"

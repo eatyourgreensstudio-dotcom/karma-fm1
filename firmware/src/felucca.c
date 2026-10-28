@@ -4,8 +4,9 @@
 #include <stdint.h>
 #define PR_WAVES_FROM_PLX 1      /* PLAITS WAVE (prism_dsp.c) reads Plaits' own 50 KB wavetable: one copy (plx.cc) */
 #ifndef KARMA_DUAL_CORE                  /* (before the HAL: fm1_sys.h holds CPU1 at every reset with it) */
-#define KARMA_DUAL_CORE 0        /* CPU1 renders tracks 2 and 3 (fx.c mix_block; the worker after Melodee): build.sh
-                                  * with KARMA_DUAL_CORE=1 -> build/karma-dual.fwsc */
+#define KARMA_DUAL_CORE 1        /* CPU1 renders tracks 2 and 3 (fx.c mix_block; the worker after Melodee). On Ariel's FM-1
+                                  * 2026-10-28: clean where one core overloaded. KARMA_DUAL_CORE=0 build.sh -> one core,
+                                  * build/karma-single.fwsc (an FM-1 whose CPU1 misbehaves; it also retires itself) */
 #endif
 #include "fm1_time.h"
 #include "fm1_sys.h"

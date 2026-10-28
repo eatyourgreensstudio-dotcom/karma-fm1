@@ -27,6 +27,9 @@ _start:
 
 /* CPU1 entry (KARMA_DUAL_CORE; after Melodee / FM-106, as cpu.a/startup.S.o): install separate supervisor / user
  * stacks, then return from the startup interrupt into the RAM polling loop. No interrupt is enabled on this core. */
+#ifndef KARMA_DUAL_CORE
+#define KARMA_DUAL_CORE 1	/* (as felucca.c: the default) */
+#endif
 #if KARMA_DUAL_CORE
 	.section .text.core1,"ax",@progbits
 	.globl fm1_core1_start
