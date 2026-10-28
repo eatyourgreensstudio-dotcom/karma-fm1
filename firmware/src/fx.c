@@ -672,6 +672,9 @@ static uint32_t w_n, w_job;                     /* the block's length, the track
 static uint32_t w_mask = 6u;                    /* tracks 2 and 3 to start */
 static uint32_t core_cost[NPART + 1];           /* ticks x 8: the three parts, the drums */
 static inline void cost_put(uint32_t k, uint32_t ticks) { core_cost[k] += ticks - (core_cost[k] >> 3); }
+static int32_t stem_buf[NTRK][CTL];            /* (below: USB STEMS) */
+static uint8_t fx_stems;
+static int32_t stem_pre1[CTL];                  /* CPU1's own (stem_take's is CPU0's) */
 static void core1_parts(void *ctx)
 {
     uint32_t i, k, n = w_n, m = w_job, t0;
@@ -681,7 +684,13 @@ static void core1_parts(void *ctx)
     for (k = 0; k < NPART; k++)
         if ((m >> k) & 1u) {
             t0 = fm1_ticks();
+            if (fx_stems)                       /* USB STEMS: what this part adds to CPU1's bus, as stem_take */
+                for (i = 0; i < n; i++)
+                    stem_pre1[i] = w_l[i] + w_r[i];
             mix_part_to(&trk[k], n, &BUS1);
+            if (fx_stems)
+                for (i = 0; i < n; i++)
+                    stem_buf[k][i] = (w_l[i] + w_r[i] - stem_pre1[i]) >> 1;
             cost_put(k, fm1_ticks() - t0);
         }
 }
@@ -1150,7 +1159,7 @@ static void mix_block(int32_t *out, uint32_t n)
 #if KARMA_DUAL_CORE
     int w_on = 0;
     audio_worker_check();                               /* (a CPU1 that faulted or misread: retired, one core) */
-    if (!fx_stems && n <= CTL && w_mask) {              /* (USB STEMS: each part's own stem, one core) */
+    if (n <= CTL && w_mask) {                           /* (USB STEMS too: each core takes its parts' stems) */
         w_n = n;
         w_job = w_mask;
         w_on = audio_worker_submit(core1_parts, 0);
@@ -1159,7 +1168,11 @@ static void mix_block(int32_t *out, uint32_t n)
         for (i = 0; i < NPART; i++)                     /* CPU0's parts, measured as CPU1's are */
             if (!((w_job >> i) & 1u)) {
                 uint32_t t0 = PROF_NOW();
+                if (fx_stems)
+                    stem_take(i, n, 0);
                 mix_part(&trk[i], n);
+                if (fx_stems)
+                    stem_take(i, n, 1);
                 cost_put(i, PROF_NOW() - t0);
             }
         PROF(PF_T1);
