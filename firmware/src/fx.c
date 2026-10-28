@@ -658,6 +658,8 @@ static void mix_part_to(track_t *t, uint32_t n, const mixbus_t *o)
     memcpy(t->p, o->pnew, sizeof pnew0);
 }
 static void mix_part(track_t *t, uint32_t n) { mix_part_to(t, n, &BUS0); }
+#define STEM_SH 3                               /* a part's stem: (L + R) / 2, 12 dB down (2026-10-28, Ariel: they came hot;
+                                                 * measured: drums and track 1 at full scale, the drums clipping) */
 #if KARMA_DUAL_CORE
 /* CPU1's job (2026-10-28, Ariel: a busy section overloaded one core): tracks 2 and 3 (ELEMENTS, PLAITS) into buses of its
  * own while CPU0 renders track 1 and the drums; CPU0 joins before the effects and adds them. What the two share is read
@@ -690,7 +692,7 @@ static void core1_parts(void *ctx)
             mix_part_to(&trk[k], n, &BUS1);
             if (fx_stems)
                 for (i = 0; i < n; i++)
-                    stem_buf[k][i] = (w_l[i] + w_r[i] - stem_pre1[i]) >> 1;
+                    stem_buf[k][i] = (w_l[i] + w_r[i] - stem_pre1[i]) >> STEM_SH;
             cost_put(k, fm1_ticks() - t0);
         }
 }
@@ -1127,7 +1129,7 @@ static __attribute__((noinline)) void stem_take(uint32_t k, uint32_t n, int post
             stem_pre[i] = mix_l[i] + mix_r[i];
     else
         for (i = 0; i < n; i++)
-            stem_buf[k][i] = (mix_l[i] + mix_r[i] - stem_pre[i]) >> 1;
+            stem_buf[k][i] = (mix_l[i] + mix_r[i] - stem_pre[i]) >> STEM_SH;
 }
 
 /* where a block's time goes (2026-10-28: the FM-1 overloaded with HEX drums and three tracks): the timer's ticks summed
@@ -1257,7 +1259,7 @@ static void mix_block(int32_t *out, uint32_t n)
     PROF(PF_CLOUD);
     if (fx_stems)                                       /* ... what the buses, the CLOUD and TEXTURE added */
         for (i = 0; i < n; i++)
-            stem_fx[0][i] = mix_l[i] - stem_fx[0][i], stem_fx[1][i] = mix_r[i] - stem_fx[1][i];
+            stem_fx[0][i] = (mix_l[i] - stem_fx[0][i]) >> 2, stem_fx[1][i] = (mix_r[i] - stem_fx[1][i]) >> 2;   /* (12 dB down too) */
     dust_process(mix_l, mix_r, n);
     punch_process(mix_l, mix_r, n);
     djf_process(mix_l, mix_r, n);
