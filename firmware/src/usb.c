@@ -344,7 +344,8 @@ static const uint8_t STR1[] = {42, 3, 'H', 0, 0xFC, 0, 'g', 0, 'e', 0, 'l', 0, '
 static const uint8_t STR2[] = {30, 3, 'F', 0, 'e', 0, 'l', 0, 'u', 0, 'c', 0, 'c', 0, 'a', 0, ' ', 0, 'U', 0, 'p', 0,
                                'd', 0, 'a', 0, 't', 0, 'e', 0};
 #else
-static const uint8_t STR2[] = {16, 3, 'F', 0, 'e', 0, 'l', 0, 'u', 0, 'c', 0, 'c', 0, 'a', 0};
+static const uint8_t STR2[] = {22, 3, 'F', 0, 'M', 0, '-', 0, '1', 0, ' ', 0, 'K', 0, 'A', 0, 'R', 0, 'M', 0, 'A', 0};   /* the product: the MIDI port's and the audio device's name
+ * (KARMA, 2026-10-28: was "Felucca"; "FM-1" in it, as installers look for) */
 #endif
 
 static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)
