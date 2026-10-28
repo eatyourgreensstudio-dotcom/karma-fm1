@@ -205,6 +205,16 @@ static void con_status(void)
 #if FELUCCA_FLASH
     con_kv("flash", flash_ok);
 #endif
+#if KARMA_DUAL_CORE
+    con_kv("core1_online", audio_worker_online);         /* (KARMA_DUAL_CORE) CPU1: running jobs, the slowest, faults */
+    con_kv("core1_barred", fm1_core1_barred());
+    con_kv("core1_jobs", (int32_t)audio_worker.jobs);
+    con_kv("core1_max_job_us", (int32_t)(audio_worker.max_job_ticks / FM1_TICKS_PER_US));
+    con_kv("core1_max_wait_us", (int32_t)(audio_worker.max_wait_ticks / FM1_TICKS_PER_US));
+    con_kv("core1_timeouts", (int32_t)audio_worker.timeouts);
+    con_kv("core1_misreads", (int32_t)audio_worker.rejected);
+    con_kv("core1_faults", (int32_t)fm1_core1_fault.count);
+#endif
 }
 
 static void con_dbg(void)

@@ -80,6 +80,10 @@ static void fm1_fault(const fm1_crash_t *c)
 {
     char b[12];
     uint32_t t0;
+#if KARMA_DUAL_CORE
+    if (audio_worker_online)
+        fm1_core1_bar_set();                            /* (CPU0 crashed with CPU1 working: one core until power-off) */
+#endif
     fm1_audio_stop();
     lcd_fill(0, 0, 240, 240, RGB(160, 0, 0));
     draw_text_box(0, 8, 240, &FONT_S, "FELUCCA CRASH", C_WHITE, 1);
@@ -161,6 +165,11 @@ static void fm1_main(void)
     fm1_adc_init();
     panel_init();
     felucca_init();
+#if KARMA_DUAL_CORE
+    if (!fm1_core1_barred())                            /* (retired earlier this session: one core until power-off) */
+        fm1_multicore_start();                          /* CPU1 up: a bounded handshake, else one core */
+    fm1_guard_enable(FM1_GUARD_PC);                     /* (CPU1 boots through mask ROM: the PC limits after it) */
+#endif
     audio_init();
 #if FELUCCA_CDC
     usb_cdc_on = usb_serial;                            /* menu USB SERIAL (persist_boot read it): before USB starts */
@@ -184,13 +193,13 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
-    fm1_delay_ms(900);                                  /* (the logo stays a moment) */
-    lcd_fill(0, 0, 240, 240, C_BLACK);
-
-    healthy_since = fm1_ms;
+    healthy_since = fm1_ms;                             /* (no 0.9 s for a logo any more: the boot animation, 2026-10-28) */
     for (;;) {
         uint32_t m = fm1_ms;
         fm1_wdt_feed();
+#if KARMA_DUAL_CORE
+        fm1_core1_poll();                               /* (a worker retired: one core until power-off) */
+#endif
         usb_retry(fm1_ms);
         if ((uint32_t)(m - healthy_since) >= 30000u && bootguard.pending) {
             bootguard_clear(&bootguard);     /* 30 s of this boot, even if TIMER4 survived reset */
@@ -302,6 +311,7 @@ void fm1_cstart(void)
 {
     uint32_t *s, *d, p3, src, wdt, boot_mode;
     fm1_time_init();
+    fm1_core1_stop();                                   /* (KARMA_DUAL_CORE: CPU1 held before RAM is cleared) */
     fm1_reset_reason();
     p3 = fm1_boot.p3_rst;
     src = fm1_boot.rst_src;
@@ -323,7 +333,7 @@ void fm1_cstart(void)
     for (s = _rt_load, d = _rt_start; d < _rt_end; s++, d++)
         *d = *s;                                /* flash driver code that must run from RAM */
     fm1_mailbox_clear();
-    fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | FM1_GUARD_PC);
+    fm1_guard_enable(FM1_GUARD_STACK | FM1_GUARD_WRITE | FM1_GUARD_BUS | (KARMA_DUAL_CORE ? 0u : FM1_GUARD_PC));
     fm1_boot.p3_rst = (uint8_t)p3;
     fm1_boot.rst_src = src;
     fm1_boot.wdt_con = (uint8_t)wdt;

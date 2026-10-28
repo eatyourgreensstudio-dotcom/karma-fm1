@@ -219,14 +219,14 @@ def build_plx():
 def build_app():
     flags = [*CFLAGS, *FPU, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_CDC", "FELUCCA_UART",
-                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FM1_AUDIO_RX_CLOCK"):
+                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FM1_AUDIO_RX_CLOCK", "KARMA_DUAL_CORE"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')
-    tc_all(("cc", "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
+    tc_all(("cc", *[f for f in flags if f.startswith("-DKARMA_DUAL_CORE=")], "-c", FW / "crt0.S", "-o", OUT / "crt0.o"),
            ("cc", "-c", FW / "hal" / "fm1_vec.S", "-o", OUT / "fm1_vec.o"),
            ("cc", "-c", FW / "hal" / "fm1_isr.S", "-o", OUT / "fm1_isr.o"),
            ("cc", *flags, "-c", FW / "src" / "felucca.c", "-o", OUT / "felucca.o"))
@@ -270,7 +270,13 @@ def check(img, syms, dis, rt):
         errors.append(f"_start is not at {APP_XIP:#x}")
     if img[:4] != bytes.fromhex("04818000"):
         errors.append(f"image starts with {img[:4].hex()}, not the entry stub")
-    rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln)]
+    rt_calls, fn = [], ""
+    for ln in rt.splitlines():      # (KARMA_DUAL_CORE: CPU1's worker calls its jobs in XIP; no job runs while the
+        mf = re.match(r"^([A-Za-z_][A-Za-z0-9_.]*):$", ln)   # flash is written: audio_worker.h)
+        if mf:
+            fn = mf.group(1)
+        elif re.search(r"\bcall\b", ln) and fn not in ("audio_worker_loop", "fm1_core1_main"):
+            rt_calls.append(ln)
     if rt_calls:                    # RAM code runs with the flash off: no calls into XIP
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
@@ -382,6 +388,8 @@ def main():
     (OUT / name).write_bytes(pkg)
     if not a.release:               # the same package by the firmware's name (felucca.fwsc stays for the tests/tools)
         karma = "karma-rxclock.fwsc" if os.environ.get("FM1_AUDIO_RX_CLOCK", "0") not in ("", "0") else "karma.fwsc"
+        if os.environ.get("KARMA_DUAL_CORE", "0") not in ("", "0"):
+            karma = karma.replace(".fwsc", "-dual.fwsc")   # (the dual-core build: its own name)
         (OUT / karma).write_bytes(pkg)
         print(f"package  {OUT / karma}  (the same: flash this one)")
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"

@@ -106,12 +106,26 @@ static void fm1_reset_reason(void)
     fm1_boot.wdt_con = fm1_p33_read(FM1_P3_WDT_CON);
 }
 
+static inline void fm1_core1_stop(void);
+
 static void fm1_reboot(void)
 {
     __asm__ volatile("cli");
+    fm1_core1_stop();
     fm1_p33_or(FM1_P3_PR_PWR, 0x10);
     for (;;)
         ;
+}
+
+/* Stop CPU1 before handing RAM / XIP back to the bootloader (KARMA_DUAL_CORE: it may be running the audio worker).
+ * The SDK uses C1_CON bit 1 to hold the core and bit 3 to release it (after Melodee, Kerem Kilic, GPL-3.0-only) */
+static inline void fm1_core1_stop(void)
+{
+#if KARMA_DUAL_CORE
+    *(volatile uint32_t *)0x1EEE004u |= 2u;
+    *(volatile uint32_t *)0x1EEE004u &= ~8u;
+    __asm__ volatile("csync" ::: "memory");
+#endif
 }
 
 static void fm1_enter_uboot(void)
@@ -119,6 +133,7 @@ static void fm1_enter_uboot(void)
     static const char k[16] = "usb_update_mode";
     uint32_t i;
     __asm__ volatile("cli");
+    fm1_core1_stop();
     /* CPU0 write limits (fm1_guard.h) may cover the mailbox: drop them all */
     if (!(*(volatile uint32_t *)0x1EEE240u & 1u))
         *(volatile uint32_t *)0x1EEE240u = 0xE7u;
@@ -132,6 +147,8 @@ static void fm1_enter_uboot(void)
 
 FM1_INLINE void fm1_core_reset(void)
 {
+    __asm__ volatile("cli" ::: "memory");
+    fm1_core1_stop();
     FM1_PWR_CON |= 0x10u;
     for (;;)
         ;

@@ -52,6 +52,55 @@ fm1_crash_t fm1_crash __attribute__((section(".noinit")));
 extern const char fm1_fatal_stubs[];
 static void fm1_fault(const fm1_crash_t *c);   /* application: report, then reset */
 
+/* DBG_MSG sources by core (SDK cpu/wl82/debug.c): read/write MMU, PC and write limits, bus-invalid fetch/read/write */
+#define FM1_DBG_C1 ((1u << 6) | (1u << 8) | (1u << 10) | (1u << 11) | (7u << 16))
+#define FM1_DBG_C0 ((1u << 7) | (1u << 9) | (1u << 12) | (1u << 13) | (7u << 19))
+static inline uint32_t fm1_cnum(void) { uint32_t v; __asm__ volatile("%0 = cnum" : "=r"(v)); return v; }
+/* CPU1 faults (KARMA_DUAL_CORE; after Melodee by Kerem Kilic, GPL-3.0-only, keremimo/melodee#17: on some units CPU1
+ * misreads shared SRAM). CPU1 enables no interrupt, so the debug unit's errors about it raise the exception on CPU0,
+ * whose own state is intact: CPU1 is held, the fault recorded, the audio worker retires (audio_worker.h) and CPU0
+ * resumes. CPU1 can also take the exception itself: it records it and holds itself */
+static struct { volatile uint32_t count; uint32_t echoes, cpu, dbg, emu, pc, rets; } fm1_core1_fault;
+static int fm1_core1_fault_c(const uint32_t *f)   /* 1: handled, CPU0 resumes */
+{
+#if KARMA_DUAL_CORE
+    uint32_t cpu = fm1_cnum(), dbg = FM1_DBG_MSG, was;
+    if (!cpu && (dbg & FM1_DBG_C0))
+        return 0;                                   /* CPU0's own */
+    if (!cpu && !(dbg & FM1_DBG_C1)) {              /* CPU1 took it too and cleared DBG_MSG first: once per CPU1 fault */
+        if (fm1_core1_fault.echoes >= fm1_core1_fault.count)
+            return 0;                               /* else CPU0's own */
+        fm1_core1_fault.echoes++;
+        return 1;
+    }
+    if (!cpu && fm1_core1_fault.count >= 16u)
+        return 0;                                   /* a hold that did not take */
+    if (!cpu)
+        fm1_core1_stop();
+    fm1_core1_fault.cpu = cpu;
+    fm1_core1_fault.dbg = dbg;
+    fm1_core1_fault.emu = *(volatile uint32_t *)(cpu ? 0x1EEF2D4u : 0x1EEF0D4u);   /* the faulting core's EMU_MSG */
+    fm1_core1_fault.pc = f[16];
+    fm1_core1_fault.rets = f[25];
+    fm1_core1_fault.count++;
+    was = FM1_DBG_WR_EN & 1u;                       /* (writing 0xE7 toggles the unlock) */
+    if (!was)
+        FM1_DBG_WR_EN = 0xE7u;
+    FM1_DBG_MSG_CLR = dbg;
+    if (!was)
+        FM1_DBG_WR_EN = 0xE7u;
+    if (cpu) {
+        fm1_core1_stop();
+        for (;;)
+            ;
+    }
+    return 1;
+#else
+    (void)f;
+    return 0;
+#endif
+}
+
 static void fm1_irq_init(void)
 {
     uint32_t i;
@@ -94,8 +143,11 @@ static void fm1_irq_enable_all(void)
 void fm1_fault_c(uint32_t *f)
 {
     static volatile uint32_t in_fault;
-    uint32_t i, count = fm1_crash.magic == FM1_CRASH_MAGIC ? fm1_crash.count : 0;
-    uint32_t early = fm1_crash.magic == FM1_CRASH_MAGIC ? fm1_crash.early : 0;
+    uint32_t i, count, early;
+    if (fm1_core1_fault_c(f))
+        return;                                     /* (a CPU1 fault: CPU0 goes on, fm1_vec.S) */
+    count = fm1_crash.magic == FM1_CRASH_MAGIC ? fm1_crash.count : 0;
+    early = fm1_crash.magic == FM1_CRASH_MAGIC ? fm1_crash.early : 0;
     fm1_irq_off();
     if (in_fault++)                           /* fault while reporting: reset at once */
         *(volatile uint32_t *)0x10000u |= 1u << 4;

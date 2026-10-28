@@ -3,10 +3,17 @@
 /* SLOOP (based on FELUCCA): one compilation unit (the HAL is header-only). Order matters. */
 #include <stdint.h>
 #define PR_WAVES_FROM_PLX 1      /* PLAITS WAVE (prism_dsp.c) reads Plaits' own 50 KB wavetable: one copy (plx.cc) */
+#ifndef KARMA_DUAL_CORE                  /* (before the HAL: fm1_sys.h holds CPU1 at every reset with it) */
+#define KARMA_DUAL_CORE 0        /* CPU1 renders tracks 2 and 3 (fx.c mix_block; the worker after Melodee): build.sh
+                                  * with KARMA_DUAL_CORE=1 -> build/karma-dual.fwsc */
+#endif
 #include "fm1_time.h"
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#if KARMA_DUAL_CORE
+#include "fm1_multicore.h"
+#endif
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"

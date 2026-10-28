@@ -636,23 +636,49 @@ static __attribute__((noinline)) void ins_rest(track_t *t)
 
 /* one synth part into the dry mix and the sends; a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
-static void mix_part_run(track_t *t, uint32_t n);
+/* where a part's sound goes: the mix and the sends, its scratch block (KARMA_DUAL_CORE: CPU1 renders into buses of its
+ * own, CPU0 adds them after; one core: the mix's own) */
+typedef struct {
+    int32_t *l, *r, *c, *d, *v, *cl, *b;
+    int16_t *pnew;
+} mixbus_t;
+static int16_t pnew0[P_COUNT];
+static const mixbus_t BUS0 = {mix_l, mix_r, send_c, send_d, send_r, cloud_bus, part_buf, pnew0};
+static void mix_part_run(track_t *t, uint32_t n, const mixbus_t *o);
 /* (2.6) a preset's fade (voice.c sound_change): the whole part rendered with the sound it had, then the new one back */
-static void mix_part(track_t *t, uint32_t n)
+static void mix_part_to(track_t *t, uint32_t n, const mixbus_t *o)
 {
-    static int16_t pnew[P_COUNT];
     if (!(t->pold && t->xf_on && t->xf)) {
-        mix_part_run(t, n);
+        mix_part_run(t, n, o);
         return;
     }
-    memcpy(pnew, t->p, sizeof pnew);
+    memcpy(o->pnew, t->p, sizeof pnew0);
     memcpy(t->p, t->p_old, sizeof t->p);
-    mix_part_run(t, n);
-    memcpy(t->p, pnew, sizeof pnew);
+    mix_part_run(t, n, o);
+    memcpy(t->p, o->pnew, sizeof pnew0);
 }
-static void mix_part_run(track_t *t, uint32_t n)
+static void mix_part(track_t *t, uint32_t n) { mix_part_to(t, n, &BUS0); }
+#if KARMA_DUAL_CORE
+/* CPU1's job (2026-10-28, Ariel: a busy section overloaded one core): tracks 2 and 3 (ELEMENTS, PLAITS) into buses of its
+ * own while CPU0 renders track 1 and the drums; CPU0 joins before the effects and adds them. What the two share is read
+ * only, or the random numbers (a race there only changes which random number comes) */
+static int32_t w_l[CTL], w_r[CTL], w_c[CTL], w_d[CTL], w_v[CTL], w_cl[CTL], w_b[CTL];
+static int16_t pnew1[P_COUNT];
+static const mixbus_t BUS1 = {w_l, w_r, w_c, w_d, w_v, w_cl, w_b, pnew1};
+static uint32_t w_n;
+static void core1_parts(void *ctx)
 {
-    int32_t *b = part_buf;
+    uint32_t i, n = w_n;
+    (void)ctx;
+    for (i = 0; i < n; i++)
+        w_l[i] = w_r[i] = w_c[i] = w_d[i] = w_v[i] = w_cl[i] = 0;
+    mix_part_to(&trk[1], n, &BUS1);
+    mix_part_to(&trk[2], n, &BUS1);
+}
+#endif
+static void mix_part_run(track_t *t, uint32_t n, const mixbus_t *o)
+{
+    int32_t *b = o->b;
     uint32_t i;
     int32_t g0 = 32767 - t->att, g1 = gain_next(t);
     if (track_render(t, b, n))
@@ -704,15 +730,15 @@ static void mix_part_run(track_t *t, uint32_t n)
             if (a > pk)
                 pk = a;
             if (c)
-                send_c[i] += mulq15(xs, c);
+                o->c[i] += mulq15(xs, c);
             if (d)
-                send_d[i] += mulq15(xs, d);
+                o->d[i] += mulq15(xs, d);
             if (r)
-                send_r[i] += mulq15(xs, r);
+                o->v[i] += mulq15(xs, r);
             if (cs)
-                cloud_bus[i] += mulq15(xs, cs);
-            mix_l[i] += ((x >> 4) * gl) >> 8;           /* (x may pass 2^19: >> 4 first) */
-            mix_r[i] += ((x >> 4) * gr) >> 8;
+                o->cl[i] += mulq15(xs, cs);
+            o->l[i] += ((x >> 4) * gl) >> 8;            /* (x may pass 2^19: >> 4 first) */
+            o->r[i] += ((x >> 4) * gr) >> 8;
         }
         t->peak = pk;
     }
@@ -1092,6 +1118,18 @@ static void mix_block(int32_t *out, uint32_t n)
     duck_block(n * (uint32_t)song.g[G_BPM]);
     prof_blocks++;
     PROF(PF_EVENTS);
+#if KARMA_DUAL_CORE
+    int w_on = 0;
+    audio_worker_check();                               /* (a CPU1 that faulted or misread: retired, one core) */
+    if (!fx_stems && n <= CTL) {                        /* (USB STEMS: each part's own stem, one core) */
+        w_n = n;
+        w_on = audio_worker_submit(core1_parts, 0);
+    }
+    if (w_on) {
+        mix_part(&trk[0], n);
+        PROF(PF_T1);
+    } else
+#endif
     for (i = 0; i < NPART; i++) {
         if (fx_stems)
             stem_take(i, n, 0);
@@ -1141,6 +1179,16 @@ static void mix_block(int32_t *out, uint32_t n)
     if (fx_stems)
         stem_take(TRK_DRUM, n, 1);                      /* the drums' stem */
     PROF(PF_DRUMS);
+#if KARMA_DUAL_CORE
+    if (w_on) {                                         /* CPU1's tracks 2 and 3: wait, then into the mix and the sends */
+        if (audio_worker_join())
+            for (i = 0; i < n; i++) {
+                mix_l[i] += w_l[i], mix_r[i] += w_r[i];
+                send_c[i] += w_c[i], send_d[i] += w_d[i], send_r[i] += w_v[i], cloud_bus[i] += w_cl[i];
+            }
+        PROF(PF_T2);                                    /* (CPU0's wait and the sum; track3: 0) */
+    }
+#endif
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */
     if (fx_stems)                                       /* the FX return: what is added from here (not the metronome) */
         for (i = 0; i < n; i++)
