@@ -2456,7 +2456,12 @@ static void mclk_event(uint32_t st, uint32_t src)  /* a realtime message; src 1 
 
 static uint32_t mclk_adv(uint32_t n)               /* units to advance this block (mclk_on) */
 {
-    uint32_t el, off = 0, tgt, adv, cap = n * 2u * (uint32_t)song.g[G_BPM];
+    /* (2026-10-28, Ariel: freezes and rushes with SYNC = USB on the FM-1) the master's tempo (G_BPM, measured over its
+     * 24 pulses), and the gap to where its pulses say it is closed a quarter a block, at most an eighth of the tempo
+     * faster or slower: pulses that come in a burst (the render late, USB) are smoothed out, not caught up at twice
+     * the tempo (a rush) or waited for (a freeze). More than a beat behind (a long stall): up to twice the tempo */
+    uint32_t el, off = 0, tgt;
+    int32_t rate = (int32_t)(n * (uint32_t)song.g[G_BPM]), err, corr, lim = rate / 8;
     if (!mclk.have)
         return 0;                                  /* START seen: wait for the downbeat */
     el = fm1_ms - mclk.last_ms;
@@ -2468,11 +2473,14 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
             off = MCLK_PULSE_U - 1u;
     }
     tgt = mclk.pos + off;
-    adv = (int32_t)(tgt - mclk.done) > 0 ? tgt - mclk.done : 0u;
-    if (adv > cap)
-        adv = cap;                                 /* behind: catch up at twice the tempo, no burst */
-    mclk.done += adv;
-    return adv;
+    err = (int32_t)(tgt - mclk.done);
+    if (err > (int32_t)BEAT_U)
+        lim = rate;                                /* (a beat or more behind: catch up faster) */
+    corr = err / 4;
+    corr = corr > lim ? lim : corr < -lim ? -lim : corr;
+    err = rate + corr;
+    mclk.done += (uint32_t)(err > 0 ? err : 0);
+    return (uint32_t)(err > 0 ? err : 0);
 }
 
 /* everything that happens between two rendered blocks: transport, input, the steps of every

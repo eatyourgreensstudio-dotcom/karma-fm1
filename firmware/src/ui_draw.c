@@ -697,6 +697,44 @@ static void graph_big(void)
     }
 }
 
+/* the settings pages (GLO, SAVE > TOOLS; 2026-10-29, Ariel: they should read as a menu): the four knobs as rows, each
+ * its knob's number and colour, its name, its value large; the track's character small at the side */
+static int menu_page(const page_t *pg)
+{
+    return pg->scope == SC_GLOBAL && pg->graph == GR_NONE && (pg->fam == FAM_GLO || pg->fam == FAM_SAVE);
+}
+static void graph_menu(const track_t *t)
+{
+    uint32_t c;
+    for (c = 0; c < 4u; c++) {
+        int32_t y = 2 + (int32_t)c * 30, x, lw, vw, uw;
+        uint16_t vc = ui.big_c[c];                      /* (the knob's colour, as the band below; dim: does nothing now) */
+        char n[2] = {(char)('1' + c), 0};
+        if (!ui.big_l[c][0])
+            continue;
+        cv_rect(4, y + 6, 12, 18, TE_COL[c & 3u]);      /* the knob: its number on its colour */
+        cv_text(6, y + 7, &FONT_S, n, C_BLACK);
+        lw = cv_text(22, y + 7, &FONT_S, ui.big_l[c], TE_COL[c & 3u]);
+        uw = ui.big_u[c][0] ? text_w(&FONT_S, ui.big_u[c]) + 4 : 0;
+        vw = text_w(&FONT_L, ui.big_v[c]);
+        if (168 - uw - vw >= lw + 8) {                  /* the value large, to the right */
+            x = cv_text(168 - uw - vw, y - 2, &FONT_L, ui.big_v[c], vc);
+            if (uw)
+                cv_text(x + 4, y + 12, &FONT_S, ui.big_u[c], C_GRAY);
+        } else {                                        /* (too long for it: small) */
+            x = cv_text(168 - uw - text_w(&FONT_S, ui.big_v[c]), y + 7, &FONT_S, ui.big_v[c], vc);
+            if (uw)
+                cv_text(x + 4, y + 7, &FONT_S, ui.big_u[c], C_GRAY);
+        }
+        cv_rect(22, y + 28, 146, 1, C_LINE);
+    }
+    if (is_drum(t))
+        op_sprite_wh(OP_SPR_DRUMMER_MX, OP_SPR_DRUMMER_MX_W, OP_SPR_DRUMMER_MX_H, 208 - OP_SPR_DRUMMER_MX_W / 2,
+                     100 - OP_SPR_DRUMMER_MX_H, 0, TE_COL[3]);
+    else
+        op_sprite_scaled(song.sel % 3u, 210, 100, TE_COL[song.sel & 3u]);
+}
+
 static void draw_graph(void)
 {
     const page_t *pg = cur_page();
@@ -765,7 +803,9 @@ static void draw_graph(void)
         default:
             if (big_page(pg)) {
                 cv_oy = 0;
-                if (pg->fam == FAM_FX) {              /* FILTER, INSERT, DLY, REV/CHO: the wizard too */
+                if (menu_page(pg)) {
+                    graph_menu(t);
+                } else if (pg->fam == FAM_FX) {              /* FILTER, INSERT, DLY, REV/CHO: the wizard too */
                     if (!is_drum(t))
                         op_names(t);
                     op_fx_scene(opk.ratio);

@@ -566,6 +566,43 @@ static void mclk_run(double *t, double *next, double per, double until, uint32_t
         *t += (double)CTL * 1000.0 / FS;
     }
 }
+/* (2026-10-28) pulses in bursts (a render late, USB): every 8th pulse window the FM-1 is "busy" for 6 pulses and they all
+ * come at once after; the tempo it plays stays near the master's (no rush to twice, no stop) and it stays in time */
+static void t_mclk_burst(void)
+{
+    double t = 0, per = 60000.0 / 125 / 24;
+    uint32_t pulses = 0, k, worst = 0, last_u = 0, blocks = 0;
+    double next = 0;
+    reset(125);
+    mi_r = mi_w;
+    song.g[G_SYNC] = 1;
+    mclk_push(0xFA0Fu);
+    while (t < 8000.0) {                               /* 8 s at 125: 16 2/3 beats */
+        int busy = ((uint32_t)(t / per) % 48u) >= 42u;  /* (6 of every 48 pulses held back, then let go together) */
+        while (next <= t && !busy) {
+            mclk_push(0xF80Fu);
+            pulses++;
+            next += per;
+        }
+        fm1_ms = (uint32_t)t;
+        run_block();
+        {   /* how fast it plays: units this block vs the master's tempo */
+            uint32_t u = clk_beat * BEAT_U + clk_pos, d = u - last_u;
+            if (blocks > 40u && d > worst)
+                worst = d;
+            last_u = u;
+        }
+        blocks++;
+        t += (double)CTL * 1000.0 / FS;
+    }
+    k = (uint32_t)(worst * 1000u / (CTL * 125u));       /* per mille of the master's tempo */
+    check(k <= 1150u, "MIDI clock in bursts: never faster than ~1.13x the master (no rush)");
+    check(clk_beat >= 15u && clk_beat <= 17u, "MIDI clock in bursts: in time after 8 s (beat 16 or so)");
+    printf("seq2:   bursts: fastest %u per mille of the master, beat %u after 8 s\n", k, clk_beat);
+    transport_req = 2;
+    run_block();
+    song.g[G_SYNC] = 0;
+}
 static void t_mclk(void)
 {
     double t = 0, next = 0, per = 60000.0 / 120 / 24;
@@ -1753,6 +1790,7 @@ int main(void)
     t_fill();
     t_chain();
     t_edits_stick();
+    t_mclk_burst();
     t_recmode();
     t_mclk();
     t_fixes24();
