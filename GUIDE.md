@@ -609,7 +609,7 @@ Open it with **SAVE tapped on TRACKS** (or on DRUMS), or **SAVE + key 16**. It s
 | --- | --- |
 | KNOB 1 | the song step (cursor) |
 | KNOB 2 | that step's section (A–D) |
-| KNOB 3 | its length in bars (1–64) |
+| KNOB 3 | its length: 1–64 bars (default 4), or below 1 **LOOP**: the section's own length, played once |
 | KNOB 4 | the number of steps in the song (1–16) |
 | **REC** | stores the current loop into the step's section (a used section: REC again within 3 s) |
 | **SAVE** (tap) | saves the song |
@@ -927,7 +927,7 @@ IN and OUT are also on GLO → SYSTEM, next to SYNC (the clock), where they were
 | KNOB 4 | **CPU** | the processor load (or the USB link state while no computer is connected) |
 
 - **MIDI out:** each track on its channel (CH1–CH4; by default 1, 2, 3 and 10 for the drums, each drum sound its own note). OUT starts on **KEYS**: to record the pattern itself into a DAW, set **OUT = SEQ**. Then a DAW track set to record the FM-1's MIDI on a track's channel gets the pattern as notes, or let KARMA drive another synth. Every note is ended, STOP ends whatever was still on, and notes that came in are never sent back (no MIDI loop).
-- **Clock in:** START plays from the top, CONTINUE carries on, STOP stops; the tempo follows the master's clock (24 pulses a beat), so KARMA cannot drift; when the pulses come unevenly over USB, KARMA closes the gap smoothly (never more than 1/8 faster or slower) instead of rushing or stopping. **Ableton Live (or any DAW):** SYNC = **USB**, and in the DAW's MIDI settings turn on *Sync* (clock) for the output **FM-1 KARMA**; pressing play in the DAW starts the FM-1 on the bar. When the clock stops for half a second, PLAY on the FM-1 plays at its own tempo again. A MIDI START during the REC count-in starts and records at once.
+- **Clock in:** START plays from the top, CONTINUE carries on, STOP stops; the tempo follows the master's clock (24 pulses a beat), so KARMA cannot drift; when the pulses come unevenly over USB, KARMA closes the gap smoothly (never more than 1/8 faster or slower) instead of rushing or stopping. **Song position:** when the master jumps (you start the DAW from the middle, or its loop goes back to the start), KARMA jumps with it: every track to that beat and, in song mode, to that section and bar. A song that ended while the DAW plays on starts again from the top when the DAW loops back. **Ableton Live (or any DAW):** SYNC = **USB**, and in the DAW's MIDI settings turn on *Sync* (clock) for the output **FM-1 KARMA**; pressing play in the DAW starts the FM-1 on the bar. When the clock stops for half a second, PLAY on the FM-1 plays at its own tempo again. A MIDI START during the REC count-in starts and records at once.
 - Switching IN, or a channel, releases any note still held: nothing is left hanging.
 - **Bluetooth MIDI** is not supported: KARMA never switches the radio on.
 
