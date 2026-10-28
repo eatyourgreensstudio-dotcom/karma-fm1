@@ -63,6 +63,7 @@ static void arrangement_save(void) {}
 static uint32_t arrangement_ready(void) { return 3; }
 static void arrangement_apply(uint32_t s) { (void)s; }
 static uint32_t section_bars(uint32_t s) { return s == 1u ? 2u : 1u; }   /* (B: two bars) */
+static uint32_t arr_scene_bars(uint32_t scene) { return section_bars(scene); }   /* (arranger.h: a LOOP entry) */
 static void song_backup(void) {}
 static void song_restore(void) {}
 static uint32_t sec_stores, sec_loads;

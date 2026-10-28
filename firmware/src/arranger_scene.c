@@ -24,6 +24,7 @@ static uint32_t section_bars(uint32_t s)
     }
     return bars > 64u ? 64u : bars;
 }
+static uint32_t arr_scene_bars(uint32_t scene) { return section_bars(scene & 3u); }   /* (arranger.h: a LOOP entry) */
 
 /* Called only at an audio-block boundary, after validation of all slots at
  * start. The song keeps one tempo and global FX across every section (only the drum

@@ -2411,22 +2411,79 @@ static int mclk_on(void)                          /* the clock drives the sequen
     return song.g[G_SYNC] && mclk.alive && fm1_ms - mclk.last_ms < 500u;
 }
 
-static void mclk_event(uint32_t st, uint32_t src)  /* a realtime message; src 1 USB, 2 TRS */
+/* Song Position Pointer (KARMA 3.0; 2026-10-28, Ariel: Ableton loops 16 bars, the FM-1's song ran on and ended): the
+ * master's position in 16ths. Playing: every track, and in song mode the song (its section, its bar), jumps there
+ * at once. Stopped: the next CONTINUE starts from there; stopped because the song ended while the clock ran on:
+ * it starts again there (the master looped back). Past the song's end: the song has ended */
+static uint8_t spp_pend, song_end_ext;
+static uint16_t spp_pos;
+static void seq_jump(uint32_t pos16)
+{
+    uint32_t bar = pos16 / 16u, in = (pos16 % 16u) * (BEAT_U / 4u), i;
+#if FELUCCA_ARRANGER
+    if (arrangement_clock.running) {
+        uint32_t k, n = arrangement.count > ARR_STEPS ? ARR_STEPS : arrangement.count;
+        for (k = 0; k < n; k++) {
+            uint32_t nb = arr_entry_bars(&arrangement, k);
+            if (bar < nb)
+                break;
+            bar -= nb;
+        }
+        if (k >= n) {
+            seq_stop();                             /* (song_restore: the loop you made is back) */
+            song_end_ext = 1;
+            return;
+        }
+        if (k != arrangement_clock.index) {
+            arrangement_clock.index = (uint8_t)k;
+            arrangement_apply(arrangement.entry[k].scene);
+        }
+        arrangement_clock.bar = (uint8_t)bar;
+        arrangement_clock.phase = in;
+    }
+#endif
+    for (i = 0; i < NTRK; i++)
+        seq_release(&trk[i]);
+    seq_reset_tracks(in % BEAT_U);
+    clk_beat = bar * 4u + in / BEAT_U;
+    mclk.done = mclk.pos;                          /* (the master's next pulse is from here) */
+}
+
+static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime message (or F2, val its position); src 1 USB, 2 TRS */
 {
     uint32_t now = fm1_ms;
     if (!song.g[G_SYNC] || src != (uint32_t)song.g[G_SYNC])
         return;
+    if (st == 0xF2u) {                             /* SONG POSITION */
+        if (song.playing && !ci_on) {
+            seq_jump(val);
+        } else {
+            spp_pos = (uint16_t)val;
+            spp_pend = 1;
+            if (song_end_ext && mclk_on()) {
+                song_end_ext = 0;
+                transport_req = 3;                 /* (the master looped back: the song again, from there) */
+            }
+        }
+        return;
+    }
     if (st == 0xFAu || st == 0xFBu) {              /* START: from the top; CONTINUE: on from where it stopped */
         mclk.pos = mclk.done = 0;
         mclk.have = 0;
-        if (st == 0xFAu)
+        song_end_ext = 0;
+        if (st == 0xFAu) {
+            spp_pend = 0;
             transport_req = 3;                     /* (not 1: the master counts, never a count-in) */
-        else if (!song.playing)
+        } else if (spp_pend && !song.playing) {
+            transport_req = 3;                     /* from the position the master sent (seq_jump after the start) */
+        } else if (!song.playing) {
             song.playing = 1;
+        }
         return;
     }
     if (st == 0xFCu) {                             /* STOP */
         transport_req = 2;
+        song_end_ext = 0;
         return;
     }
     if (st != 0xF8u)
@@ -2509,6 +2566,10 @@ static void events_block(uint32_t n)
             click_on(1);
         } else {
             seq_start();
+            if (ext && spp_pend && song.playing)
+                seq_jump(spp_pos);                  /* (a CONTINUE after a SONG POSITION: from there) */
+            spp_pend = 0;
+            song_end_ext = 0;
             if (rec_wait && song.playing)
                 rec_begin();                        /* PLAY while armed: record from the top */
         }
@@ -2550,6 +2611,7 @@ static void events_block(uint32_t n)
         if (scene == ARR_DONE) {
             arrangement_clock.running = 1;          /* (arr_next cleared it: seq_stop brings the loop back) */
             seq_stop();
+            song_end_ext = (uint8_t)mclk_on();      /* (the master runs on: a SONG POSITION starts it again) */
         }
         else if (scene >= 0) {
             arrangement_apply((uint32_t)scene);
@@ -2639,7 +2701,7 @@ static void events_block(uint32_t n)
         track_t *t;
         mi_r++;
         if ((pkt & 15u) == 0xFu) {                    /* clock / transport: cable 0 USB, 1 TRS */
-            mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u);
+            mclk_event((pkt >> 8) & 0xFFu, ((pkt >> 4) & 15u) ? 2u : 1u, d1 | d2 << 7);
             continue;
         }
         if (song.g[G_ROUTE] >= 2 && ch == (uint32_t)song.g[G_ROUTE] - 2u) {   /* IN = CH n: that channel plays the selected

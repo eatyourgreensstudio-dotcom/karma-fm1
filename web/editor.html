@@ -3312,7 +3312,8 @@ const SMF = {
 
 /* ------------------------------------------- SLOOP 2.5: the song order --- */
 /* The song order lives in the settings object (backup object 1, firmware project.c persist_t): bytes 48..83
-   are arranger.h arr_config_t: count, loop, 2 reserved, then 16 x {scene 0..3 = A..D, bars 1..64}. */
+   are arranger.h arr_config_t: count, loop, 2 reserved, then 16 x {scene 0..3 = A..D, bars 0..64}; bars 0 = LOOP: the
+   section's own length, once (KARMA 3.0). */
 const ARR = {
   OFF: 48, STEPS: 16, SIZE: 36, MAX_BARS: 64, MAGIC: 0x50455233,
   ok: (b) => !!b && b.length >= ARR.OFF + ARR.SIZE && ((b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24)) >>> 0) === ARR.MAGIC,
@@ -3331,9 +3332,9 @@ const ARR = {
     }
     return o;
   },
-  /* arranger.h arr_valid: 1..16 entries, sections A..D, 1..64 bars */
+  /* arranger.h arr_valid: 1..16 entries, sections A..D, 0 (LOOP) ..64 bars */
   valid: (song) => song.entries.length >= 1 && song.entries.length <= ARR.STEPS
-    && song.entries.every((e) => e.scene >= 0 && e.scene < 4 && e.bars >= 1 && e.bars <= ARR.MAX_BARS),
+    && song.entries.every((e) => e.scene >= 0 && e.scene < 4 && e.bars >= 0 && e.bars <= ARR.MAX_BARS),
   /* entries -> rows {scene, bars, times}: the same section with the same bars in a row is one row played `times` */
   group(entries) {
     const rows = [];
@@ -3759,10 +3760,11 @@ const TEXT = {
     midiSetLen: "トラックの長さを {n} ステップにする", midiImport: "読み込む",
     midiConfirm: "このトラックのパターンを置き換えます。よろしいですか？", midiDone: "読み込みました。音の数: ", midiBad: "MIDI ファイルを読めません: ",
     tabSong: "ソング", songTitle: "ソング",
-    songHelp: "FM-1 の SONG 画面と同じもの: セクション A〜D（4 つのプロジェクトスロット）を並べ、それぞれ何小節鳴らすか。全部で 16 項目まで。PLAY はソングモード（SAVE + 13）で。",
+    songHelp: "FM-1 の SONG 画面と同じもの: セクション A〜D（4 つのプロジェクトスロット）を並べ、それぞれ何小節鳴らすか（0 = LOOP: セクション自身の長さを 1 回）。全部で 16 項目まで。PLAY はソングモード（SAVE + 13）で。",
     songSection: "セクション", songBars: "小節", songTimes: "回数",
     songEmpty: "空のスロットのセクションがあります: FM-1 で先に SAVE + 5〜8 で保存してください。",
     songAdd: "追加", songSum: "{n} / {max} 項目、{bars} 小節", songLoop: "最後まで来たら:",
+    songLoopBars: "0 = LOOP: セクション自身の長さ（いちばん長いトラック）を 1 回",
     songLoopOff: "止まる", songLoopOn: "最初に戻る", songRead: "FM-1 から読む", songSend: "FM-1 に送る",
     songUp: "上へ", songDown: "下へ", songDel: "削除",
     songOld: "この FM-1 のファームウェアではソングを読めません（SLOOP 2.5 以降）。",
@@ -3959,10 +3961,11 @@ const TEXT = {
     midiSetLen: "Set the track's length to {n} steps", midiImport: "Import",
     midiConfirm: "This replaces the track's pattern. Go on?", midiDone: "Imported. Notes: ", midiBad: "Not a readable MIDI file: ",
     tabSong: "Song", songTitle: "Song",
-    songHelp: "The FM-1's SONG screen: the sections A–D (the four project slots) in order, each for so many bars. 16 entries at most. PLAY it in song mode (SAVE + key 13).",
+    songHelp: "The FM-1's SONG screen: the sections A–D (the four project slots) in order, each for so many bars (0 = LOOP: the section's own length, once). 16 entries at most. PLAY it in song mode (SAVE + key 13).",
     songSection: "Section", songBars: "Bars", songTimes: "Times",
     songEmpty: "A section has an empty slot: save it on the FM-1 first (SAVE + keys 5–8).",
     songAdd: "Add", songSum: "{n} of {max} entries, {bars} bars", songLoop: "At the end:",
+    songLoopBars: "0 = LOOP: the section plays its own length once (its longest track)",
     songLoopOff: "stop", songLoopOn: "start again", songRead: "Read from the FM-1", songSend: "Send to the FM-1",
     songUp: "Up", songDown: "Down", songDel: "Remove",
     songOld: "This FM-1's firmware cannot share its song (SLOOP 2.5 or later).",
@@ -5271,12 +5274,12 @@ function renderSong() {
     const sec = el("select", { onchange: (e) => songEdit(() => { r.scene = +e.target.value; }) },
       ...[0, 1, 2, 3].map((s) => el("option", { value: s, text: LET[s] + (dev.slotUsed[s] === false ? ` (${t("empty")})` : "") })));
     sec.value = String(r.scene);
-    const num = (v, max, set) => el("input", { type: "number", min: 1, max, value: String(v), onchange: (e) =>
-      songEdit(() => set(Math.max(1, Math.min(max, Math.round(+e.target.value) || 1)))) });
+    const num = (v, max, set, lo = 1) => el("input", { type: "number", min: lo, max, value: String(v), title: lo ? null : t("songLoopBars"), onchange: (e) =>
+      songEdit(() => set(Math.max(lo, Math.min(max, Math.round(+e.target.value) || lo)))) });
     const empty = dev.slotUsed[r.scene] === false;
     return el("tr", { class: empty ? "bad" : null },
       el("td", { class: "i", text: String(k + 1) }), el("td", {}, sec),
-      el("td", {}, num(r.bars, ARR.MAX_BARS, (v) => { r.bars = v; })),
+      el("td", {}, num(r.bars, ARR.MAX_BARS, (v) => { r.bars = v; }, 0)),
       el("td", {}, num(r.times, ARR.STEPS, (v) => { r.times = v; })),
       el("td", { class: "acts" },
         el("button", { type: "button", title: t("songUp"), disabled: k === 0, onclick: () => songEdit(() => { SG.rows.splice(k - 1, 0, SG.rows.splice(k, 1)[0]); }) }, "▲"),

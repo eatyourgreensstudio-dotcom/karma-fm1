@@ -8,7 +8,7 @@ static void song_sane(void)                         /* a bad chain (blank / dama
 {
     uint32_t i, ok = arrangement.count >= 1u && arrangement.count <= ARR_STEPS;
     for (i = 0; ok && i < arrangement.count; i++)
-        ok = arrangement.entry[i].scene < ARR_SCENES && arrangement.entry[i].bars >= 1u && arrangement.entry[i].bars <= 64u;
+        ok = arrangement.entry[i].scene < ARR_SCENES && arrangement.entry[i].bars <= 64u;   /* (0: LOOP) */
     if (!ok)
         arr_defaults(&arrangement);
     if (song_cursor >= arrangement.count)
@@ -55,13 +55,22 @@ static void song_screen_draw(void)
             cv_rect(30, 3, 22, 20, used ? sc : RGB(26, 26, 30));   /* the section tile */
             b[0] = (char)('A' + e->scene); b[1] = 0;
             cv_text(37, 5, &FONT_S, b, used ? C_BLACK : sc);
-            w = e->bars * 120 / 64 + 4;                 /* its length as a bar */
-            cv_rect(60, 9, w, 8, used ? (selected ? sc : RGB(54, 54, 60)) : RGB(26, 26, 30));
-            fmt_int(b, e->bars);
-            str_cpy(b + str_len(b), e->bars == 1 ? " bar" : " bars", 8);
+            {
+                uint32_t eb = arr_entry_bars(&arrangement, pos);   /* (LOOP: the section's own length) */
+                w = (int32_t)eb * 120 / 64 + 4;             /* its length as a bar */
+                cv_rect(60, 9, w, 8, used ? (selected ? sc : RGB(54, 54, 60)) : RGB(26, 26, 30));
+                if (!e->bars) {
+                    str_cpy(b, "loop ", 8);
+                    fmt_int(b + 5, (int32_t)eb);
+                    str_cpy(b + str_len(b), "b", 4);
+                } else {
+                    fmt_int(b, e->bars);
+                    str_cpy(b + str_len(b), e->bars == 1 ? " bar" : " bars", 8);
+                }
+            }
             cv_text(60 + w + 6, 5, &FONT_S, used ? b : "empty", selected ? C_WHITE : RGB(118, 118, 126));
             if (arrangement_clock.running && arrangement_clock.index == pos) {
-                cv_rect(60, 19, (int32_t)(arrangement_clock.bar + 1u) * w / (e->bars ? e->bars : 1), 2, C_WHITE);
+                cv_rect(60, 19, (int32_t)(arrangement_clock.bar + 1u) * w / (int32_t)arr_entry_bars(&arrangement, pos), 2, C_WHITE);
                 cv_rect(226, 9, 9, 9, SC[1]);
             }
             if (selected) cv_rect(0, 1, 240, 1, RGB(54, 54, 60)), cv_rect(0, 24, 240, 1, RGB(54, 54, 60));
@@ -143,7 +152,7 @@ static void song_screen_input(uint32_t pressed, uint32_t home)
         }
         if (song.playing || transport_req) { ui_message("STOP FIRST"); continue; }
         if (k == 1) arrangement.entry[song_cursor].scene = (uint8_t)clamp(arrangement.entry[song_cursor].scene + steps, 0, 3);
-        if (k == 2) arrangement.entry[song_cursor].bars = (uint8_t)clamp(arrangement.entry[song_cursor].bars + steps, 1, 64);
+        if (k == 2) arrangement.entry[song_cursor].bars = (uint8_t)clamp(arrangement.entry[song_cursor].bars + steps, 0, 64);   /* 0: LOOP */
         if (k == 3) {
             arrangement.count = (uint8_t)clamp(arrangement.count + steps, 1, ARR_STEPS);
             if (song_cursor >= arrangement.count) song_cursor = arrangement.count - 1;

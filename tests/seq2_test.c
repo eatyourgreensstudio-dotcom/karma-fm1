@@ -603,6 +603,71 @@ static void t_mclk_burst(void)
     run_block();
     song.g[G_SYNC] = 0;
 }
+/* KARMA 3.0 (2026-10-28, Ariel: Ableton loops 16 bars, the FM-1's song ran on and ended): Song Position Pointer with
+ * SYNC = USB. Sections A (1 bar), B (2), C (3); the song A B C, each LOOP (bars 0: its own length) */
+static void spp_push(uint32_t pos16) { mclk_push(0xF20Fu | (pos16 & 0x7Fu) << 16 | (pos16 >> 7 & 0x7Fu) << 24); }
+static void t_spp(void)
+{
+    double t = 0, next = 0, per = 60000.0 / 120 / 24;
+    uint32_t i, ok;
+    reset(120);
+    mi_r = mi_w;
+    for (i = 0; i < NTRK; i++) {
+        trk[i].p[P_SLEN] = 16;
+        trk[i].p[P_SDIV] = 2;
+    }
+    proj_capture(&proj_slot[0]);                     /* A: one bar */
+    TDRUM->p[P_SLEN] = 32;
+    proj_capture(&proj_slot[1]);                     /* B: two bars */
+    TDRUM->p[P_SLEN] = 48;
+    proj_capture(&proj_slot[2]);                     /* C: three bars */
+    proj_slot[3].magic = 0;
+    arrangement.count = 3;
+    arrangement.loop = 0;
+    for (i = 0; i < 3u; i++)
+        arrangement.entry[i].scene = (uint8_t)i, arrangement.entry[i].bars = 0;
+    arrangement_enabled = 1;
+    song.g[G_SYNC] = 1;
+    mclk_run(&t, &next, per, 300, 0);
+    mclk_push(0xFA0Fu);                               /* START */
+    next = t;
+    mclk_run(&t, &next, per, t + 3000.0, 0);          /* a bar and a half (A, then B) */
+    ok = song.playing && live_sec == 1 && arrangement_clock.index == 1;
+    check(ok, "SPP: song mode, LOOP entries: A plays its 1 bar, then B");
+    spp_push(3u * 16u + 4u);                          /* the master jumps to bar 4, beat 2: C's first bar */
+    mclk_run(&t, &next, per, t + 10.0, 0);
+    ok = song.playing && live_sec == 2 && arrangement_clock.index == 2 && arrangement_clock.bar == 0 && clk_beat == 1u;
+    check(ok, "SPP: a jump to bar 4 beat 2 -> section C, its bar 1, beat 2");
+    spp_push(1u * 16u);                               /* back to bar 2: B */
+    mclk_run(&t, &next, per, t + 10.0, 0);
+    check(live_sec == 1 && arrangement_clock.index == 1 && clk_beat == 0u, "SPP: a jump back to bar 2 -> section B from its top");
+    mclk_run(&t, &next, per, t + 13000.0, 0);         /* B's 2 bars and C's 3: the song ends, the master runs on */
+    check(!song.playing && song_end_ext, "SPP: the song ends at its last section while the clock runs on");
+    spp_push(0);                                      /* the master loops back to bar 1 */
+    mclk_run(&t, &next, per, t + 60.0, 0);
+    ok = song.playing && live_sec == 0 && arrangement_clock.index == 0 && arrangement_clock.running;
+    check(ok, "SPP: the master loops back to bar 1 -> the song starts again from A");
+    mclk_push(0xFC0Fu);                               /* STOP */
+    mclk_run(&t, &next, per, t + 20.0, 0);
+    arrangement_enabled = 0;
+    mclk_push(0xFA0Fu);                               /* loop mode: START */
+    next = t;
+    mclk_run(&t, &next, per, t + 500.0, 0);
+    spp_push(2u * 16u + 5u);                          /* bar 3, the 6th 16th: beat 10 (9 from 0), a 16th in */
+    mclk_run(&t, &next, per, t + 1.0, 0);
+    check(song.playing && clk_beat == 9u && clk_pos >= BEAT_U / 4u && clk_pos < BEAT_U / 4u + 4u * CTL * 120u,
+          "SPP: loop mode, a jump to bar 3 + 5 16ths -> beat 9 and a 16th");
+    mclk_push(0xFC0Fu);
+    mclk_run(&t, &next, per, t + 20.0, 0);
+    spp_push(8u);                                     /* stopped: the master moves to beat 3, then CONTINUE */
+    mclk_push(0xFB0Fu);
+    mclk_run(&t, &next, per, t + 30.0, 0);
+    check(song.playing && clk_beat == 2u, "SPP: stopped, SONG POSITION 8 then CONTINUE -> plays from beat 3");
+    mclk_push(0xFC0Fu);
+    mclk_run(&t, &next, per, t + 20.0, 0);
+    song.g[G_SYNC] = 0;
+    reset(120);
+}
 static void t_mclk(void)
 {
     double t = 0, next = 0, per = 60000.0 / 120 / 24;
@@ -1791,6 +1856,7 @@ int main(void)
     t_chain();
     t_edits_stick();
     t_mclk_burst();
+    t_spp();
     t_recmode();
     t_mclk();
     t_fixes24();

@@ -840,6 +840,14 @@ static void midi_in_event(uint32_t pkt)
         }
         return;
     }
+    if (cin == 0x3u && st == 0xF2u && !(pkt & 0x80800000u)) {   /* Song Position Pointer (KARMA 3.0): to the clock's ring */
+        if (mi_w - mi_r < MQ) {
+            midi_in_q[mi_w % MQ] = 0xFu | (pkt & 0xFFFFFF00u);
+            RING_PUBLISH();
+            mi_w++;
+        }
+        return;
+    }
     if (cin >= 8u && cin <= 0xEu && (st >> 4) == cin && !((pkt >> 16) & 0x80u) &&
         (cin == 0xCu || cin == 0xDu || !(pkt & 0x80000000u))) {
         if (mi_w - mi_r < MQ) {
