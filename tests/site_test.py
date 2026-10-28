@@ -20,9 +20,9 @@ def check(what, ok):
     bad += not ok
 
 
-check("the editor links the offline file (download)", src.count('download="sloop-editor.html"') == 1)
+check("the editor links the offline file (download)", src.count('download="karma-editor.html"') == 1)
 check("the installer page links it too",
-      (ROOT / "web" / "index_pkg.html").read_text(encoding="utf-8").count('href="../editor/sloop-editor.html"') == 1)
+      (ROOT / "web" / "index_pkg.html").read_text(encoding="utf-8").count('href="../editor/karma-editor.html"') == 1)
 check("offline: the icon font inlined", 'url("fukiai.ttf")' not in off and "font/ttf;base64," in off)
 check("offline: no download link to itself", "<!--DL-->" not in off and 'id="offline"' not in off)
 check("offline: the installer and the font licence online",

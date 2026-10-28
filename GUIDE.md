@@ -1,10 +1,10 @@
-<p align="center"><img src="assets/logo/sloop-logo.png" alt="SLOOP" width="420"></p>
+<p align="center"><img src="assets/logo/karma-logo.svg" alt="KARMA" width="420"></p>
 
-# SLOOP 2.6 — The Complete Guide
+# KARMA 3.0 — The Complete Guide
 
-Everything SLOOP does, every button, every combination, every page, in one place. This guide is written to be read from the top the first time, then used as a reference: the [cheat sheet](#26-cheat-sheet) at the end has every combination on one page.
+Everything KARMA does, every button, every combination, every page, in one place. This guide is written to be read from the top the first time, then used as a reference: the [cheat sheet](#26-cheat-sheet) at the end has every combination on one page.
 
-SLOOP is a free, open-source (GPL-3.0) firmware for the M-VAVE FM-1, based on [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita / Hügelton Instruments. The short manual is [SLOOP.md](SLOOP.md); the project page is [README.md](README.md).
+KARMA is a free, open-source (GPL-3.0-only) firmware for the M-VAVE FM-1 by Ariel Muchnik. It is a fork of [SLOOP](https://github.com/isod89/sloop-fm1) by isod89, based on [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita / Hügelton Instruments; the version numbers marked in this guide (2.5, 2.6) are SLOOP's, where a feature first came. The project page is [README.md](README.md).
 
 ---
 
@@ -63,13 +63,13 @@ The 11 black keys are F#3, G#3, A#3, C#4, D#4, F#4, G#4, A#4, C#5, D#5, F#5. The
 
 ## 1. Install and update
 
-**From the browser (recommended).** Open the [installer page](https://isod89.github.io/sloop-fm1/) in **Chrome or Edge**, connect the FM-1 by USB (a data cable, plugged straight in, no hub), press **INSTALL**, allow MIDI access, and wait for *Done*. The FM-1 restarts on the SLOOP logo.
+**From the browser (recommended).** Open the [installer page](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/) in **Chrome or Edge**, connect the FM-1 by USB (a data cable, plugged straight in, no hub), press **INSTALL**, allow MIDI access, and wait for *Done*. The FM-1 restarts with the KARMA boot animation.
 
 **From the source folder (Windows).** Double-click **`INSTALL-SLOOP.bat`**: it builds the firmware and opens the installer at `http://localhost:8766/webapp/installer/`. Keep the black window open until the install is done. **`OPEN-EDITOR.bat`** opens the web editor.
 
-**Updating** keeps your projects, presets, samples, kits and settings. The installer checks the package (SHA-256), SLOOP's update loader checks it again (CRC) before it starts the new firmware, and a damaged package is refused before anything is written.
+**Updating** keeps your projects, presets, samples, kits and settings. The installer checks the package (SHA-256), KARMA's update loader checks it again (CRC) before it starts the new firmware, and a damaged package is refused before anything is written.
 
-**Before you go back to an older SLOOP** (2.3 or earlier), save a backup in the editor: 2.3 cannot read 2.4 projects (format FUN5).
+**Before you go back to an older SLOOP** (2.3 or earlier, which KARMA grew from), save a backup in the editor: 2.3 cannot read 2.4 projects (format FUN5).
 
 ---
 
@@ -169,7 +169,7 @@ The layers are **FX** (punch-in effects), **EDIT** (erase), **ARP** (note repeat
 
 | Combination | Does |
 | --- | --- |
-| **OCT−** held while switching on | **USB rescue** (*SLOOP USB RESCUE*): install again from the browser |
+| **OCT−** held while switching on | **USB rescue** (*KARMA USB RESCUE*): install again from the browser |
 | **OCT− + OCT+** held while switching on | **hardware calibration**: teach each button and knob (also in the HOME menu → SYSTEM) |
 | **OCT− + OCT+** held 5 s, stopped | **update mode** (UBOOT): a countdown shows from 2 s; let go to cancel. Your work is saved first |
 
@@ -262,7 +262,7 @@ While the song plays in song mode, the grid's hit and level knobs wait (*STOP TH
 
 ## 8. Recording
 
-SLOOP records live and layers every pass on top of the last (overdub). Notes go to the nearest step **as you heard it**: the ~12 ms between a key and its sound are taken back, so what you play on the beat lands on the beat. Chords are kept on the synth tracks whose VOICE is POLY (up to 4 notes a step; a MONO, LEGATO or UNISON sound, as most basses and leads, plays and records one note at a time); held notes become ties. The TRACKS page draws one mark a step; the STEP page shows a chord's other notes (*+1*, *+2*…).
+KARMA records live and layers every pass on top of the last (overdub). Notes go to the nearest step **as you heard it**: the ~12 ms between a key and its sound are taken back, so what you play on the beat lands on the beat. Chords are kept on the synth tracks whose VOICE is POLY (up to 4 notes a step; a MONO, LEGATO or UNISON sound, as most basses and leads, plays and records one note at a time); held notes become ties. The TRACKS page draws one mark a step; the STEP page shows a chord's other notes (*+1*, *+2*…).
 
 **With a MIDI keyboard:** REC records the **selected** track. A keyboard on channel 1, 2 or 3 always plays track 1, 2 or 3 (2.6: the channels of GLO → MIDI), whatever track is selected: set it to channel 4 (or 4–16) to play and record the selected track. From 2.6, if your keyboard plays another track than the one recording, the screen says *MIDI PLAYS TRACK n* (once a take).
 
@@ -291,7 +291,7 @@ LENGTH and START apply when you record at a tempo (MODE *tempo*, or a project th
 ### Free take: the loop follows you
 
 1. On an empty project, **REC**, then play freely. The screen shows *free take*, the seconds, and the loop it would make right now (*2 bars · 92 bpm*).
-2. **Press REC on the "1" after your last bar.** SLOOP picks 1, 2 or 4 bars at the tempo nearest the one set (within 3 % the set tempo is kept), writes your notes with their lengths and levels, and plays the loop at once. All four tracks take that length.
+2. **Press REC on the "1" after your last bar.** KARMA picks 1, 2 or 4 bars at the tempo nearest the one set (within 3 % the set tempo is kept), writes your notes with their lengths and levels, and plays the loop at once. All four tracks take that length.
 3. **PLAY** during a free take drops it. A take closes by itself after 24 s.
 
 ### Metronome and swing
@@ -415,6 +415,8 @@ Details in [Key, scales, chords and CHORD+](#11-key-scales-chords-and-chord).
 | **GLO + SELECT** | the tempo (also inside the visualiser) |
 
 The tiles show what is heard; the *fill* and *bar* tiles light while they act.
+
+**Keep the mixer on screen:** hold **GLO** for about a second without touching anything else, then let go: the mixer stays (GLO blinks), so the keys and knobs above work without holding GLO. Any other button (not PLAY, REC or the OCT buttons) closes it.
 
 ### SAVE — song
 
@@ -570,7 +572,7 @@ A muted track fades out in a few milliseconds and plays no new notes; its patter
 | **Save / load a project** | SAVE → PROJECT: **SLOT** 1–4, **LOAD** (GO), **SAVE** (GO) |
 | **Erase a saved project / section** (2.6) | SAVE → PROJECT: **SLOT** 1–4 (= sections A–D), **ERASE** on KNOB 2 (GO), the song stopped: the slot is *EMPTY* again and its section key goes dark. The steps of the song that played it are taken out (the others keep their order; none left: the default song A B C D). Your working loop is not touched. No undo: save it into another slot first if in doubt |
 | **Save a sound** | SAVE → USER: **SLOT** (1–32), **SAVE** (GO) |
-| **Autosave** | automatic: when the transport is stopped and you have not touched anything for 2.5 s (at most every 20 s), the working project is kept in flash; at power-on SLOOP comes back exactly as you left it |
+| **Autosave** | automatic: when the transport is stopped and you have not touched anything for 2.5 s (at most every 20 s), the working project is kept in flash; at power-on KARMA comes back exactly as you left it |
 
 A **project** keeps the four tracks (sounds, patterns, kit, locks, nudges, fill conditions, the track filter) and the global settings of the song (tempo, swing, key…). **Settings of the FM-1** — SYNC, MIDI OUT, IN, the lights, the menu settings, the REC screen's MODE and START — are not part of a project: loading a project or NEW PROJECT never changes them.
 
@@ -618,6 +620,8 @@ Open it with **SAVE tapped on TRACKS** (or on DRUMS), or **SAVE + key 16**. It s
 | **HOME** | back to TRACKS |
 
 The song's settings can only be edited while it is stopped (*STOP FIRST*). An empty section cannot play (*EMPTY SECTION: REC*).
+
+**Edits stick.** Whatever you change while a section plays (a step erased, a sound, a kit) is kept in that section: when the chain or the song comes back to it, it plays as you left it. Your changes are written to flash when the FM-1 is quiet.
 
 ---
 
@@ -823,7 +827,7 @@ The texture is saved with the project, and each song section (A–D) has its own
 
 ## 19. The visualiser
 
-On the TRACKS screen, **tap HOME**: the whole screen becomes a visualiser of what SLOOP plays.
+On the TRACKS screen, **tap HOME**: the whole screen becomes a visualiser of what KARMA plays.
 
 | Control | Does |
 | --- | --- |
@@ -834,18 +838,17 @@ On the TRACKS screen, **tap HOME**: the whole screen becomes a visualiser of wha
 
 | # | Style | Shows |
 | --- | --- | --- |
-| 1 | **OSCILLOSCOPE** | the mix's wave, standing still |
+| 1 | **TAPE** | the home screen's reel-to-reel deck, big: the reels turn and the tape runs while the song plays (still when stopped), the bar, the sections A–D and two VU meters in dB with peak lamps |
 | 2 | **SPECTRUM** | 32 bands with falling caps |
 | 3 | **SPECTROGRAM** | the spectrum scrolling down, black → blue → green → yellow → white |
 | 4 | **LISSAJOUS** | the stereo image: the wider the cloud, the wider the sound |
 | 5 | **VU METERS** | tracks 1–4 in their colours and the mix, with peak holds |
 | 6 | **CIRCLE** | the wave round a ring that swells on every kick |
-| 7 | **TAPE** | two reels turning with the song, the level, the bar and the tempo |
-| 8 | **LCD** | the tempo in seven-segment digits, bar and beat, four track meters |
-| 9 | **BOUNCE** | a ball per track, kicked up by its notes |
-| 10 | **ORBIT** | four planets turning in 1, 2, 4 and 8 beats round a sun that pulses with the mix |
-| 11 | **WIRES** | a string per track, set swinging by its notes |
-| 12 | **SLOOP** | the logo alive: the sail's four bands are the tracks, the boat rocks on its wave |
+| 7 | **LCD** | the tempo in seven-segment digits, bar and beat, four track meters |
+| 8 | **BOUNCE** | a ball per track, kicked up by its notes |
+| 9 | **ORBIT** | four planets turning in 1, 2, 4 and 8 beats round a sun that pulses with the mix |
+| 10 | **WIRES** | a string per track, set swinging by its notes |
+| 11 | **OSCILLOSCOPE** | the mix's wave, standing still |
 
 The visualiser sees the mix **as if MASTER were all the way up**: with MASTER turned down, even to 0, it still moves at full size. It costs the sound nothing.
 
@@ -919,14 +922,14 @@ IN and OUT are also on GLO → SYSTEM, next to SYNC (the clock), where they were
 | Knob | Setting | Choices |
 | --- | --- | --- |
 | KNOB 1 | **OUT** (MIDI out) | as on MIDI 2 |
-| KNOB 2 | **SYNC** (clock in) | **INT**: SLOOP's own tempo · **USB** or **TRS**: follow that MIDI clock |
+| KNOB 2 | **SYNC** (clock in) | **INT**: KARMA's own tempo · **USB** or **TRS**: follow that MIDI clock |
 | KNOB 3 | **IN** | as on MIDI 2 |
 | KNOB 4 | **CPU** | the processor load (or the USB link state while no computer is connected) |
 
-- **MIDI out:** each track on its channel (CH1–CH4). With **SEQ**, set a DAW track to record the FM-1's MIDI and you get the pattern as notes, or let SLOOP drive another synth. Every note is ended, STOP ends whatever was still on, and notes that came in are never sent back (no MIDI loop).
-- **Clock in:** START plays from the top, CONTINUE carries on, STOP stops; the tempo follows the master pulse by pulse (24 a beat), so SLOOP cannot drift. When the clock stops for half a second, PLAY on the FM-1 plays at its own tempo again. A MIDI START during the REC count-in starts and records at once.
+- **MIDI out:** each track on its channel (CH1–CH4; by default 1, 2, 3 and 10 for the drums, each drum sound its own note). OUT starts on **KEYS**: to record the pattern itself into a DAW, set **OUT = SEQ**. Then a DAW track set to record the FM-1's MIDI on a track's channel gets the pattern as notes, or let KARMA drive another synth. Every note is ended, STOP ends whatever was still on, and notes that came in are never sent back (no MIDI loop).
+- **Clock in:** START plays from the top, CONTINUE carries on, STOP stops; the tempo follows the master's clock (24 pulses a beat), so KARMA cannot drift; when the pulses come unevenly over USB, KARMA closes the gap smoothly (never more than 1/8 faster or slower) instead of rushing or stopping. **Ableton Live (or any DAW):** SYNC = **USB**, and in the DAW's MIDI settings turn on *Sync* (clock) for the output **FM-1 KARMA**; pressing play in the DAW starts the FM-1 on the bar. When the clock stops for half a second, PLAY on the FM-1 plays at its own tempo again. A MIDI START during the REC count-in starts and records at once.
 - Switching IN, or a channel, releases any note still held: nothing is left hanging.
-- **Bluetooth MIDI** is not supported: SLOOP never switches the radio on.
+- **Bluetooth MIDI** is not supported: KARMA never switches the radio on.
 
 ### MIDI CCs (2.5)
 
@@ -951,7 +954,7 @@ The knobs of a MIDI controller set the sound (the standard CC map of Felucca 1.1
 Any knob of your controller onto any parameter of a track (after Felucca 1.5):
 
 1. **GLO + F#3** (the first black key): *LEARN: TURN A KNOB*; the top line shows **LEARN**.
-2. Turn the knob of SLOOP you want (any page of the track, or LEVEL / PAN on TRACKS): *T1 CUT: SEND A CC*.
+2. Turn the knob of KARMA you want (any page of the track, or LEVEL / PAN on TRACKS): *T1 CUT: SEND A CC*.
 3. Move the knob on your controller: *CC 21 = T1 CUT*. Go on with other knobs, as many as you like.
 4. **GLO + F#3** again: *LEARN DONE*.
 
@@ -961,14 +964,29 @@ A learned CC sets that track's parameter whatever channel it comes on, and no lo
 
 ## 22. USB audio
 
-On USB the FM-1 is also an audio input named **Felucca**: 44.1 or 48 kHz (the computer, phone or tablet picks; 48 kHz since 2.5, for the phones and apps that only take it), 16-bit stereo, class compliant, no driver. In your DAW, in Audacity or in a sampler app on your phone (with a USB-C cable or adapter) choose that input and record: you get the master output, exactly what the headphones play (after DUST, DUCK and FILT; the click and count-in too if they are on). MIDI, the editor and the installer keep working on the same cable.
+On USB the FM-1 is also an audio input named **FM-1 KARMA** (the MIDI port has the same name): 44.1 or 48 kHz (the computer, phone or tablet picks), 16-bit stereo, class compliant, no driver. In your DAW, in Audacity or in a sampler app on your phone (with a USB-C cable or adapter) choose that input and record: you get the master output, exactly what the headphones play (after DUST, DUCK and FILT; the click and count-in too if they are on). MIDI, the editor and the installer keep working on the same cable.
 
 **HOME menu → AUDIO → USB AUDIO:**
 
 - **MASTER** (default): the recording follows the MASTER knob, as the headphones do. Keep MASTER well up while you record.
 - **FULL**: a fixed level, as with MASTER all the way up (kept from clipping by the limiter); MASTER then only sets the headphones. Best for a computer input with no level control of its own.
+- **STEMS**: a six-channel interface at 44.1 kHz, each track on its own, for recording a whole jam into separate DAW tracks at once:
+
+| Input | Carries |
+| --- | --- |
+| 1 | track 1 (mono) |
+| 2 | track 2 (mono) |
+| 3 | track 3 (mono) |
+| 4 | the drums (mono) |
+| 5–6 | the effects return (reverb, delay, CLOUD), stereo |
+
+Each stem is the track's dry sound at its level (left and right summed; what it sends to the effects comes back on 5–6), before MASTER and the master effects, 12 dB below full scale so a loud part never clips: bring it up in the DAW. STEMS starts at the next start of the FM-1 (the computer sees a different device). The USB console (USB SERIAL) is off while STEMS is on.
+
+Close the HOME menu with **OCT−** to keep the setting through power-off.
 
 The first time, the computer sees the FM-1 as a slightly different device (MIDI + audio) and sets it up again. On macOS 13–15, keep **USB SERIAL** OFF (the default) or the audio input may not show.
+
+**Recording in Ableton Live**, in short: Preferences → Audio → Input Device **FM-1 KARMA** (or an aggregate device with your own interface); Preferences → Link, Tempo & MIDI → the **FM-1 KARMA** input with *Track* on (notes) and the output with *Sync* on (clock, with SYNC = USB on the FM-1); GLO → SYSTEM → OUT = **SEQ** to record the pattern as MIDI on channels 1, 2, 3 and 10.
 
 ---
 
@@ -1083,7 +1101,7 @@ The editor writes presets, the FM6 bank and backups to flash only while the song
 
 Editor → **Projects** → **Backup**:
 
-- **Save a backup** writes everything on the FM-1 to one file (`SLOOP-backup-DATE.json`): the music you are working on, the projects 1–4 (the song sections A–D), the 32 user presets, the FM6 bank, the SYN drum kits, the samples **USR1–USR4** (your drum kits with them) and the settings (colours, calibration, song order, lights, SYNC, MIDI OUT).
+- **Save a backup** writes everything on the FM-1 to one file (`KARMA-backup-DATE.json`): the music you are working on, the projects 1–4 (the song sections A–D), the 32 user presets, the FM6 bank, the SYN drum kits, the samples **USR1–USR4** (your drum kits with them) and the settings (colours, calibration, song order, lights, SYNC, MIDI OUT).
 - **Restore from a file** puts it all back: what is on the FM-1 is replaced. Stop the song (PLAY) first. A damaged file is refused before anything is written, and each object is written as a save writes it (a cut-off restore never leaves half an object).
 
 A 2.4 backup restores into 2.4 (or later) only. **Save a backup before every update and before going back.**
@@ -1092,7 +1110,7 @@ A 2.4 backup restores into 2.4 (or later) only. **Save a backup before every upd
 
 | Situation | Do |
 | --- | --- |
-| SLOOP does not start | hold **OCT−** alone while switching on (*SLOOP USB RESCUE*), then install again from the browser |
+| KARMA does not start | hold **OCT−** alone while switching on (*KARMA USB RESCUE*), then install again from the browser |
 | An install stopped half-way | the FM-1 waits in update mode: press **INSTALL** again |
 | Buttons or knobs do the wrong thing | hold **OCT− + OCT+** while switching on, or HOME menu → SYSTEM → HARDWARE CALIBRATION |
 | A developer needs UBOOT | hold **OCT− + OCT+** for 5 s while stopped (*UPDATE MODE IN 3…*; let go to cancel) |
@@ -1107,8 +1125,8 @@ On the installer page, open **Return to the official firmware (V15)**: save a ba
 | --- | --- |
 | The installer or editor does not find the FM-1 | Chrome or Edge, a data cable, no hub, allow MIDI; close every other app or tab that uses MIDI, then reload |
 | The black keys are silent on a synth track | it plays chords or the scale: SEL → CHORD OFF and KEYS OFF (with a chord on, the black keys change the chord: CHORD+) |
-| Recorded notes move | SLOOP quantises to the track's DIV: use 1/32, or nudge the step (SEQ + step + KNOB 4) |
-| Notes fade out on a dense part | the processor is at its limit; SLOOP fades one voice at a time (never the bass or lead) rather than glitching. Fewer held notes or a lighter engine help |
+| Recorded notes move | KARMA quantises to the track's DIV: use 1/32, or nudge the step (SEQ + step + KNOB 4) |
+| Notes fade out on a dense part | the processor is at its limit; KARMA fades one voice at a time (never the bass or lead) rather than glitching. Fewer held notes or a lighter engine help |
 | Nothing from the MIDI IN jack | try the other adapter type (A / B); check the channel (GLO → MIDI: CH1–CH4; MIDI 2: OTHER) and that GLO → MIDI 2 → IN is NOTES |
 | The USB audio input does not show | replug the FM-1; on a Mac keep USB SERIAL OFF and restart the FM-1; in Audacity: Transport → Rescan Audio Devices |
 | The USB recording is quiet | HOME menu → USB AUDIO = FULL, or MASTER up |
@@ -1207,4 +1225,4 @@ On the installer page, open **Return to the official firmware (V15)**: save a ba
 
 ---
 
-*SLOOP is based on Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. Full credits and licences: [SLOOP.md](SLOOP.md#rescue-going-back-credits) and [LICENSING.md](LICENSING.md). M-VAVE and FM-1 are trademarks of their owners; SLOOP is not affiliated with them.*
+*KARMA is by Ariel Muchnik, a fork of SLOOP by isod89, based on Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments. Full credits and licences: [README.md](README.md) and [LICENSING.md](LICENSING.md). M-VAVE and FM-1 are trademarks of their owners; KARMA is not affiliated with M-VAVE.*

@@ -324,10 +324,10 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
         <h1>Four tracks, a drum synth and a small cast of characters for your FM-1.</h1>
       </div>
       <div>
-        <p class="sub">KARMA is free custom firmware for the M-VAVE FM-1. An acid bass or a Juno, physical modelling, two dozen synthesis models, a drum synthesizer, a 64-step sequencer and generators that keep writing while you play. It runs in your browser today.</p>
+        <p class="sub">KARMA is free custom firmware for the M-VAVE FM-1. An acid bass or a Juno, physical modelling, two dozen synthesis models, a drum synthesizer, a 64-step sequencer and generators that keep writing while you play. It runs on the FM-1 today, and in your browser.</p>
         <div class="ctas">
-          <a class="btn go" href="emu/" target="_blank" rel="noopener">TRY IN THE BROWSER<small>Live now · the real firmware</small></a>
-          <a class="btn soon" href="webapp/installer/" target="_blank" rel="noopener" aria-describedby="soon-note">INSTALL<small id="soon-note">Soon · after hardware testing</small></a>
+          <a class="btn go" href="webapp/installer/" target="_blank" rel="noopener">INSTALL<small>Chrome or Edge · over USB</small></a>
+          <a class="btn lav" href="emu/" target="_blank" rel="noopener">TRY IN THE BROWSER<small>The real firmware, simulated</small></a>
           <a class="btn plain" href="webapp/editor/" target="_blank" rel="noopener">EDITOR<small>Sounds, kits, projects</small></a>
         </div>
         <div class="meta"><span>Free forever</span><span>GPL-3.0-only</span><span>Not for sale</span></div>
@@ -357,7 +357,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
 <div class="status">
   <div class="wrap">
     <b>STATUS</b>
-    <p><strong>Hardware testing starts this week</strong>, when the first FM-1 unit arrives. Until it passes, the installer stays closed. The browser simulator runs the same firmware and is open now.</p>
+    <p><strong>Version 3.0 runs on the FM-1.</strong> Tested on real hardware: both processor cores, USB audio with stems, MIDI in and out, and sync to a DAW. The installer is open.</p>
   </div>
 </div>
 
@@ -375,10 +375,10 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
         <a class="more" href="emu/" target="_blank" rel="noopener">Open the simulator →</a>
       </li>
       <li>
-        <span class="n" style="color:var(--muted)">2</span>
-        <h3>Install it on your FM-1 <span class="pill">soon</span></h3>
-        <p>A web installer flashes KARMA over USB from Chrome or Edge, with no tools to download. It opens once the firmware has been tested on real hardware. The same page will put the official firmware back.</p>
-        <a class="more" href="webapp/installer/" target="_blank" rel="noopener">Installer page (not available yet) →</a>
+        <span class="n c2">2</span>
+        <h3>Install it on your FM-1</h3>
+        <p>The web installer flashes KARMA over USB from Chrome or Edge, with no tools to download. Updating keeps your projects and settings, and the same page puts the official firmware back.</p>
+        <a class="more" href="webapp/installer/" target="_blank" rel="noopener">Open the installer →</a>
       </li>
       <li>
         <span class="n c1">3</span>
@@ -472,7 +472,8 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
         <h3>Audio interface and MIDI</h3>
         <ul>
           <li>Class-compliant stereo USB audio at 44.1 or 48 kHz</li>
-          <li>USB MIDI in and out</li>
+          <li>USB MIDI in and out: the sequencer plays out as MIDI, one channel a track</li>
+          <li>Follows your DAW's clock and play button (SYNC = USB)</li>
           <li><b>STEMS</b>: six channels into your DAW, tracks 1–3, drums and the FX return, each on its own</li>
         </ul>
       </div>
@@ -563,6 +564,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
         <ul>
           <li>Class-compliant USB audio and USB MIDI, no drivers.</li>
           <li>MENU › AUDIO › USB AUDIO = <b>STEMS</b>: six channels into your DAW, each track on its own.</li>
+          <li>GLO › SYSTEM › OUT = <b>SEQ</b>: the pattern goes out as MIDI to record in the DAW.</li>
         </ul>
       </li>
     </ol>
@@ -606,19 +608,19 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
     <div class="faq">
       <details open>
         <summary>Can I go back to the official firmware?</summary>
-        <div class="a"><p>Yes. The installer will offer M-VAVE's official V15 firmware alongside KARMA, so going back is the same few clicks as going forward.</p></div>
+        <div class="a"><p>Yes. The installer page has a <strong>Return to the official firmware</strong> section: download M-VAVE's official FM-1 V15, select its file, and it goes back the same way KARMA went on. Save a backup with the editor first: the official firmware cannot open KARMA's projects.</p></div>
       </details>
       <details>
         <summary>What do I need to install it?</summary>
-        <div class="a"><p><strong>Chrome or Edge</strong> on a computer (the installer uses WebUSB, which other browsers do not offer), and a <strong>USB cable that carries data</strong>. Many cables that come with chargers only carry power, and the FM-1 will not show up with one of those.</p></div>
+        <div class="a"><p><strong>Chrome or Edge</strong> on a computer (the installer talks to the FM-1 over Web MIDI, which Safari and Firefox do not offer for this), and a <strong>USB cable that carries data</strong>. Many cables that come with chargers only carry power, and the FM-1 will not show up with one of those.</p></div>
       </details>
       <details>
         <summary>I run FM1 Open or another custom firmware. What should I do?</summary>
         <div class="a"><p>Return to the official V15 firmware first, then install KARMA from there. Going from one custom firmware straight to another is not tested.</p></div>
       </details>
       <details>
-        <summary>When can I install it?</summary>
-        <div class="a"><p>After hardware testing. The first FM-1 unit arrives in a few days, and the installer opens once KARMA has been checked on it. Until then, the browser simulator runs the same firmware.</p></div>
+        <summary>Has it been tested on a real FM-1?</summary>
+        <div class="a"><p>Yes. Version 3.0 has been played, recorded and synced on a real FM-1. It is still young: if something misbehaves, <a href="https://github.com/eatyourgreensstudio-dotcom/karma-fm1/issues" target="_blank" rel="noopener">report it on GitHub</a>.</p></div>
       </details>
       <details>
         <summary>Does it cost anything?</summary>
@@ -626,7 +628,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
       </details>
       <details>
         <summary>Can I use it as an audio interface?</summary>
-        <div class="a"><p>Yes. Over USB the FM-1 shows up as a class-compliant stereo audio interface at 44.1 or 48 kHz, and as a MIDI device. Set MENU › AUDIO › USB AUDIO to STEMS and it becomes a six-channel interface: each track on its own channel, plus the effects in stereo.</p></div>
+        <div class="a"><p>Yes. Over USB the FM-1 shows up as a class-compliant stereo audio interface at 44.1 or 48 kHz, and as a MIDI device, both named FM-1 KARMA. Set MENU › AUDIO › USB AUDIO to STEMS and it becomes a six-channel interface: each track on its own channel, plus the effects in stereo. Set GLO › SYSTEM › OUT to SEQ and the sequencer plays out as MIDI, and SYNC to USB to start and stop it from the DAW.</p></div>
       </details>
     </div>
   </div>
@@ -687,7 +689,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
   <div class="wrap">
     <svg class="mark" viewBox="0 0 29 7" aria-hidden="true"><g class="k1"><rect x="0" y="0" width=".86" height=".86"/><rect x="4" y="0" width=".86" height=".86"/><rect x="0" y="1" width=".86" height=".86"/><rect x="3" y="1" width=".86" height=".86"/><rect x="0" y="2" width=".86" height=".86"/><rect x="2" y="2" width=".86" height=".86"/><rect x="0" y="3" width=".86" height=".86"/><rect x="1" y="3" width=".86" height=".86"/><rect x="0" y="4" width=".86" height=".86"/><rect x="2" y="4" width=".86" height=".86"/><rect x="0" y="5" width=".86" height=".86"/><rect x="3" y="5" width=".86" height=".86"/><rect x="0" y="6" width=".86" height=".86"/><rect x="4" y="6" width=".86" height=".86"/></g><g class="k2"><rect x="7" y="0" width=".86" height=".86"/><rect x="8" y="0" width=".86" height=".86"/><rect x="9" y="0" width=".86" height=".86"/><rect x="6" y="1" width=".86" height=".86"/><rect x="10" y="1" width=".86" height=".86"/><rect x="6" y="2" width=".86" height=".86"/><rect x="10" y="2" width=".86" height=".86"/><rect x="6" y="3" width=".86" height=".86"/><rect x="7" y="3" width=".86" height=".86"/><rect x="8" y="3" width=".86" height=".86"/><rect x="9" y="3" width=".86" height=".86"/><rect x="10" y="3" width=".86" height=".86"/><rect x="6" y="4" width=".86" height=".86"/><rect x="10" y="4" width=".86" height=".86"/><rect x="6" y="5" width=".86" height=".86"/><rect x="10" y="5" width=".86" height=".86"/><rect x="6" y="6" width=".86" height=".86"/><rect x="10" y="6" width=".86" height=".86"/></g><g class="k3"><rect x="12" y="0" width=".86" height=".86"/><rect x="13" y="0" width=".86" height=".86"/><rect x="14" y="0" width=".86" height=".86"/><rect x="15" y="0" width=".86" height=".86"/><rect x="12" y="1" width=".86" height=".86"/><rect x="16" y="1" width=".86" height=".86"/><rect x="12" y="2" width=".86" height=".86"/><rect x="16" y="2" width=".86" height=".86"/><rect x="12" y="3" width=".86" height=".86"/><rect x="13" y="3" width=".86" height=".86"/><rect x="14" y="3" width=".86" height=".86"/><rect x="15" y="3" width=".86" height=".86"/><rect x="12" y="4" width=".86" height=".86"/><rect x="14" y="4" width=".86" height=".86"/><rect x="12" y="5" width=".86" height=".86"/><rect x="15" y="5" width=".86" height=".86"/><rect x="12" y="6" width=".86" height=".86"/><rect x="16" y="6" width=".86" height=".86"/></g><g class="k4"><rect x="18" y="0" width=".86" height=".86"/><rect x="22" y="0" width=".86" height=".86"/><rect x="18" y="1" width=".86" height=".86"/><rect x="19" y="1" width=".86" height=".86"/><rect x="21" y="1" width=".86" height=".86"/><rect x="22" y="1" width=".86" height=".86"/><rect x="18" y="2" width=".86" height=".86"/><rect x="20" y="2" width=".86" height=".86"/><rect x="22" y="2" width=".86" height=".86"/><rect x="18" y="3" width=".86" height=".86"/><rect x="20" y="3" width=".86" height=".86"/><rect x="22" y="3" width=".86" height=".86"/><rect x="18" y="4" width=".86" height=".86"/><rect x="22" y="4" width=".86" height=".86"/><rect x="18" y="5" width=".86" height=".86"/><rect x="22" y="5" width=".86" height=".86"/><rect x="18" y="6" width=".86" height=".86"/><rect x="22" y="6" width=".86" height=".86"/></g><g class="k5"><rect x="25" y="0" width=".86" height=".86"/><rect x="26" y="0" width=".86" height=".86"/><rect x="27" y="0" width=".86" height=".86"/><rect x="24" y="1" width=".86" height=".86"/><rect x="28" y="1" width=".86" height=".86"/><rect x="24" y="2" width=".86" height=".86"/><rect x="28" y="2" width=".86" height=".86"/><rect x="24" y="3" width=".86" height=".86"/><rect x="25" y="3" width=".86" height=".86"/><rect x="26" y="3" width=".86" height=".86"/><rect x="27" y="3" width=".86" height=".86"/><rect x="28" y="3" width=".86" height=".86"/><rect x="24" y="4" width=".86" height=".86"/><rect x="28" y="4" width=".86" height=".86"/><rect x="24" y="5" width=".86" height=".86"/><rect x="28" y="5" width=".86" height=".86"/><rect x="24" y="6" width=".86" height=".86"/><rect x="28" y="6" width=".86" height=".86"/></g></svg>
     <span>KARMA · free FM-1 firmware · GPL-3.0-only · by Ariel Muchnik</span>
-    <nav aria-label="Tools"><a href="emu/" target="_blank" rel="noopener">Simulator</a><a href="webapp/installer/" target="_blank" rel="noopener">Installer (soon)</a><a href="webapp/editor/" target="_blank" rel="noopener">Editor</a><a href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener">Ko-fi ↗</a></nav>
+    <nav aria-label="Tools"><a href="emu/" target="_blank" rel="noopener">Simulator</a><a href="webapp/installer/" target="_blank" rel="noopener">Installer</a><a href="webapp/editor/" target="_blank" rel="noopener">Editor</a><a href="https://ko-fi.com/arielmuchnik" target="_blank" rel="noopener">Ko-fi ↗</a></nav>
   </div>
 </footer>
 

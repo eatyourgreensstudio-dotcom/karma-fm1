@@ -4,10 +4,10 @@
 """Make the site (GitHub Pages):
 
   index.html                  redirect to the installer
-  firmware/felucca-VER.fwsc   the package
+  firmware/karma-VER.fwsc     the package
   webapp/installer/index.html index_pkg.html with fm1pkg.js, fm1ota.js and the metadata inlined
   webapp/editor/index.html    editor.html (+ fukiai.ttf, FUKIAI-LICENSE.txt)
-  webapp/editor/sloop-editor.html  the editor in one file, for offline use (SLOOP 2.6): its icon font inlined,
+  webapp/editor/karma-editor.html  the editor in one file, for offline use (SLOOP 2.6): its icon font inlined,
                               its links to the installer and the font licence online; opened from the disk in
                               Chrome / Edge (file:// is a secure context: Web MIDI asks for permission)
   src/                        not touched
@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ONLINE = "https://isod89.github.io/sloop-fm1/"                 # (the offline editor's links)
+ONLINE = "https://eatyourgreensstudio-dotcom.github.io/karma-fm1/"                 # (the offline editor's links)
 
 
 def offline_editor(html):
@@ -67,7 +67,7 @@ def main(pkg, version, out):
     html = (HERE / "index_pkg.html").read_text(encoding="utf-8")
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8"))
-    name = f"sloop-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
+    name = f"karma-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
     meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name,
                        "sha256": hashlib.sha256(raw).hexdigest()})   # the page checks the download against it
     for mark in ("/*LIB*/", "/*META*/"):
@@ -90,23 +90,23 @@ def main(pkg, version, out):
         notes = HERE / "beta_banner.html"
         banner = notes.read_text(encoding="utf-8") if notes.exists() else "<p><b>BETA</b></p>"
     html = html.replace("<!--BANNER-->", banner)
-    for old in list(fw.glob("felucca-*.fwsc")) + list(fw.glob("sloop-*.fwsc")):   # one package: the current one
+    for old in list(fw.glob("felucca-*.fwsc")) + list(fw.glob("sloop-*.fwsc")) + list(fw.glob("karma-*.fwsc")):   # one package: the current one
         old.unlink()
     shutil.copy(pkg, fw / name)
     ed_html = (HERE / "editor.html").read_text(encoding="utf-8")
-    dl = f'download="sloop-editor-{re.sub(r"[^A-Za-z0-9.-]", "-", version)}.html"'
-    if ed_html.count('download="sloop-editor.html"') != 1 or html.count('download="sloop-editor.html"') != 1:
-        raise SystemExit('editor.html and index_pkg.html must link download="sloop-editor.html" once; update make_site.py')
-    (ed / "index.html").write_text(ed_html.replace('download="sloop-editor.html"', dl), encoding="utf-8")
-    (ed / "sloop-editor.html").write_text(offline_editor(ed_html), encoding="utf-8")
-    (inst / "index.html").write_text(html.replace('download="sloop-editor.html"', dl), encoding="utf-8")
+    dl = f'download="karma-editor-{re.sub(r"[^A-Za-z0-9.-]", "-", version)}.html"'
+    if ed_html.count('download="karma-editor.html"') != 1 or html.count('download="karma-editor.html"') != 1:
+        raise SystemExit('editor.html and index_pkg.html must link download="karma-editor.html" once; update make_site.py')
+    (ed / "index.html").write_text(ed_html.replace('download="karma-editor.html"', dl), encoding="utf-8")
+    (ed / "karma-editor.html").write_text(offline_editor(ed_html), encoding="utf-8")
+    (inst / "index.html").write_text(html.replace('download="karma-editor.html"', dl), encoding="utf-8")
     for f in ("fukiai.ttf", "FUKIAI-LICENSE.txt"):
         if (HERE / f).exists():
             shutil.copy(HERE / f, ed / f)
     (out / "index.html").write_text(
-        '<!doctype html><meta charset="utf-8"><title>SLOOP</title>'
+        '<!doctype html><meta charset="utf-8"><title>KARMA</title>'
         '<meta http-equiv="refresh" content="0; url=webapp/installer/">'
-        '<a href="webapp/installer/">SLOOP installer</a>\n', encoding="utf-8")
+        '<a href="webapp/installer/">KARMA installer</a>\n', encoding="utf-8")
     print(f"site: {out}: webapp/installer ({len(html)} B), webapp/editor, firmware/{name} ({len(raw)} B, {product})")
 
 

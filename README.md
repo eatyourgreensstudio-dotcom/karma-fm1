@@ -8,14 +8,16 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 <p align="center">
 <a href="https://eatyourgreensstudio-dotcom.github.io/karma-fm1/"><b>Website</b></a> ·
 <a href="https://eatyourgreensstudio-dotcom.github.io/karma-fm1/emu/"><b>Try it in the browser</b></a> ·
+<a href="https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/"><b>Install</b></a> ·
 <a href="https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/editor/">Web editor</a> ·
+<a href="GUIDE.md">Guide</a> ·
 <a href="../../issues">Report a bug</a>
 </p>
 
 ---
 
-> **Status:** 3.0, before hardware testing. The browser simulator runs the real firmware today; the installer opens
-> once KARMA has been tested on a real FM-1. Never for sale, free forever.
+> **Status:** 3.0, running on a real FM-1. Install it from the browser with the [web installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/)
+> (Chrome or Edge, a USB data cable); the same page puts the official firmware back. Never for sale, free forever.
 
 ## What's inside
 
@@ -26,8 +28,13 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 - **Sequencer.** 64 steps a track, chords of up to 4 notes, ratchets, accents, slides, chance, PLAY modes, a song arranger.
 - **Generators.** GEN writes every synth track's part on one KEY and chord PROGRESSION (SEQ > HARMONY): an acid bass, a voice-led line, a lead motif, evolving as they play. ACID GEN (TB-3PO), DRUM GEN (Grids maps, Euclid).
 - **Effects.** CLOUD granular send (built on Mutable Instruments' Clouds code), reverb, delay, punch-in effects.
-- **USB.** Class-compliant stereo audio interface and MIDI; per-track stems are in progress.
+- **USB.** Shows up as **FM-1 KARMA**: a class-compliant audio interface (stereo, or six-channel STEMS: each track on its own plus the effects) and MIDI in and out. The sequencer can play out as MIDI (one channel a track) and follow a DAW's clock and play button.
+- **Two cores.** The FM-1's second processor core renders tracks alongside the first, balanced as they play, so dense patterns and heavy engines stay clean.
 - **Screens.** OP-1-inspired pixel art drawn for KARMA: every track has a character that reacts to the notes.
+
+## Install
+
+Open the [installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/) in Chrome or Edge, connect the FM-1 by USB (a data cable, straight into the computer), press **Install** and allow MIDI. Updating keeps your projects and settings. Everything else, every button and page: [GUIDE.md](GUIDE.md).
 
 ## Build
 
