@@ -665,15 +665,44 @@ static void mix_part(track_t *t, uint32_t n) { mix_part_to(t, n, &BUS0); }
 static int32_t w_l[CTL], w_r[CTL], w_c[CTL], w_d[CTL], w_v[CTL], w_cl[CTL], w_b[CTL];
 static int16_t pnew1[P_COUNT];
 static const mixbus_t BUS1 = {w_l, w_r, w_c, w_d, w_v, w_cl, w_b, pnew1};
-static uint32_t w_n;
+static uint32_t w_n, w_job;                     /* the block's length, the tracks CPU1 renders in it (bit k: track k + 1) */
+/* the cores balanced (2026-10-28, Ariel): each part's render time (and the drums') is measured as it runs, a running
+ * mean of ticks; after each block CPU0 picks the tracks CPU1 renders next so that the two finish together (the larger
+ * of the two loads the least), a change only when it is clearly better (by 1/16: no back and forth) */
+static uint32_t w_mask = 6u;                    /* tracks 2 and 3 to start */
+static uint32_t core_cost[NPART + 1];           /* ticks x 8: the three parts, the drums */
+static inline void cost_put(uint32_t k, uint32_t ticks) { core_cost[k] += ticks - (core_cost[k] >> 3); }
 static void core1_parts(void *ctx)
 {
-    uint32_t i, n = w_n;
+    uint32_t i, k, n = w_n, m = w_job, t0;
     (void)ctx;
     for (i = 0; i < n; i++)
         w_l[i] = w_r[i] = w_c[i] = w_d[i] = w_v[i] = w_cl[i] = 0;
-    mix_part_to(&trk[1], n, &BUS1);
-    mix_part_to(&trk[2], n, &BUS1);
+    for (k = 0; k < NPART; k++)
+        if ((m >> k) & 1u) {
+            t0 = fm1_ticks();
+            mix_part_to(&trk[k], n, &BUS1);
+            cost_put(k, fm1_ticks() - t0);
+        }
+}
+static void core_balance(void)                  /* CPU0, after the join: the next block's split */
+{
+    uint32_t m, best = w_mask, k, bl = 0xFFFFFFFFu, cur = 0;
+    for (m = 1; m < (1u << NPART); m++) {               /* (CPU1 always has one: else nothing would measure it) */
+        uint32_t l0 = core_cost[NPART], l1 = 0, l;
+        for (k = 0; k < NPART; k++)
+            if ((m >> k) & 1u)
+                l1 += core_cost[k];
+            else
+                l0 += core_cost[k];
+        l = l0 > l1 ? l0 : l1;
+        if (m == w_mask)
+            cur = l;
+        if (l < bl)
+            bl = l, best = m;
+    }
+    if (best != w_mask && bl + (cur >> 4) < cur)
+        w_mask = best;
 }
 #endif
 static void mix_part_run(track_t *t, uint32_t n, const mixbus_t *o)
@@ -1121,12 +1150,18 @@ static void mix_block(int32_t *out, uint32_t n)
 #if KARMA_DUAL_CORE
     int w_on = 0;
     audio_worker_check();                               /* (a CPU1 that faulted or misread: retired, one core) */
-    if (!fx_stems && n <= CTL) {                        /* (USB STEMS: each part's own stem, one core) */
+    if (!fx_stems && n <= CTL && w_mask) {              /* (USB STEMS: each part's own stem, one core) */
         w_n = n;
+        w_job = w_mask;
         w_on = audio_worker_submit(core1_parts, 0);
     }
     if (w_on) {
-        mix_part(&trk[0], n);
+        for (i = 0; i < NPART; i++)                     /* CPU0's parts, measured as CPU1's are */
+            if (!((w_job >> i) & 1u)) {
+                uint32_t t0 = PROF_NOW();
+                mix_part(&trk[i], n);
+                cost_put(i, PROF_NOW() - t0);
+            }
         PROF(PF_T1);
     } else
 #endif
@@ -1178,15 +1213,19 @@ static void mix_block(int32_t *out, uint32_t n)
     }
     if (fx_stems)
         stem_take(TRK_DRUM, n, 1);                      /* the drums' stem */
+#if KARMA_DUAL_CORE
+    cost_put(NPART, PROF_NOW() - prof_t0);              /* (the drums' time, for the balance) */
+#endif
     PROF(PF_DRUMS);
 #if KARMA_DUAL_CORE
-    if (w_on) {                                         /* CPU1's tracks 2 and 3: wait, then into the mix and the sends */
+    if (w_on) {                                         /* CPU1's tracks: wait, then into the mix and the sends */
         if (audio_worker_join())
             for (i = 0; i < n; i++) {
                 mix_l[i] += w_l[i], mix_r[i] += w_r[i];
                 send_c[i] += w_c[i], send_d[i] += w_d[i], send_r[i] += w_v[i], cloud_bus[i] += w_cl[i];
             }
         PROF(PF_T2);                                    /* (CPU0's wait and the sum; track3: 0) */
+        core_balance();
     }
 #endif
     click_render(mix_l, mix_r, n);                      /* the metronome: its own voice (drums.c), any kit, any mute */

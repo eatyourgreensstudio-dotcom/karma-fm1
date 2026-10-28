@@ -214,6 +214,11 @@ static void con_status(void)
     con_kv("core1_timeouts", (int32_t)audio_worker.timeouts);
     con_kv("core1_misreads", (int32_t)audio_worker.rejected);
     con_kv("core1_faults", (int32_t)fm1_core1_fault.count);
+    con_kv("core1_tracks", (int32_t)w_mask);             /* (bit k: track k + 1 on CPU1) and the measured costs, us */
+    con_kv("cost_t1_us", (int32_t)(core_cost[0] / 8u / FM1_TICKS_PER_US));
+    con_kv("cost_t2_us", (int32_t)(core_cost[1] / 8u / FM1_TICKS_PER_US));
+    con_kv("cost_t3_us", (int32_t)(core_cost[2] / 8u / FM1_TICKS_PER_US));
+    con_kv("cost_drums_us", (int32_t)(core_cost[NPART] / 8u / FM1_TICKS_PER_US));
 #endif
 }
 
