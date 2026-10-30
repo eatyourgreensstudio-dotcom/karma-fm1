@@ -1,0 +1,11 @@
+{
+  "what": "A four-track groovebox: an acid bass or a Juno-style poly, physical modelling, two dozen synthesis models and a drum synth. A 64-step sequencer with song mode, generators that write parts on one chord plan, pixel characters, and USB audio with six stems, MIDI out and DAW sync.",
+  "author": "Ariel Muchnik",
+  "kinds": [
+    "groove"
+  ],
+  "play": "https://eatyourgreensstudio-dotcom.github.io/karma-fm1/emu/",
+  "editor": "https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/editor/",
+  "cheat": "https://eatyourgreensstudio-dotcom.github.io/karma-fm1/emu/cheatsheet.html",
+  "image": "assets/card.png"
+}

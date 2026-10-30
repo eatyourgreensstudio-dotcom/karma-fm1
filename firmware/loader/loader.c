@@ -12,7 +12,9 @@
 #define FELUCCA_OTA 1
 #define FELUCCA_OTA_DRYRUN 0
 #define FELUCCA_USB_PID 0x0002
-#define FELUCCA_ID "ota-FM-1_900"
+#ifndef FELUCCA_ID
+#define FELUCCA_ID "ota-FM-1_926"   /* (build.py passes "ota-" + the package identity) */
+#endif
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")
 #include "fm1_time.h"
 #include "fm1_sys.h"
