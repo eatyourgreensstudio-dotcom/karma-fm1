@@ -37,8 +37,9 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 Open the [installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/) in Chrome or Edge, connect the FM-1 by USB (a data cable, straight into the computer), press **Install** and allow MIDI. Updating keeps your projects and settings. Everything else, every button and page: [GUIDE.md](GUIDE.md).
 
 **Coming from another firmware, or leaving KARMA:** back up first (the editor's **Projects → Backup**). KARMA reads
-projects saved by SLOOP, but every FM-1 firmware keeps its work in the same flash in its own way: another firmware may
-not read KARMA's projects, presets and samples, and may overwrite them. Restore your backup from the editor when you
+projects saved by SLOOP up to 2.6 (where it grew from), not those of newer SLOOP releases; every FM-1 firmware keeps its
+work in the same flash in its own way, so another firmware may not read KARMA's projects, presets and samples, and may
+overwrite them (tested: after SLOOP 2.8, KARMA starts with an empty project). Restore your backup from the editor when you
 come back. The installer page puts M-VAVE's official V15 back; holding **OCT−** while switching on starts the USB
 rescue if an install was interrupted. KARMA's identity is **FM-1_926**.
 
