@@ -34,9 +34,33 @@ const E = vm.runInNewContext(proto + `
    CHOP, chopNovelty, chopHits, chopSnap, chopGrid, chopEqual, chopList, chopPick, chopFit, chopZones, wavFile, zipStore, crc32,
    UP, bank, capturePatch, auditionPatch, startWatch, libraryFile, readLibraryFile, paramKeys, patternFromSteps, stepsFromPattern, upName,
    mixer, GM_DRUM, drumName, parseNotes, fmtValue, F, DRUM_LANES, LV_NAMES, emptyDrum, lockable, MICRO, FC, fillGet, fillSet, pack7, unpack7,
-   backupCapture, backupRestore, backupObjects, b64enc, b64dec, FM6, KIT, kitPad, kitZones, kitLen, kitBytes, kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ROLL, SMF, ARR, mockSettings, fm6CartWrite, fm6CartPreset, fm6CartSlots, fm6CartPresets, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkDevFormat, bkFwAtLeast })`,
+   backupCapture, backupRestore, backupObjects, b64enc, b64dec, FM6, KIT, kitPad, kitZones, kitLen, kitBytes, kitFit, kitSplit, kitLaneOf, kitPlace, zipRead, ROLL, SMF, ARR, mockSettings, fm6CartWrite, fm6CartPreset, fm6CartSlots, fm6CartPresets, DSYN, DSYN_MOCK_NAMES, DSYN_MOCK_KITS, SetGate, bkProjFormat, bkDevFormat, bkFwAtLeast, getNames, parseNamesPage })`,
 { setTimeout, clearTimeout, setInterval, clearInterval, console, TextEncoder, TextDecoder, Blob, Response, DecompressionStream });
 
+/* v11 (2026-10-30): names in pages, as firmware editor.c ED_NAMES with a start: 58 names of 12 letters need three frames */
+async function namesPaging() {
+  const all = Array.from({ length: 58 }, (_, i) => ("NAME" + String(i).padStart(2, "0")).padEnd(12, "X"));
+  const str = (s) => [...Buffer.from(s, "latin1"), 0];
+  let frames = 0;
+  const rq = async (r) => {
+    const [cmd, args] = r;
+    frames++;
+    if (args.length < 2) return [args[0], all.length, ...all.flatMap(str).slice(0, 590)];   /* v10: one frame, cut */
+    const out = [args[0], all.length, args[1], 0];
+    let k = args[1];
+    while (k < all.length && out.length + 13 + 20 <= 594) out.push(...str(all[k++]));
+    out[3] = k - args[1];
+    if (k >= all.length) out.push(...str("PAGE1"), ...str("PAGE2"));
+    return out;
+  };
+  const got = await E.getNames(rq, { proto: 11 }, 12);
+  ok(got.names.length === 58 && got.names.every((n, i) => n === all[i]) && got.titles.join() === "PAGE1,PAGE2" && frames >= 2,
+    `v11: NAMES in pages: 58 names of 12 letters in ${frames} frames, titles after the last`);
+  frames = 0;
+  let err = "";
+  try { await E.getNames(rq, { proto: 10 }, 12); } catch (e) { err = e.message; }
+  ok(err === "short reply" && frames === 1, "v10 firmware: one NAMES frame (as before)");
+}
 async function editorMock() {
   const m = E.makeMockDevice();
   const inp = [...m.access.inputs.values()][0], out = [...m.access.outputs.values()][0];
@@ -626,7 +650,7 @@ async function editorV5() {
     && names.indexOf("ED_MICRO_GET") + 1 === C.MICRO_GET && names.indexOf("ED_MICRO_SET") + 1 === C.MICRO_SET
     && names.indexOf("ED_FILL_GET") + 1 === C.FILL_GET && names.indexOf("ED_FILL_SET") + 1 === C.FILL_SET
     && /ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE/.test(ec) && C.FM6_GET === 68 && C.FM6_ERASE === 71
-    && /#define ED_PROTO 10u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec)
+    && /#define ED_PROTO 11u/.test(ec) && /ed_b\(ED_PROTO\);/.test(ec)
     && /enum \{ ED_DSYN_LIST = 72, ED_DSYN_GET, ED_DSYN_PUT, ED_DSYN_STORE, ED_DSYN_PLAY \};/.test(readFileSync(join(HERE, "../firmware/src/editor_dsyn.c"), "utf8"))
     && C.DSYN_LIST === 72 && C.DSYN_PLAY === 76, "v5..v10: command numbers and INFO == editor.c / editor_dsyn.c");
   const enumNames = (id) => (new RegExp(`${id}\\[\\] = \\{([^}]*)\\}`).exec(pc) || [])[1].split(",").map((x) => x.trim().replace(/"/g, ""));
@@ -1521,6 +1545,7 @@ async function updater() {
   ok(e6 && /official FM-1 V15/.test(e6.message), "fm1pkg.js: only the exact official V15 is accepted (SHA-256)");
 }
 
+await namesPaging();
 await editorMock();
 await editorLibrarian();
 await editorLive();

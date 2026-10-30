@@ -29,7 +29,7 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_FILL_GET, ED_FILL_SET,                                                /* v8: fill conditions */
        ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE };                /* v9: FM6 patches (Felucca's numbers) */
 /* v10 (SLOOP 2.5): DSYN_LIST .. DSYN_PLAY = 72..76, editor_dsyn.c; backup object 9 = the SYN kits */
-#define ED_PROTO 10u                                   /* the protocol version INFO ends with */
+#define ED_PROTO 11u                                   /* the protocol version INFO ends with */
 
 static uint8_t ed_out[600];
 static uint32_t ed_n;
@@ -645,7 +645,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         for (i = 0; i < NENGINES; i++)
             ed_str(ENGINES[i]->name, 8);
         ed_b(NTRK);                                       /* v3 */
-        ed_b(ED_PROTO);                                   /* v5..: the protocol version (9: FM6 patches, 10: SYN kits) */
+        ed_b(ED_PROTO);                                   /* v5..: the protocol version (9: FM6 patches, 10: SYN kits,
+                                                           * 11: NAMES in pages) */
         break;
     case ED_GET:
     case ED_SET:
@@ -737,8 +738,30 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             return;
         ed_b(a[0]);
         ed_b(ENGINES[a[0]]->npresets);
-        for (i = 0; i < ENGINES[a[0]]->npresets; i++)
-            ed_str(ENGINES[a[0]]->presets[i].name, 12);
+        if (na >= 2u) {                                    /* v11 (2026-10-30: PLAITS' 58 names overflowed the frame, the
+                                                            * editor stopped on "short reply"): a page from a[1]: start,
+                                                            * count, the names that fit, the titles after the last one */
+            uint32_t n = ENGINES[a[0]]->npresets, st = a[1] < n ? a[1] : n, at, k = st;
+            ed_b(st);
+            at = ed_n;
+            ed_b(0);
+            while (k < n) {
+                const char *s = ENGINES[a[0]]->presets[k].name;
+                uint32_t l = 0;
+                while (s && s[l] && l < 12u)
+                    l++;
+                if (ed_n + l + 1u + 20u > sizeof ed_out - 2u)  /* (room for the titles and the end) */
+                    break;
+                ed_str(s, 12);
+                k++;
+            }
+            ed_out[at] = (uint8_t)(k - st);
+            if (k < n)
+                break;
+        } else {
+            for (i = 0; i < ENGINES[a[0]]->npresets; i++)
+                ed_str(ENGINES[a[0]]->presets[i].name, 12);
+        }
         for (i = 0; i < 2u; i++)                           /* then the two edit-page titles */
             ed_str(ENGINES[a[0]]->page_title[i], 8);
         break;

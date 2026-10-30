@@ -940,6 +940,7 @@ const req = {
   preset: (e, p) => [CMD.PRESET, [e & 0x7F, p & 0x7F]],
   project: (op, slot) => { if (![0, 1, 2].includes(op)) throw new Error("bad PROJECT op"); return [CMD.PROJECT, [op, slot & 3]]; },   /* 0 load, 1 save, 2 query */
   names: (e) => [CMD.NAMES, [e & 0x7F]],
+  namesFrom: (e, start) => [CMD.NAMES, [e & 0x7F, start & 0x7F]],   /* v11: a page of names from start */
   smpBegin: (s) => [CMD.SMP_BEGIN, [s & 0x7F]],
   smpWrite: (s, off, bytes) => [CMD.SMP_WRITE, [s & 0x7F, off & 0x7F, (off >> 7) & 0x7F, (off >> 14) & 0x7F, ...pack7(bytes)]],
   smpEnd: (s, hdr) => [CMD.SMP_END, [s & 0x7F, ...pack7(hdr)]],
@@ -3514,6 +3515,28 @@ class SetGate {
   }
   clear() { this.m.clear(); }
 }
+/* v11 (KARMA 3.0): an engine's preset names in pages (PLAITS' 58 names overflowed one frame: "short reply").
+   A page: engine, total, start, count, the names, then the two page titles after the last name. Older firmware:
+   one frame (NAMES) */
+function parseNamesPage(a) {
+  const r = new Reader(a);
+  const o = { engine: r.b(), n: r.b(), start: r.b(), names: [], titles: null };
+  const cnt = r.b();
+  for (let i = 0; i < cnt; i++) o.names.push(r.s());
+  if (o.start + cnt >= o.n) { try { o.titles = [r.s(), r.s()]; } catch (e) { o.titles = []; } }
+  return o;
+}
+async function getNames(rq, info, e) {
+  if (!(info.proto >= 11)) return parse[CMD.NAMES](await rq(req.names(e)));
+  const o = { engine: e, names: [], titles: [] };
+  for (let guard = 0; guard < 32; guard++) {
+    const p = parseNamesPage(await rq(req.namesFrom(e, o.names.length)));
+    o.names.push(...p.names);
+    if (p.titles) o.titles = p.titles;
+    if (p.titles || !p.names.length || o.names.length >= p.n) break;
+  }
+  return o;
+}
 /*PROTO-END*/
 
 /* ===================================================================== UI === */
@@ -4232,7 +4255,7 @@ async function load(d) {
     if (kd && kd.label === "KIT" && kd.names.length) d.kitNames = kd.names;   /* (the drum track was selected) */
     d.titles = [];
     for (let e = 0; e < d.info.nengines; e++) {
-      const r = parse[CMD.NAMES](await d.link.request(req.names(e)));
+      const r = await getNames((q, o) => d.link.request(q, o), d.info, e);   /* (v11: in pages) */
       d.names[e] = r.names;
       d.titles[e] = r.titles;
     }
