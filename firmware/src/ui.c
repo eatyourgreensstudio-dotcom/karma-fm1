@@ -3,7 +3,7 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "KARMA 3.0"  /* KARMA, free firmware for the FM-1: after SLOOP 2.6, based on Felucca (3.0: the editor reads the number, 2.5.1 and later) */
+#define FELUCCA_VERSION "KARMA 3.0.1"  /* (3.0.1: the PLAITS song-mode crash fixed)  KARMA, free firmware for the FM-1: after SLOOP 2.6, based on Felucca (3.0: the editor reads the number, 2.5.1 and later) */
 #endif
 static void project_save(uint32_t slot);
 static void arrangement_save(void);
