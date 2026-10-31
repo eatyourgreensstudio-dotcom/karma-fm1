@@ -92,6 +92,7 @@
     Hold OCT− alone while switching on for USB rescue.<br>
     Font: Terminus (Dimitar Toshkov Zhekov, SIL OFL 1.1). Samples: Versilian Studios VSCO-2 Community Edition and VCSL (CC0 1.0), and the Hügelton Sample Pack (© Hügelton Instruments, not CC0).<br>
     M-VAVE and FM-1 are trademarks of their respective owners; KARMA is not affiliated with them.<br>
+    Visits and installs are counted anonymously with GoatCounter: no cookies, no personal data.<br>
     <span data-t="license"></span> <a href="https://github.com/eatyourgreensstudio-dotcom/karma-fm1" target="_blank" rel="noopener">github.com/eatyourgreensstudio-dotcom/karma-fm1</a></p>
 </main>
 <script type="module">
@@ -504,6 +505,19 @@ window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault
   } catch (e) { sayK("loadfail", e.message); }
 })();
 
+/* anonymous counts (GoatCounter, karmafm1): a page opened, an install started / done / failed. No cookies, no
+   personal data, no script from elsewhere: one image request. Only from the live site (https), never with Do Not Track */
+const gc = (path, title, event) => {
+  try {
+    if (location.protocol !== "https:" || navigator.doNotTrack === "1") return;
+    const q = new URLSearchParams({ p: path, t: title || path, rnd: Math.random().toString(36).slice(2) });
+    if (event) q.set("e", "true");
+    else if (document.referrer) q.set("r", document.referrer);
+    new Image().src = "https://karmafm1.goatcounter.com/count?" + q;
+  } catch (e) { /* counting never gets in the way */ }
+};
+gc("/webapp/installer/", "Installer");
+
 const total = 74 + 1179;                           /* reads: step 1, step 2 (head + app area, SLOOP 2.0 loader) */
 const step = (k, a) => {
   log(`${k} ${a ?? ""}`);
@@ -512,9 +526,11 @@ const step = (k, a) => {
   if (k === "loader") sayK("loader");
   if (k === "write") { sayK("write"); $("bar").value = Math.min(100, ((74 + a) / total) * 100); }
   if (k === "reboot") sayK("reboot");
-  if (k === "done") { $("bar").value = 100; sayK("done"); }
+  if (k === "done") { $("bar").value = 100; sayK("done"); gc(`${job}-done`, `${job} done`, true); }
 };
+let job = "install";                               /* (what the counts call it: install, official-v15) */
 const failed = (e) => {
+  gc(`${job}-failed`, `${job} failed: ${(e && (e.code || e.message)) || "?"}`.slice(0, 120), true);
   if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
   else sayK("error", e && e.message);
   log(String(e && e.stack || e));
@@ -526,12 +542,16 @@ $("go").addEventListener("click", async () => {
   let midi;
   try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
   catch (e) { sayK("denied"); lockAll(false); return; }
+  job = "install";
+  gc("install-start", `install KARMA ${meta.version}`, true);
   try {
     const up = new Updater(midi, log);
     const ota = await up.find((id) => /^ota-/i.test(id.model));
     if (ota) {
       ota.link.close();
-      sayK((await up.resume(image, step)) ? "done" : "stopped");
+      const ok = await up.resume(image, step);
+      sayK(ok ? "done" : "stopped");
+      gc(ok ? "install-done" : "install-stopped", ok ? "install done (resumed)" : "install stopped", true);
     } else {
       await up.install(image, meta.product, step);
     }
@@ -557,6 +577,8 @@ $("stock-go").addEventListener("click", async () => {
   let midi;
   try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
   catch (e) { sayK("denied"); lockAll(false); return; }
+  job = "official-v15";
+  gc("official-v15-start", "back to the official V15", true);
   try {
     const up = new Updater(midi, log);
     const ota = await up.find((id) => /^ota-/i.test(id.model));

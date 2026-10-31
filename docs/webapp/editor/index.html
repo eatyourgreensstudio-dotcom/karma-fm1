@@ -7665,6 +7665,13 @@ showTab(tab);
 libInit();
 if (!MOCK && !navigator.requestMIDIAccess) sayK("nomidi");
 })();
-</script>
+/* an anonymous count of this page (GoatCounter, karmafm1): no cookies, no personal data, one image request;
+   only from the live site (https), never with Do Not Track */
+(function () { try {
+  if (location.protocol !== "https:" || navigator.doNotTrack === "1") return;
+  var q = new URLSearchParams({ p: "/webapp/editor/", t: "Editor", rnd: Math.random().toString(36).slice(2) });
+  if (document.referrer) q.set("r", document.referrer);
+  new Image().src = "https://karmafm1.goatcounter.com/count?" + q;
+} catch (e) {} })();</script>
 </body>
 </html>
