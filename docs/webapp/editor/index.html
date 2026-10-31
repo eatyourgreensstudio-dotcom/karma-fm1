@@ -3606,6 +3606,9 @@ const TEXT = {
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。",
     denied: "MIDI（SysEx）の使用が許可されませんでした。",
     nodevice: "KARMA が見つかりません。USB で接続して、もう一度押してください。",
+    notkarma: "この FM-1 はまだ KARMA ではありません。先にウェブインストーラーで KARMA を入れてから、もう一度接続を押してください。",
+    midiSees: "ブラウザに見える MIDI:",
+    midiNone: "ブラウザには MIDI 機器がひとつも見えません。データ用の USB ケーブルでコンピューターに直接つないでください。Mac では「システム設定 > プライバシーとセキュリティ > アクセサリの接続を許可」も確認してください。",
     connecting: "接続中", reading: "読み込み中 ", steploading: "ステップを読み込み中 ",
     ready: "接続しました", disconnected: "切断されました", lost: "FM-1 が外されました",
     noreply: "応答がありません", error: "エラー: ", busy: "処理中",
@@ -3807,6 +3810,9 @@ const TEXT = {
     nomidi: "This browser cannot do it. Open the page in Chrome or Edge.",
     denied: "MIDI (SysEx) access was not allowed.",
     nodevice: "KARMA not found. Connect the FM-1 by USB and press Connect again.",
+    notkarma: "This FM-1 is not running KARMA yet: install it with the web installer first, then press Connect again.",
+    midiSees: "The browser sees:",
+    midiNone: "The browser sees no MIDI device at all. Use a USB data cable, straight into the computer. On a Mac, also check System Settings > Privacy & Security > Allow accessories to connect.",
     connecting: "Connecting", reading: "Reading ", steploading: "Reading steps ",
     ready: "Connected", disconnected: "Disconnected", lost: "The FM-1 was unplugged",
     noreply: "No reply from the device", error: "Error: ", busy: "Busy",
@@ -3999,7 +4005,7 @@ const TEXT = {
 let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
 const t = (k) => TEXT[lang][k] ?? k;
 let lastKey = null, lastArg = "";
-const ERR_KEYS = /fail|error|denied|nomidi|nodevice|noreply|lost|refused|full|bad/i;
+const ERR_KEYS = /fail|error|denied|nomidi|nodevice|notkarma|noreply|lost|refused|full|bad/i;
 function sayK(k, arg = "") {
   lastKey = k; lastArg = arg;
   $("status").textContent = t(k) + arg;
@@ -4171,7 +4177,13 @@ async function connect() {
     const isF = (p) => /felucca|karma/i.test(p.name || "") && p.state !== "disconnected";
     const input = [...access.inputs.values()].find(isF);
     const output = [...access.outputs.values()].find(isF);
-    if (!input || !output) { sayK("nodevice"); return; }
+    if (!input || !output) {                        /* (2026-10-31, issue 1) say why: not KARMA yet, or what the browser sees */
+      const names = [...access.inputs.values()].filter((p) => p.state !== "disconnected").map((p) => p.name || "?");
+      const fm1 = names.find((n) => /fm-1|sloop|composite|sinco|usb-midi/i.test(n));
+      if (fm1) sayK("notkarma", ` (${fm1})`);
+      else sayK("nodevice", " " + (names.length ? t("midiSees") + " " + names.join(", ") : t("midiNone")));
+      return;
+    }
     const link = new Link((d) => output.send(d), {
       timeout: 300,
       onUnknown: (f) => console.debug("ignored reply", f),
