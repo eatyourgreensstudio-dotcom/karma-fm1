@@ -39,6 +39,8 @@ static const cfg_t CFG[] = {   /* (2026-10-19: the engines that are left: ACID, 
     {ENGI_ELEM, 0, 0, "ELEMENTS BOUNCE"}, {ENGI_ELEM, 3, 1, "ELEMENTS PICK"}, {ENGI_ELEM, 5, 2, "ELEMENTS BOW (solo)"},
     {ENGI_ELEM, 8, 3, "ELEMENTS BLOW (solo)"}, {ENGI_ELEM, 11, 4, "ELEMENTS OMIN (Ominous Voice)"},
     {ENGI_PRISM, 47, -1, "PLAITS MODAL (her C++)"},
+    {ENGI_PRISM, 23, -1, "PLAITS HOUSE STAB (CHORD: its own model, in the same arena)"},   /* (2026-10-31, Ariel's
+                                * song: CHORD wrote the arena, Plaits' MODAL then ran a stale instance: a crash) */
 };
 static const uint8_t LIVE[] = {ENGI_ACID, ENGI_JUNO, ENGI_PRISM, ENGI_ELEM};
 #define NCFG (sizeof CFG / sizeof CFG[0])
@@ -57,6 +59,7 @@ static uint64_t phrase(track_t *t)
     int32_t out[CTL];
     uint64_t h = 0xCBF29CE484222325ull;
     uint32_t b, k;
+    pr_rng = 0x21;                                      /* (SWARM's random pitches: its generator runs on by design) */
     for (b = 0; b < 3000u; b++) {                       /* ~2.2 s */
         if (b == 10u)
             for (k = 0; k < 3u; k++)
@@ -156,6 +159,49 @@ static uint64_t after(uint32_t di, uint32_t ci)
     return phrase(t) ^ (eng_arena_bad ? 1u : 0u);
 }
 
+/* (2026-10-31, Ariel's song crashed in plx_render at the second pass) within ONE engine: PLAITS plays model X, a
+ * section switches it to model Y, then back to X. PRISM's own models (SWARM .. CHORD) and Plaits' models share the
+ * arena: each must set its state up again after the other wrote it. X, Y, X with notes, the track put back, then the
+ * phrase on X: as on a fresh FM-1 (a stale instance: a crash, the child answers 0, or other sound) */
+static void play_switch(track_t *t, const cfg_t *c)
+{
+    int32_t out[CTL];
+    uint32_t b, k, guard;
+    host_preset_req(t, c->e, c->pi);
+    for (guard = 0; guard < 20000u && (t->engine != c->e || t->xf_on); guard++) {
+        engine_block(t);
+        track_render(t, out, CTL);
+    }
+    for (k = 0; k < 4u; k++)
+        trk_note_on(t, (uint32_t)(43 + 5 * k), 110);
+    for (b = 0; b < 1500u; b++) {
+        engine_block(t);
+        track_render(t, out, CTL);
+    }
+    for (k = 0; k < 4u; k++)
+        trk_note_off(t, (uint32_t)(43 + 5 * k));
+    for (b = 0; b < 3000u; b++) {
+        engine_block(t);
+        track_render(t, out, CTL);
+    }
+}
+static uint64_t xyx(uint32_t xi, uint32_t yi)
+{
+    static track_t boot;
+    track_t *t = &trk[0];
+    host_tracks_init();
+    boot = *t;
+    load(t, &CFG[xi]);
+    play_switch(t, &CFG[xi]);
+    play_switch(t, &CFG[yi]);
+    play_switch(t, &CFG[xi]);
+    play_switch(t, &CFG[yi]);
+    *t = boot;
+    load(t, &CFG[xi]);
+    rng_state = 0x5EED5EEDu;
+    return phrase(t) ^ (eng_arena_bad ? 1u : 0u);
+}
+
 /* ------------------------------------------------------------ fuzz --- */
 static uint32_t fz = 0xA5A5F00Du;
 static uint32_t frnd(uint32_t n)
@@ -191,6 +237,23 @@ int main(int argc, char **argv)
         }
     snprintf(what, sizeof what, "arena: every engine after every other one (%u pairs, both ELEMENTS layouts) bit-identical to a fresh start", pairs);
     check(same == pairs, what);
+    {   /* within PLAITS: Plaits' MODAL and PRISM's own CHORD (HOUSE STAB) back and forth, both ways round */
+        uint32_t x, y, ok = 1;
+        for (x = 0; x < NCFG; x++)
+            for (y = 0; y < NCFG; y++) {
+                uint64_t h;
+                if (x == y || CFG[x].e != ENGI_PRISM || CFG[y].e != ENGI_PRISM)
+                    continue;
+                h = in_child(xyx, x, y);
+                if (h != ref[x]) {
+                    snprintf(what, sizeof what, "PLAITS: %s, %s, %s again, %s again: then as on a fresh FM-1%s", CFG[x].name,
+                             CFG[y].name, CFG[x].name, CFG[y].name, h ? "" : " (it crashed)");
+                    check(0, what);
+                    ok = 0;
+                }
+            }
+        check(ok, "PLAITS: its models back and forth (Plaits' own and PRISM's, as song sections switch them) sound as on a fresh FM-1");
+    }
 
     /* 3. the long random session (2. is counted all along) */
     {

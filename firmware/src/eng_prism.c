@@ -75,6 +75,8 @@ static void *plx_slot(track_t *t, voice_t *v, uint32_t k)
         if (plx_init((int)k, a + i * st, st))
             return 0;
         plx_ready[p][i] = (uint8_t)(k + 1u);
+        for (j = 0; j < NVOICE; j++)                     /* (2026-10-31) PRISM's own slots share this arena: written */
+            t->v[j].s[5] = 0;                            /* over, each sets itself up again (prism_slot_init) */
     }
     return a + i * st;
 }
@@ -88,8 +90,14 @@ static prism_slot_t *prism_slot(track_t *t, voice_t *v)   /* the voice's slot (0
 static void prism_slot_init(track_t *t, voice_t *v)      /* the slot set for the model the track plays now */
 {
     prism_slot_t *sl = prism_slot(t, v);
-    uint32_t model = prism_model(t);
+    uint32_t model = prism_model(t), p = (uint32_t)(t - trk);
     v->s[5] = (int32_t)model + 1;
+    if (sl && model != PRM_FOLD && p < NPART)            /* (2026-10-31, Ariel's song: CHORD here, Plaits' MODAL in the next
+                                                          * section ran the instance this slot had written over: a crash at
+                                                          * the second pass) Plaits' instances in this arena start over */
+        memset(plx_ready[p], 0, sizeof plx_ready[p]);
+    if (sl)
+        memset(sl, 0, sizeof *sl);                       /* (as on a fresh FM-1: what another model left is not this one's) */
     if (sl && model == PRM_SWARM)
         pr_swarm_init(&sl->swarm);
     if (sl && model == PRM_WAVE)
