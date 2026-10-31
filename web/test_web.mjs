@@ -1542,7 +1542,19 @@ async function updater() {
   const pk = await import(join(HERE, "fm1pkg.js"));
   const notStock = new Uint8Array(pk.STOCK_V15_SIZE);
   const e6 = await pk.validateStockPackage(notStock).then(() => null, (x) => x);
-  ok(e6 && /official FM-1 V15/.test(e6.message), "fm1pkg.js: only the exact official V15 is accepted (SHA-256)");
+  ok(e6 && /official FM-1 V15 or V16/.test(e6.message), "fm1pkg.js: only the exact official V15 / V16 are accepted (SHA-256)");
+  /* (2026-10-31) the real official files, when they are here: V15 (ref/), V16 (KARMA_V16=path) */
+  const fs = await import("node:fs");
+  for (const [path, version, product] of [[join(HERE, "../../ref/fm-106/build/FM-1.fwsc"), "V15", "FM-1_015"],
+                                           [process.env.KARMA_V16 || "", "V16", "FM-1_016"]]) {
+    if (!path || !fs.existsSync(path)) { console.log(`  (skipped: no official ${version} file)`); continue; }
+    const raw = new Uint8Array(fs.readFileSync(path));
+    const v = await pk.validateStockPackage(raw);
+    ok(v.version === version && v.product === product && v.image.length === raw.length - 20, `fm1pkg.js: the official ${version} is accepted as ${version}`);
+    raw[raw.length - 100] ^= 1;
+    const e7 = await pk.validateStockPackage(raw).then(() => null, (x) => x);
+    ok(!!e7, `fm1pkg.js: the official ${version} with one byte changed is refused`);
+  }
 }
 
 await namesPaging();

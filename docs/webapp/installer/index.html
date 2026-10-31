@@ -80,7 +80,7 @@
   <details>
     <summary data-t="stockTitle"></summary>
     <p class="small" data-t="stockHelp"></p>
-    <p class="small"><a href="https://www.m-vave.com/download" target="_blank" rel="noopener">www.m-vave.com/download</a></p>
+    <p class="small">V16: <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">www.m-vave.com/download</a></p>
     <p class="small" data-t="stockBackup"></p>
     <p><a class="ed" href="../editor/" data-t="stockEditor"></a></p>
     <p class="small"><label><input id="stock-saved" type="checkbox"> <span data-t="stockSaved"></span></label></p>
@@ -123,12 +123,18 @@ function logicalImage(fwsc) {
   return out;
 }
 
-// The official FM-1 V15 (M-VAVE Downloads -> PC Firmware -> FM-1 V15, FM-1.fwsc), for the return to the
-// official firmware: only that exact file is accepted (its SHA-256 pins every byte: the loader, the app, the
-// layout; the name of the file proves nothing). The digest is the one Felucca 1.0 pins.
-const STOCK_V15_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a";
-const STOCK_V15_SIZE = 699956;
-const STOCK_V15_PRODUCT = "FM-1_015";
+// The official FM-1 firmware, for the return to it: only these exact files are accepted (the SHA-256 pins every
+// byte: the loader, the app, the layout; the name of the file proves nothing). V15: the digest Felucca 1.0 pins.
+// V16 (2026-10-21; M-VAVE's site offers only V16 now): a new layout, the same official update loader. An FM-1 goes
+// back only to the official version whose flash head it has (the version it last ran): with the other one it
+// refuses in step 1, before anything is written (firmware/src/ota.c: the official loader writes the head).
+const STOCK = [
+  { version: "V15", sha256: "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a", size: 699956, product: "FM-1_015" },
+  { version: "V16", sha256: "d017fb65e70aca97ee29d944470c3515a74581df5c0576bf70de917c7b2b61d5", size: 718196, product: "FM-1_016" },
+];
+const STOCK_V15_SHA256 = STOCK[0].sha256;
+const STOCK_V15_SIZE = STOCK[0].size;
+const STOCK_V15_PRODUCT = STOCK[0].product;
 
 async function sha256hex(bytes) {
   const d = await crypto.subtle.digest("SHA-256", bytes);
@@ -136,9 +142,11 @@ async function sha256hex(bytes) {
 }
 
 async function validateStockPackage(bytes) {
-  if (bytes.length !== STOCK_V15_SIZE || await sha256hex(bytes) !== STOCK_V15_SHA256 || productOf(bytes) !== STOCK_V15_PRODUCT)
-    throw new Error("select the unmodified official FM-1 V15 file (FM-1.fwsc)");
-  return { product: STOCK_V15_PRODUCT, image: logicalImage(bytes) };
+  const cand = STOCK.filter((x) => x.size === bytes.length);
+  const sha = cand.length ? await sha256hex(bytes) : "";
+  const k = cand.find((x) => x.sha256 === sha && productOf(bytes) === x.product);
+  if (!k) throw new Error("select the unmodified official FM-1 V15 or V16 file (FM-1.fwsc)");
+  return { product: k.product, version: k.version, image: logicalImage(bytes) };
 }
 
 // SPDX-License-Identifier: GPL-3.0-only
@@ -400,7 +408,7 @@ const TEXT = {
     direct: "USB ケーブルはパソコンに直接つないでください。Probe や Transporter などの機材は不要です。",
     brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
     beta: "これはベータ版で、不安定な場合があります。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
-    back: "公式ファームウェアに戻すには、M-VAVE 公式のアップデーター M-UPGRADE（Downloads → PC Software → M-UPGRADE）と公式ファームウェア（PC Firmware → FM-1 V15）が必要です。",
+    back: "公式ファームウェアに戻すには、M-VAVE 公式のアップデーター M-UPGRADE（Downloads → PC Software → M-UPGRADE）と公式ファームウェア（PC Firmware → FM-1）が必要です。",
     nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", loadfail: "読み込めませんでした: ",
     start: "開始します", verify: "確認中", loader: "書き込みモードに切り替え中", write: "書き込み中",
     reboot: "再起動中", done: "完了しました", stopped: "途中で止まりました。USB を挿し直してもう一度押してください。",
@@ -416,14 +424,15 @@ const TEXT = {
     badpkg: "インストールするファイルが壊れています。ページを再読み込みしてください。",
     leave: "書き込み中です。ページを閉じないでください。",
     license: "GPL-3.0、無保証。ソース:",
-    stockTitle: "公式ファームウェア（V15）に戻す",
-    stockHelp: "M-VAVE のサイトから公式の FM-1 V15 をダウンロードし、中の FM-1.fwsc（変更していないもの）を選んでください。ファイルはこのブラウザの中で確認され、どこにも送られません。",
+    stockTitle: "公式ファームウェアに戻す",
+    stockHelp: "公式の FM-1.fwsc（変更していないもの）を選んでください: V16（M-VAVE のサイトは今は V16 だけです）か V15。FM-1 は最後に入っていた公式バージョンにだけ戻れます: V16 で届いた、または V16 に更新した FM-1 は V16、V15 から KARMA にした FM-1 は V15（M-VAVE のサイトにはもうありません。お持ちのファイルか、M-VAVE のサポートに問い合わせてください）。違うほうを選ぶと、FM-1 は何も書き込まずに断ります。ファイルはこのブラウザの中で確認され、どこにも送られません。",
     stockBackup: "公式ファームウェアは KARMA の曲・プロジェクト・サンプルを開けません。先にエディタでバックアップを保存してください（Projects → Backup）。KARMA を入れ直せば、エディタから復元できます。",
     stockEditor: "エディタを開いてバックアップする", stockSaved: "バックアップをパソコンに保存しました",
-    stockFile: "公式の FM-1.fwsc", stockGo: "公式 V15 をインストール",
-    stockValid: "公式 V15 を確認しました", stockBad: "公式 V15 ではありません: ",
-    stockConfirm: "FM-1 に公式 V15 をインストールします。KARMA の曲は公式ファームウェアでは開けません。バックアップは保存しましたか？",
-    stockFinish: "FM-1 は KARMA の書き込みモードです。先に「インストール」で KARMA の書き込みを終えてから、公式 V15 に戻してください。",
+    stockFile: "公式の FM-1.fwsc", stockGo: "公式ファームウェアをインストール",
+    stockValid: "確認しました: 公式 ", stockBad: "公式の FM-1 V15 / V16 ではありません: ",
+    stockConfirm: "FM-1 に公式ファームウェアをインストールします。KARMA の曲は公式ファームウェアでは開けません。バックアップは保存しましたか？",
+    stockFinish: "FM-1 は KARMA の書き込みモードです。先に「インストール」で KARMA の書き込みを終えてから、公式ファームウェアに戻してください。",
+    stockRefused: "FM-1 はこの公式バージョンを受け取りませんでした。何も書き込まれていません。FM-1 は最後に入っていた公式バージョンにだけ戻れます: V16 を選んだなら V15 を、V15 を選んだなら V16 を選んで、もう一度押してください。",
     back: "M-VAVE のアップデーター M-UPGRADE（Downloads → PC Software）でも戻せます。FM-1 が見つからない場合は、MIDI を使う他のアプリとブラウザのタブを閉じてください。",
   },
   en: {
@@ -435,7 +444,7 @@ const TEXT = {
     direct: "Connect the USB cable directly to the computer. No probe or Transporter is needed.",
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
     beta: "This is a beta and may be unstable. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
-    back: "To go back to the official firmware you need M-VAVE's official updater, M-UPGRADE (Downloads → PC Software → M-UPGRADE), and the official firmware (PC Firmware → FM-1 V15).",
+    back: "To go back to the official firmware you need M-VAVE's official updater, M-UPGRADE (Downloads → PC Software → M-UPGRADE), and the official firmware (PC Firmware → FM-1).",
     nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
     start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
     reboot: "Restarting", done: "Done", stopped: "Stopped. Replug the USB cable and press Install again.",
@@ -451,14 +460,15 @@ const TEXT = {
     badpkg: "The file to install is damaged. Reload the page.",
     leave: "Writing. Do not close the page.",
     license: "GPL-3.0, no warranty. Source:",
-    stockTitle: "Return to the official firmware (V15)",
-    stockHelp: "Download the official FM-1 V15 from M-VAVE and select the FM-1.fwsc inside it, unmodified. The file is checked in this browser; it is not sent anywhere.",
+    stockTitle: "Return to the official firmware",
+    stockHelp: "Select the official FM-1.fwsc, unmodified: V16 (M-VAVE's site has only V16 now) or V15. An FM-1 goes back only to the official version it last had: one that came with V16, or was updated to it, takes V16; one that went from V15 to KARMA takes V15 (no longer on M-VAVE's site: use the file you have, or ask M-VAVE's support for it). With the other one, the FM-1 says no before anything is written. The file is checked in this browser; it is not sent anywhere.",
     stockBackup: "The official firmware cannot open KARMA's music, projects or samples. Save a backup with the editor first (Projects → Backup); reinstall KARMA and restore it from the editor whenever you want them back.",
     stockEditor: "Open the editor to back up", stockSaved: "I saved a backup on this computer",
-    stockFile: "The official FM-1.fwsc", stockGo: "Install the official V15",
-    stockValid: "Official V15 verified", stockBad: "Not the official V15: ",
-    stockConfirm: "Install the official V15 on the FM-1? The official firmware cannot open KARMA's music. Did you save a backup?",
-    stockFinish: "The FM-1 is in KARMA's update mode. Press Install to finish the KARMA update first, then return to the official V15.",
+    stockFile: "The official FM-1.fwsc", stockGo: "Install the official firmware",
+    stockValid: "Verified: the official ", stockBad: "Not the official FM-1 V15 or V16: ",
+    stockConfirm: "Install the official firmware on the FM-1? The official firmware cannot open KARMA's music. Did you save a backup?",
+    stockFinish: "The FM-1 is in KARMA's update mode. Press Install to finish the KARMA update first, then return to the official firmware.",
+    stockRefused: "The FM-1 did not take this official version; nothing was written. It goes back only to the official version it last had: if you chose V16, choose V15 (or the other way round) and press the button again.",
     back: "M-VAVE's own updater, M-UPGRADE (Downloads → PC Software), works too. If it does not find the FM-1, close every other app and browser tab that uses MIDI.",
   },
 };
@@ -528,10 +538,11 @@ const step = (k, a) => {
   if (k === "reboot") sayK("reboot");
   if (k === "done") { $("bar").value = 100; sayK("done"); gc(`${job}-done`, `${job} done`, true); }
 };
-let job = "install";                               /* (what the counts call it: install, official-v15) */
+let job = "install";                               /* (what the counts call it: install, official) */
 const failed = (e) => {
   gc(`${job}-failed`, `${job} failed: ${(e && (e.code || e.message)) || "?"}`.slice(0, 120), true);
-  if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
+  if (job === "official" && e && e.code === "stopped" && /nothing was written/.test(e.message)) sayK("stockRefused");   /* (step 1: another head) */
+  else if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
   else sayK("error", e && e.message);
   log(String(e && e.stack || e));
 };
@@ -559,7 +570,7 @@ $("go").addEventListener("click", async () => {
   lockAll(false);
 });
 
-/* back to the official V15 (after Felucca 1.0): only the exact official file, a backup first (the editor),
+/* back to the official firmware, V15 or V16 (after Felucca 1.0): only the exact official files, a backup first (the editor),
    through the same update path as M-UPGRADE; a device left in the official updater's mode is finished */
 $("stock-saved").addEventListener("change", () => lockAll(writing));
 $("stock-file").addEventListener("change", async () => {
@@ -567,7 +578,7 @@ $("stock-file").addEventListener("change", async () => {
   stock = null;
   lockAll(writing);
   if (!f) return;
-  try { stock = await validateStockPackage(new Uint8Array(await f.arrayBuffer())); sayK("stockValid"); }
+  try { stock = await validateStockPackage(new Uint8Array(await f.arrayBuffer())); sayK("stockValid", stock.version); }
   catch (e) { sayK("stockBad", e.message); }
   lockAll(writing);
 });
@@ -577,8 +588,8 @@ $("stock-go").addEventListener("click", async () => {
   let midi;
   try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
   catch (e) { sayK("denied"); lockAll(false); return; }
-  job = "official-v15";
-  gc("official-v15-start", "back to the official V15", true);
+  job = "official";
+  gc("official-start", `back to the official ${stock.version}`, true);
   try {
     const up = new Updater(midi, log);
     const ota = await up.find((id) => /^ota-/i.test(id.model));
