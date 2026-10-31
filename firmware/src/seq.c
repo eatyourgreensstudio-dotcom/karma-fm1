@@ -2634,10 +2634,18 @@ static void events_block(uint32_t n)
         int scene = arr_next(&arrangement_clock, &arrangement, FS);
         if (scene == ARR_DONE) {
             arrangement_clock.running = 1;          /* (arr_next cleared it: seq_stop brings the loop back) */
-            seq_stop();
-            song_end_ext = (uint8_t)mclk_on();      /* (the master runs on: a SONG POSITION starts it again) */
+            if (mclk_on()) {
+                /* (3.0.2; 2026-10-31, Ariel: Ableton's loop came back to bar 1, the FM-1 played on and stopped) the
+                 * master runs on: the song again from its top, on the bar (below). Ableton sends no SONG POSITION
+                 * at its loop's wrap (measured: 112 bars, only START and STOP), so a song as long as the loop stays
+                 * with it; a SONG POSITION still moves it */
+                arrangement_clock.index = 0;
+                scene = arrangement.entry[0].scene;
+            } else {
+                seq_stop();
+            }
         }
-        else if (scene >= 0) {
+        if (scene >= 0) {
             arrangement_apply((uint32_t)scene);
             seq_reset_tracks(arrangement_clock.phase);   /* (the remainder: exactly on the bar) */
         }

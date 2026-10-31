@@ -733,12 +733,15 @@ static void t_spp(void)
     spp_push(1u * 16u);                               /* back to bar 2: B */
     mclk_run(&t, &next, per, t + 10.0, 0);
     check(live_sec == 1 && arrangement_clock.index == 1 && clk_beat == 0u, "SPP: a jump back to bar 2 -> section B from its top");
-    mclk_run(&t, &next, per, t + 13000.0, 0);         /* B's 2 bars and C's 3: the song ends, the master runs on */
-    check(!song.playing && song_end_ext, "SPP: the song ends at its last section while the clock runs on");
-    spp_push(0);                                      /* the master loops back to bar 1 */
+    mclk_run(&t, &next, per, t + 10500.0, 0);         /* B's 2 bars and C's 3, then a beat: the master runs on */
+    ok = song.playing && live_sec == 0 && arrangement_clock.index == 0 && arrangement_clock.running && clk_beat == 1u;
+    check(ok, "SPP: the song ends while the clock runs on (Ableton's loop sends no SONG POSITION) -> A again, on the bar");
+    mclk_run(&t, &next, per, t + 2000.0, 0);
+    check(song.playing && arrangement_clock.index == 1, "SPP: ... and on: B after A, as the first time");
+    spp_push(0);                                      /* the master moves to bar 1 */
     mclk_run(&t, &next, per, t + 60.0, 0);
     ok = song.playing && live_sec == 0 && arrangement_clock.index == 0 && arrangement_clock.running;
-    check(ok, "SPP: the master loops back to bar 1 -> the song starts again from A");
+    check(ok, "SPP: the master jumps to bar 1 -> the song from A");
     mclk_push(0xFC0Fu);                               /* STOP */
     mclk_run(&t, &next, per, t + 20.0, 0);
     arrangement_enabled = 0;

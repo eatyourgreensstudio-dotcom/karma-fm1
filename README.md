@@ -16,7 +16,7 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 
 ---
 
-> **Status:** 3.0.1, running on a real FM-1. Install it from the browser with the [web installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/)
+> **Status:** 3.0.2, running on a real FM-1. Install it from the browser with the [web installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/)
 > (Chrome or Edge, a USB data cable); the same page puts the official firmware back. Never for sale, free forever.
 
 ## What's inside
