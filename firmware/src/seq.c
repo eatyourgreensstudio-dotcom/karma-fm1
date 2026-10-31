@@ -2401,8 +2401,8 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
 static struct {
     uint32_t pos, done;          /* units: the master's position (pulses since START), ours */
     uint32_t last_ms, iv_ms;     /* the last pulse, the interval between pulses (smoothed) */
-    uint16_t bt[5];              /* (2026-10-31) the last beats' times (ms, low 16 bits: spans of seconds): the tempo
-                                  * over up to 4 beats */
+    uint16_t bt[9];              /* (2026-10-31) the last beats' times (ms, low 16 bits: spans of seconds): the tempo
+                                  * over up to 8 beats */
     uint8_t nbt;                 /* beats in bt */
     uint8_t have, n24;           /* a pulse since START; pulses towards the next tempo reading */
     uint8_t alive;               /* pulses are coming (from the SYNC source) */
@@ -2469,6 +2469,9 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
         }
         return;
     }
+    if (st == 0xFAu || st == 0xFBu || st == 0xFCu)
+        mclk.nbt = 0;                              /* (2026-10-31) the tempo measured afresh: a pause in the pulses is
+                                                    * never part of a beat (STOP, PLAY quickly: 104, then 122) */
     if (st == 0xFAu || st == 0xFBu) {              /* START: from the top; CONTINUE: on from where it stopped */
         mclk.pos = mclk.done = 0;
         mclk.have = 0;
@@ -2494,21 +2497,21 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
         uint32_t iv = now - mclk.last_ms;
         mclk.iv_ms = mclk.iv_ms ? (mclk.iv_ms * 3u + iv + 2u) / 4u : iv;
     }
-    if (!mclk.alive || now - mclk.last_ms >= 500u) {   /* (re)started: count a fresh beat */
+    if (!mclk.alive || now - mclk.last_ms >= 500u || !mclk.nbt) {   /* (re)started: count a fresh beat */
         mclk.n24 = 0;
         mclk.bt[0] = (uint16_t)now;
         mclk.nbt = 1;
     } else if (++mclk.n24 == 24u) {                /* a beat: the tempo */
-        /* (2026-10-31, Ariel: Ableton at 120, the FM-1 showed 119, 120, 119 ..) USB brings the pulses a few ms early or
-         * late, and one beat at 120 is only 500 ms: 503 read as 119. The tempo over the last 4 beats (a quarter of the
-         * jitter), changed only when it is 0.6 BPM away: the master's 120 stays 120, its real changes follow in beats */
+        /* (2026-10-31, Ariel: Ableton at 120, the FM-1 showed 119, 120, 119 ..) the pulses come a few ms early or late
+         * (Ableton's per audio buffer: up to ~10 ms), and one beat at 120 is only 500 ms: 503 read as 119. The tempo over
+         * the last 8 beats, changed only when it is clearly away (thr): the master's 120 stays 120, real changes follow */
         uint32_t span, beats, mbpm, cur;
         mclk.n24 = 0;
-        if (mclk.nbt == 5u) {
+        if (mclk.nbt == 9u) {
             uint32_t j;
-            for (j = 0; j < 4u; j++)
+            for (j = 0; j < 8u; j++)
                 mclk.bt[j] = mclk.bt[j + 1u];
-            mclk.nbt = 4;
+            mclk.nbt = 8;
         }
         mclk.bt[mclk.nbt++] = (uint16_t)now;
         beats = mclk.nbt - 1u;
@@ -2516,7 +2519,10 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
         if (beats && span >= 250u * beats && span <= 1500u * beats) {   /* 40..240 BPM */
             mbpm = (uint32_t)(((uint64_t)60000000u * beats + span / 2u) / span);   /* milli-BPM */
             cur = (uint32_t)song.g[G_BPM] * 1000u;
-            if (mbpm > cur + 600u || mbpm + 600u < cur)
+            /* how far it must be to count: the fewer beats measured, the more the pulses' jitter (~8 ms each end) weighs
+             * (1 beat at 120: +-2 BPM; 8 beats: +-0.25), so 8, 3, 1.5, 0.6 BPM; 8 beats still follow a change of 1 */
+            uint32_t thr = beats >= 6u ? 600u : beats >= 3u ? 1500u : beats == 2u ? 3000u : 8000u;
+            if (mbpm > cur + thr || mbpm + thr < cur)
                 song.g[G_BPM] = (int16_t)clamp((int32_t)((mbpm + 500u) / 1000u), 40, 240);
         }
     }

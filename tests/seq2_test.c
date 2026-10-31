@@ -618,7 +618,7 @@ static void t_mclk_jitter(void)
             mclk_push(0xF80Fu);
             pulses++;
             seed = seed * 1664525u + 1013904223u;
-            next = pulses * per + ((double)(seed >> 16) / 65535.0 * 6.0 - 3.0);   /* the pulse's own time, +-3 ms */
+            next = pulses * per + ((double)(seed >> 16) / 65535.0 * 16.0 - 8.0);   /* the pulse's own time, +-8 ms (Ableton: per audio buffer) */
         }
         fm1_ms = (uint32_t)t;
         run_block();
@@ -628,8 +628,25 @@ static void t_mclk_jitter(void)
         }
         t += (double)CTL * 1000.0 / FS;
     }
-    check(lo == 120u && hi == 120u, "MIDI clock with +-3 ms of USB jitter at 120: BPM stays 120 for 30 s (no 119 / 120 flicker)");
+    check(lo == 120u && hi == 120u, "MIDI clock with +-8 ms of jitter at 120: BPM stays 120 for 30 s (no 119 / 120 flicker)");
     printf("seq2:   jitter: BPM %u..%u\n", lo, hi);
+    per = 60000.0 / 121 / 24;                            /* the master goes to 121: one BPM is still followed */
+    {
+        double t0 = t, base = next;
+        uint32_t p0 = pulses;
+        while (t < t0 + 8000.0) {
+            while (next <= t) {
+                mclk_push(0xF80Fu);
+                pulses++;
+                seed = seed * 1664525u + 1013904223u;
+                next = base + (pulses - p0) * per + ((double)(seed >> 16) / 65535.0 * 16.0 - 8.0);
+            }
+            fm1_ms = (uint32_t)t;
+            run_block();
+            t += (double)CTL * 1000.0 / FS;
+        }
+    }
+    check(song.g[G_BPM] == 121, "MIDI clock: the master goes from 120 to 121 (jitter +-8 ms): BPM 121 within 8 s");
     per = 60000.0 / 126 / 24;                            /* the master goes to 126 */
     {
         double t0 = t, base = next;
@@ -639,7 +656,7 @@ static void t_mclk_jitter(void)
                 mclk_push(0xF80Fu);
                 pulses++;
                 seed = seed * 1664525u + 1013904223u;
-                next = base + (pulses - p0) * per + ((double)(seed >> 16) / 65535.0 * 6.0 - 3.0);
+                next = base + (pulses - p0) * per + ((double)(seed >> 16) / 65535.0 * 16.0 - 8.0);
             }
             fm1_ms = (uint32_t)t;
             run_block();
@@ -647,6 +664,32 @@ static void t_mclk_jitter(void)
         }
     }
     check(song.g[G_BPM] == 126, "MIDI clock: the master goes to 126: BPM 126 within a few beats");
+    {   /* (Ariel: STOP, PLAY again quickly: 104, then 122) the master stops, 300 ms later starts again: 126 throughout */
+        uint32_t k, lo2 = 999, hi2 = 0;
+        for (k = 0; k < 3u; k++) {
+            double t0 = t, base;
+            uint32_t p0;
+            mclk_push(0xFC0Fu);                           /* STOP: no pulses for 300 ms */
+            while (t < t0 + 300.0) { fm1_ms = (uint32_t)t; run_block(); t += (double)CTL * 1000.0 / FS; }
+            mclk_push(0xFA0Fu);                           /* START, the pulses again from now */
+            base = t; p0 = pulses; next = t;
+            while (t < base + 5000.0) {
+                while (next <= t) {
+                    mclk_push(0xF80Fu);
+                    pulses++;
+                    seed = seed * 1664525u + 1013904223u;
+                    next = base + (pulses - p0) * per + ((double)(seed >> 16) / 65535.0 * 16.0 - 8.0);
+                }
+                fm1_ms = (uint32_t)t;
+                run_block();
+                if ((uint32_t)song.g[G_BPM] < lo2) lo2 = (uint32_t)song.g[G_BPM];
+                if ((uint32_t)song.g[G_BPM] > hi2) hi2 = (uint32_t)song.g[G_BPM];
+                t += (double)CTL * 1000.0 / FS;
+            }
+        }
+        check(lo2 == 126u && hi2 == 126u, "MIDI clock: STOP, then PLAY again 300 ms later (3 times): BPM stays 126 (no 104 / 122)");
+        printf("seq2:   stop / play quickly: BPM %u..%u\n", lo2, hi2);
+    }
     mclk_push(0xFC0Fu);
     run_block();
     song.g[G_SYNC] = 0;
