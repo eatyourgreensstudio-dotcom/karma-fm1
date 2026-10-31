@@ -4160,6 +4160,24 @@ const isDrum = () => !!dev && !!dev.dump && dev.dump.engine >= dev.info.nengines
 const drumGrid = () => isDrum() && !!dev.info.proto && dev.info.proto >= 5;
 
 /* -------------------------------------------------------------- MIDI --- */
+/* one INFO to a port (600 ms): true when the firmware there says KARMA */
+async function isKarmaPort(input, output) {
+  return new Promise((resolve) => {
+    let done = false;
+    const end = (v) => { if (done) return; done = true; clearTimeout(tm); input.onmidimessage = null; resolve(v); };
+    const tm = setTimeout(() => end(false), 600);
+    input.onmidimessage = (e) => {
+      const f = unframe(e.data);
+      if (f && f.cmd === CMD.INFO) {
+        try { end(/karma/i.test(parse[CMD.INFO](f.a).version || "")); } catch (x) { end(false); }
+      }
+    };
+    Promise.resolve(input.open ? input.open() : null).catch(() => {}).then(() => {
+      try { output.send(frame(CMD.INFO, [])); } catch (x) { end(false); }
+    });
+  });
+}
+
 async function connect() {
   wantConnected = true;
   if (!MOCK && !navigator.requestMIDIAccess) { sayK("nomidi"); return; }
@@ -4175,8 +4193,17 @@ async function connect() {
       access.onstatechange = onState;
     }
     const isF = (p) => /felucca|karma/i.test(p.name || "") && p.state !== "disconnected";
-    const input = [...access.inputs.values()].find(isF);
-    const output = [...access.outputs.values()].find(isF);
+    let input = [...access.inputs.values()].find(isF);
+    let output = [...access.outputs.values()].find(isF);
+    if ((!input || !output) && !MOCK) {             /* (2026-10-31, issue 1) macOS can keep a USB MIDI device's name
+                                                     * from its last firmware ("Mutable Dreams FM-1"): ask the FM-1's
+                                                     * ports what they run, by INFO, and take the one that says KARMA */
+      const fm1 = (p) => /fm-?1|sloop|felucca|composite|sinco|usb-midi/i.test(p.name || "") && p.state !== "disconnected";
+      for (const ci of [...access.inputs.values()].filter(fm1)) {
+        const co = [...access.outputs.values()].find((o) => fm1(o) && o.name === ci.name);
+        if (co && await isKarmaPort(ci, co)) { input = ci; output = co; break; }
+      }
+    }
     if (!input || !output) {                        /* (2026-10-31, issue 1) say why: not KARMA yet, or what the browser sees */
       const names = [...access.inputs.values()].filter((p) => p.state !== "disconnected").map((p) => p.name || "?");
       const fm1 = names.find((n) => /fm-1|sloop|composite|sinco|usb-midi/i.test(n));
