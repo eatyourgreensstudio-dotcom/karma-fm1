@@ -2401,7 +2401,9 @@ static void __attribute__((noinline)) midi_cc(track_t *t, uint32_t cc, uint32_t 
 static struct {
     uint32_t pos, done;          /* units: the master's position (pulses since START), ours */
     uint32_t last_ms, iv_ms;     /* the last pulse, the interval between pulses (smoothed) */
-    uint32_t beat_ms;            /* when pulse 0 of the last 24 came: the tempo */
+    uint16_t bt[5];              /* (2026-10-31) the last beats' times (ms, low 16 bits: spans of seconds): the tempo
+                                  * over up to 4 beats */
+    uint8_t nbt;                 /* beats in bt */
     uint8_t have, n24;           /* a pulse since START; pulses towards the next tempo reading */
     uint8_t alive;               /* pulses are coming (from the SYNC source) */
 } mclk;
@@ -2494,13 +2496,29 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
     }
     if (!mclk.alive || now - mclk.last_ms >= 500u) {   /* (re)started: count a fresh beat */
         mclk.n24 = 0;
-        mclk.beat_ms = now;
+        mclk.bt[0] = (uint16_t)now;
+        mclk.nbt = 1;
     } else if (++mclk.n24 == 24u) {                /* a beat: the tempo */
-        uint32_t dt = now - mclk.beat_ms;
+        /* (2026-10-31, Ariel: Ableton at 120, the FM-1 showed 119, 120, 119 ..) USB brings the pulses a few ms early or
+         * late, and one beat at 120 is only 500 ms: 503 read as 119. The tempo over the last 4 beats (a quarter of the
+         * jitter), changed only when it is 0.6 BPM away: the master's 120 stays 120, its real changes follow in beats */
+        uint32_t span, beats, mbpm, cur;
         mclk.n24 = 0;
-        mclk.beat_ms = now;
-        if (dt >= 250u && dt <= 1500u)             /* 40..240 BPM */
-            song.g[G_BPM] = (int16_t)clamp((int32_t)((60000u + dt / 2u) / dt), 40, 240);
+        if (mclk.nbt == 5u) {
+            uint32_t j;
+            for (j = 0; j < 4u; j++)
+                mclk.bt[j] = mclk.bt[j + 1u];
+            mclk.nbt = 4;
+        }
+        mclk.bt[mclk.nbt++] = (uint16_t)now;
+        beats = mclk.nbt - 1u;
+        span = (uint16_t)((uint16_t)now - mclk.bt[0]);
+        if (beats && span >= 250u * beats && span <= 1500u * beats) {   /* 40..240 BPM */
+            mbpm = (uint32_t)(((uint64_t)60000000u * beats + span / 2u) / span);   /* milli-BPM */
+            cur = (uint32_t)song.g[G_BPM] * 1000u;
+            if (mbpm > cur + 600u || mbpm + 600u < cur)
+                song.g[G_BPM] = (int16_t)clamp((int32_t)((mbpm + 500u) / 1000u), 40, 240);
+        }
     }
     mclk.alive = 1;
     mclk.last_ms = now;

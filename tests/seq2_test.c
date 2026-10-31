@@ -603,6 +603,55 @@ static void t_mclk_burst(void)
     run_block();
     song.g[G_SYNC] = 0;
 }
+/* (2026-10-31, Ariel: Ableton at 120, the FM-1 showed 119 and 120 by turns) the master's pulses as USB brings them, each
+ * up to 3 ms early or late: the tempo shown stays the master's, and a real change (120 -> 126) still follows */
+static void t_mclk_jitter(void)
+{
+    double t = 0, per = 60000.0 / 120 / 24, next = 0;
+    uint32_t lo = 999, hi = 0, seed = 12345, pulses = 0;
+    reset(90);
+    mi_r = mi_w;
+    song.g[G_SYNC] = 1;
+    mclk_push(0xFA0Fu);
+    while (t < 30000.0) {
+        while (next <= t) {
+            mclk_push(0xF80Fu);
+            pulses++;
+            seed = seed * 1664525u + 1013904223u;
+            next = pulses * per + ((double)(seed >> 16) / 65535.0 * 6.0 - 3.0);   /* the pulse's own time, +-3 ms */
+        }
+        fm1_ms = (uint32_t)t;
+        run_block();
+        if (t > 4000.0) {                                 /* (after the first beats) */
+            if ((uint32_t)song.g[G_BPM] < lo) lo = (uint32_t)song.g[G_BPM];
+            if ((uint32_t)song.g[G_BPM] > hi) hi = (uint32_t)song.g[G_BPM];
+        }
+        t += (double)CTL * 1000.0 / FS;
+    }
+    check(lo == 120u && hi == 120u, "MIDI clock with +-3 ms of USB jitter at 120: BPM stays 120 for 30 s (no 119 / 120 flicker)");
+    printf("seq2:   jitter: BPM %u..%u\n", lo, hi);
+    per = 60000.0 / 126 / 24;                            /* the master goes to 126 */
+    {
+        double t0 = t, base = next;
+        uint32_t p0 = pulses;
+        while (t < t0 + 6000.0) {
+            while (next <= t) {
+                mclk_push(0xF80Fu);
+                pulses++;
+                seed = seed * 1664525u + 1013904223u;
+                next = base + (pulses - p0) * per + ((double)(seed >> 16) / 65535.0 * 6.0 - 3.0);
+            }
+            fm1_ms = (uint32_t)t;
+            run_block();
+            t += (double)CTL * 1000.0 / FS;
+        }
+    }
+    check(song.g[G_BPM] == 126, "MIDI clock: the master goes to 126: BPM 126 within a few beats");
+    mclk_push(0xFC0Fu);
+    run_block();
+    song.g[G_SYNC] = 0;
+    reset(120);
+}
 /* KARMA 3.0 (2026-10-28, Ariel: Ableton loops 16 bars, the FM-1's song ran on and ended): Song Position Pointer with
  * SYNC = USB. Sections A (1 bar), B (2), C (3); the song A B C, each LOOP (bars 0: its own length) */
 static void spp_push(uint32_t pos16) { mclk_push(0xF20Fu | (pos16 & 0x7Fu) << 16 | (pos16 >> 7 & 0x7Fu) << 24); }
@@ -1856,6 +1905,7 @@ int main(void)
     t_chain();
     t_edits_stick();
     t_mclk_burst();
+    t_mclk_jitter();
     t_spp();
     t_recmode();
     t_mclk();
