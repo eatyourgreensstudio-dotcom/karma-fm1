@@ -643,6 +643,9 @@ static void project_save(uint32_t slot)
     if (song.playing || transport_req) { ui_message("STOP BEFORE SAVE"); return; }
 #endif
     proj_capture(p);
+#if FELUCCA_ARRANGER
+    live_sec = -1;                                      /* (3.0.3: saved from the menu or the editor: no section playing) */
+#endif
 #if FELUCCA_FLASH
     if (flash_ok) {
         int err = st_save(OBJ_PROJECT0 + (slot & 3u), p, sizeof *p);
@@ -726,6 +729,12 @@ static void project_load(uint32_t slot)
         return;
     }
     project_apply(p);
+#if FELUCCA_ARRANGER
+    live_sec = -1;                                      /* (3.0.3; 2026-10-31, Ariel: every slot came to play the same song)
+                                                         * a project loaded from the menu or the editor is no section
+                                                         * playing: edits stick kept it in the section last played, a
+                                                         * moment after any touch. Only SAVE + key loads a section */
+#endif
     ui_message("LOADED");
 }
 
