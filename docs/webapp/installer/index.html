@@ -65,6 +65,7 @@
     <div class="tile" style="--c: var(--orange)"><b>USB</b><span>audio, six stems, MIDI, DAW sync</span></div>
   </div>
   <p data-t="intro"></p>
+  <p id="dev-note" hidden><span id="dev-text"></span> <a id="dev-link" href="https://fm-1.drewr.dev/fm-switch/" target="_blank" rel="noopener" hidden>FM-SWITCH ↗</a></p>
   <p data-t="warn"></p>
   <p><button id="go" disabled data-t="install"></button></p>
   <progress id="bar" max="100" value="0"></progress>
@@ -409,7 +410,9 @@ const TEXT = {
     brick: "万一インストールに失敗して起動しなくなった場合は、復旧に Transporter が必要です:",
     beta: "これはベータ版で、不安定な場合があります。このカスタムファームウェアを使ったことで FM-1 が壊れたり不具合が起きたりしても、作者は一切の責任を負いません。自己責任でお使いください。",
     back: "公式ファームウェアに戻すには、M-VAVE 公式のアップデーター M-UPGRADE（Downloads → PC Software → M-UPGRADE）と公式ファームウェア（PC Firmware → FM-1）が必要です。",
-    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。", loadfail: "読み込めませんでした: ",
+    nomidi: "このブラウザでは使えません。Chrome か Edge で開いてください。",
+    devIOS: "iPhone と iPad のブラウザではファームウェアを書き込めません（Apple が Web MIDI を許可していないため）。無料のアプリ FM-SWITCH を使えば、パソコンなしで KARMA をインストールできます（一覧に KARMA があります）:",
+    devAndroid: "Android では、Chrome と USB-C のデータ用ケーブル（必要ならアダプター）でインストールできます。Android からのインストールは新しい方法です。途中で止まったら、パソコンから同じページで仕上げてください。", loadfail: "読み込めませんでした: ",
     start: "開始します", verify: "確認中", loader: "書き込みモードに切り替え中", write: "書き込み中",
     reboot: "再起動中", done: "完了しました", stopped: "途中で止まりました。USB を挿し直してもう一度押してください。",
     error: "エラー: ",
@@ -445,7 +448,9 @@ const TEXT = {
     brick: "If an install fails and the FM-1 no longer starts, recovering it needs a Transporter:",
     beta: "This is a beta and may be unstable. The author accepts no responsibility if your FM-1 is damaged or misbehaves because of this custom firmware. Use it at your own risk.",
     back: "To go back to the official firmware you need M-VAVE's official updater, M-UPGRADE (Downloads → PC Software → M-UPGRADE), and the official firmware (PC Firmware → FM-1).",
-    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
+    nomidi: "This browser cannot do it. Open the page in Chrome or Edge.",
+    devIOS: "No browser on iPhone or iPad can install firmware (Apple allows no Web MIDI). Install KARMA with the free FM-SWITCH app instead, no computer needed (KARMA is in its list):",
+    devAndroid: "On Android: Chrome and a USB-C data cable (with an adapter if needed). Installing from Android is new: if it stops, finish it from a computer on this same page.", loadfail: "Could not load: ",
     start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
     reboot: "Restarting", done: "Done", stopped: "Stopped. Replug the USB cable and press Install again.",
     error: "Error: ",
@@ -475,11 +480,15 @@ const TEXT = {
 let lang = (navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en";
 const t = (k) => TEXT[lang][k];
 let lastKey = null, lastArg = "";
+/* (2026-11-01) phones: iPhone / iPad cannot (no Web MIDI in any iOS browser): the FM-SWITCH app can; Android Chrome can */
+const DEV = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "devIOS"
+  : /Android/.test(navigator.userAgent) ? "devAndroid" : "";
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t); });
   $("lang").textContent = t("other");
   if (lastKey) $("status").textContent = t(lastKey) + lastArg;
+  if (DEV) { $("dev-note").hidden = false; $("dev-text").textContent = t(DEV); $("dev-link").hidden = DEV !== "devIOS"; }
 }
 $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; applyLang(); });
 applyLang();
@@ -499,7 +508,7 @@ const lockAll = (on) => {
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
 (async () => {
-  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+  if (!navigator.requestMIDIAccess) { if (DEV !== "devIOS") sayK("nomidi"); return; }   /* (iOS: the note says how) */
   try {
     const r = await fetch(meta.pkg);
     if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);

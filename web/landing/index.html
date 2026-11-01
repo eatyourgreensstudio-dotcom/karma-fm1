@@ -330,6 +330,7 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
           <a class="btn lav" href="emu/" target="_blank" rel="noopener">TRY IN THE BROWSER<small>The real firmware, simulated</small></a>
           <a class="btn plain" href="webapp/editor/" target="_blank" rel="noopener">EDITOR<small>Sounds, kits, projects</small></a>
         </div>
+        <p class="sub" id="dev-note" hidden></p>
         <div class="meta"><span>Free forever</span><span>GPL-3.0-only</span><span>Not for sale</span></div>
       </div>
     </div>
@@ -608,15 +609,16 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
     <div class="faq">
       <details open>
         <summary>Can I go back to the official firmware?</summary>
-        <div class="a"><p>Yes. The installer page has a <strong>Return to the official firmware</strong> section: download M-VAVE's official FM-1 V15, select its file, and it goes back the same way KARMA went on. Save a backup with the editor first: the official firmware cannot open KARMA's projects.</p></div>
+        <div class="a"><p>Yes. The installer page has a <strong>Return to the official firmware</strong> section: select M-VAVE's official FM-1 file (V16, or V15 if your FM-1 came from V15), and it goes back the same way KARMA went on. Save a backup with the editor first: the official firmware cannot open KARMA's projects.</p></div>
       </details>
       <details>
         <summary>What do I need to install it?</summary>
-        <div class="a"><p><strong>Chrome or Edge</strong> on a computer (the installer talks to the FM-1 over Web MIDI, which Safari and Firefox do not offer for this), and a <strong>USB cable that carries data</strong>. Many cables that come with chargers only carry power, and the FM-1 will not show up with one of those.</p></div>
+        <div class="a"><p><strong>Chrome or Edge</strong> on a computer (the installer talks to the FM-1 over Web MIDI, which Safari and Firefox do not offer for this), and a <strong>USB cable that carries data</strong>. Many cables that come with chargers only carry power, and the FM-1 will not show up with one of those.</p>
+          <p><strong>On Android:</strong> Chrome and a USB-C data cable work too. <strong>On iPhone or iPad:</strong> no browser can install firmware there, but the free <a href="https://fm-1.drewr.dev/fm-switch/" target="_blank" rel="noopener">FM-SWITCH</a> app can, with no computer: KARMA is in its list.</p></div>
       </details>
       <details>
         <summary>I run FM1 Open or another custom firmware. What should I do?</summary>
-        <div class="a"><p>Return to the official V15 firmware first, then install KARMA from there. Going from one custom firmware straight to another is not tested.</p></div>
+        <div class="a"><p>Return to the official firmware first, then install KARMA from there. Going from one custom firmware straight to another is not tested.</p></div>
       </details>
       <details>
         <summary>Has it been tested on a real FM-1?</summary>
@@ -693,6 +695,19 @@ footer nav { display: flex; gap: 1.2rem; flex-wrap: wrap; }
   </div>
 </footer>
 
+<script>
+(function () {   /* (2026-11-01) phones: how to install from here */
+  var n = document.getElementById("dev-note"), ua = navigator.userAgent;
+  if (!n) return;
+  if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+    n.innerHTML = 'On iPhone or iPad: install KARMA with the free <a href="https://fm-1.drewr.dev/fm-switch/" target="_blank" rel="noopener">FM-SWITCH</a> app, no computer needed. KARMA is in its list.';
+    n.hidden = false;
+  } else if (/Android/.test(ua)) {
+    n.textContent = "On Android: the installer works in Chrome, with a USB-C data cable.";
+    n.hidden = false;
+  }
+})();
+</script>
 <script>
 (function () {
   var mq = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
