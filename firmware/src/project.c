@@ -838,7 +838,8 @@ static void persist_boot(void)                    /* before settings_init / pane
 #if FELUCCA_FLASH
     persist_t p;
     uint32_t f = irq_save();
-    flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;       /* the expected 1 MiB part, else stay RAM-only */
+    flash_ok = FL_JEDEC_OK(FL_FAR(fl_jedec_ram)());      /* a known 1 MiB part (fm1_flash_id.h; 3.0.4 after SLOOP 2.8.5:
+                                                          * the UC25HQ80 of FM-1s sold from late 2026 too), else RAM-only */
     irq_restore(f);
     if (!flash_ok)
         return;

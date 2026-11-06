@@ -1,3 +1,4 @@
+#include <math.h>
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* SLOOP 2.0 sequencer: the transport clock and what plays on it.
  *   timing   the kick and the click stay together for 64 bars at any tempo (no drift); a tempo or DIV
@@ -601,6 +602,102 @@ static void t_mclk_burst(void)
     printf("seq2:   bursts: fastest %u per mille of the master, beat %u after 8 s\n", k, clk_beat);
     transport_req = 2;
     run_block();
+    song.g[G_SYNC] = 0;
+}
+/* (3.0.4, 2026-11-06, Ariel: synced to Ableton, "the bpm lost it in a few points") Ableton's pulses as a busy FM-1 sees
+ * them: each +-8 ms off (per audio buffer), and held back while the render runs late (1 to 6 pulses, now and then), then
+ * read together. How steady the tempo is: the speed over every 20 ms against the master's (its worst), and how far the
+ * FM-1 is from where the master is (its worst after the first beats, and after 30 s) */
+static void t_mclk_smooth(void)
+{
+    double t = 0, per = 60000.0 / 120 / 24, next = 0, held_until = 0;
+    uint32_t seed = 4242, pulses = 0, blocks = 0, win_u = 0, win_b = 0;
+    double worst_fast = 0, worst_slow = 0, worst_lag = 0;
+    const uint32_t WIN = 27;                            /* blocks: ~20 ms */
+    reset(120);
+    mi_r = mi_w;
+    song.g[G_SYNC] = 1;
+    mclk_push(0xFA0Fu);
+    while (t < 30000.0) {
+        seed = seed * 1664525u + 1013904223u;
+        if (t >= held_until && (seed >> 24) < 3u)         /* now and then the render runs late: pulses wait */
+            held_until = t + 2.0 + (double)((seed >> 8) % 120u) / 10.0;   /* (2 to 14 ms) */
+        while (next <= t && t >= held_until) {
+            mclk_push(0xF80Fu);
+            pulses++;
+            seed = seed * 1664525u + 1013904223u;
+            next = pulses * per + ((double)(seed >> 16) / 65535.0 * 16.0 - 8.0);
+        }
+        fm1_ms = (uint32_t)t;
+        {
+            uint32_t u0 = clk_beat * BEAT_U + clk_pos;
+            run_block();
+            win_u += clk_beat * BEAT_U + clk_pos - u0;
+        }
+        if (++win_b == WIN) {
+            double sp = (double)win_u / ((double)WIN * CTL * 120.0);   /* 1.0 = the master's tempo */
+            if (t > 3000.0) {
+                if (sp - 1.0 > worst_fast) worst_fast = sp - 1.0;
+                if (1.0 - sp > worst_slow) worst_slow = 1.0 - sp;
+            }
+            win_u = win_b = 0;
+        }
+        if (t > 3000.0) {                                   /* the lag, in ms: the FM-1's beat against the master's */
+            double mb = t / 500.0, fb = (double)clk_beat + (double)clk_pos / BEAT_U, lag = (mb - fb) * 500.0;
+            if (fabs(lag) > worst_lag) worst_lag = fabs(lag);
+        }
+        blocks++;
+        t += (double)CTL * 1000.0 / FS;
+    }
+    printf("seq2:   smooth: speed +%.1f%% / -%.1f%% at worst (20 ms), lag %.1f ms at worst, beat %u after 30 s\n",
+           worst_fast * 100.0, worst_slow * 100.0, worst_lag, clk_beat);
+    check(worst_fast < 0.04 && worst_slow < 0.04, "MIDI clock, jitter and bursts: the tempo within 4 % over every 20 ms");
+    check(worst_lag < 30.0, "MIDI clock, jitter and bursts: never more than 30 ms from the master");
+    transport_req = 2;
+    run_block();
+    song.g[G_SYNC] = 0;
+}
+/* (3.0.4, 2026-11-06, the Ableton test: after each STOP / PLAY from Ableton the FM-1 read 144, 131, 127, 125 BPM for a beat
+ * or two and rushed: the first pulses after START come in a clump (the section applied, the render late). Ableton at 120,
+ * stopped and started 4 times, the first 12 pulses after each START read within 30 ms: the BPM stays 120 */
+static void t_mclk_restart(void)
+{
+    double t = 0, per = 60000.0 / 120 / 24, next = 0;
+    uint32_t pulses = 0, lo = 999, hi = 0, r;
+    reset(120);
+    mi_r = mi_w;
+    song.g[G_SYNC] = 1;
+    for (r = 0; r < 5u; r++) {
+        double seg_end = t + 4000.0, clump_until;
+        mclk_push(0xFA0Fu);
+        pulses = 0;
+        next = t;
+        clump_until = t + 12 * per;                       /* the first 12 pulses held back, then read together */
+        while (t < seg_end) {
+            while (next <= t && t >= clump_until) {
+                mclk_push(0xF80Fu);
+                pulses++;
+                next = (seg_end - 4000.0) + pulses * per;
+            }
+            if (t >= clump_until - 30.0 && t < clump_until)  /* (released over 30 ms) */
+                ;
+            fm1_ms = (uint32_t)t;
+            run_block();
+            if (song.playing) {
+                if ((uint32_t)song.g[G_BPM] < lo) lo = (uint32_t)song.g[G_BPM];
+                if ((uint32_t)song.g[G_BPM] > hi) hi = (uint32_t)song.g[G_BPM];
+            }
+            t += (double)CTL * 1000.0 / FS;
+        }
+        mclk_push(0xFC0Fu);                               /* STOP, 300 ms, then START again */
+        for (double t1 = t + 300.0; t < t1; t += (double)CTL * 1000.0 / FS) {
+            fm1_ms = (uint32_t)t;
+            run_block();
+        }
+        song.g[G_BPM] = 125;                              /* (song mode's STOP: the project's own tempo comes back) */
+    }
+    printf("seq2:   restart: BPM %u..%u over 5 starts with a clump of pulses each\n", lo, hi);
+    check(lo >= 119u && hi <= 121u, "MIDI clock: START after STOP with the first pulses in a clump: the BPM stays 120 (no 144)");
     song.g[G_SYNC] = 0;
 }
 /* (2026-10-31, Ariel: Ableton at 120, the FM-1 showed 119 and 120 by turns) the master's pulses as USB brings them, each
@@ -1951,6 +2048,8 @@ int main(void)
     t_chain();
     t_edits_stick();
     t_mclk_burst();
+    t_mclk_smooth();
+    t_mclk_restart();
     t_mclk_jitter();
     t_spp();
     t_recmode();

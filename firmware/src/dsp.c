@@ -6,6 +6,12 @@
 #define VOICE_FS 24000           /* per-voice level: one voice peaks near -6 dBFS before the master */
 
 static inline int32_t mulq15(int32_t a, int32_t b) { return (a * b) >> 15; }
+/* (3.0.4, from SLOOP 2.8.4 by isod89, "clean fades") x * g / 4096 rounded to the nearest, in 32 bits wherever
+ * ((x >> k) * g) >> (12 - k) fits (the same bound): the k low bits of x go in apart instead of being dropped. The mix's
+ * gains (fx.c: a part's LEVEL, mute / duck, PAN, the MASTER, DIST's drive) took x >> k first and lost them: a floor to
+ * steps of 2^k x the gain, signal-correlated distortion that stays as loud while a note fades out. k a constant */
+#define MULQ12R(x, g, k) \
+    ((((x) >> (k)) * (g) + ((((x) & ((1 << (k)) - 1)) * (g) + (1 << ((k) - 1))) >> (k)) + (1 << (11 - (k)))) >> (12 - (k)))
 /* a * k / 65536 without 64-bit: a up to 2^31, k Q16 */
 static inline int32_t mulq16(int32_t a, uint32_t k)
 {

@@ -257,7 +257,7 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
     switch (md) {
     case PM_MODAL: {
         px_modal_blk_t B;
-        px_modal_block(&B, &S->u.m, f0, strc, brit, damp, acc, pos * 129, bow);   /* pos 0..1/4 */
+        px_modal_block(&B, &S->u.m, f0, strc, brit, damp, acc, pos * 129, bow, 0);   /* pos 0..1/4 */
         px_modal_run(&B, &S->u.m, y, ax, n);
         break;
     }
@@ -268,7 +268,7 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         M->gen = md == PM_BOUNCE ? PX_GEN_BOUNCE : PX_GEN_PICK;
         M->gate = v->gate;
         M->par = p[P_E6] * 516;
-        px_modal_block(&B, M, f0, strc, brit, clamp(damp - (md == PM_PICK ? M->pk.damp >> 3 : 0), 0, 65536), acc, pos * 129, 0);
+        px_modal_block(&B, M, f0, strc, brit, clamp(damp - (md == PM_PICK ? M->pk.damp >> 3 : 0), 0, 65536), acc, pos * 129, 0, 0);
         px_modal_run(&B, M, y, ax, n);
         break;
     }
@@ -276,18 +276,40 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         px_modal_blk_t B;                                /* TONE: her bow timbre, darker on a dark body as hers */
         px_modal_t *M = &S->u.m;
         int32_t lv = 16384 + p[P_E6] * 387, v = px_m(m->envq15 * 2, lv, 16);
+        px_bow_t *W = (px_bow_t *)PHYS_SOLO(S);
         M->gen = PX_GEN_BOW;
-        px_modal_block(&B, M, f0, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0);
-        px_bow_run(&B, M, (px_bow_t *)PHYS_SOLO(S), v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, y, ax, n);
+#if PHYS_HALF                                              /* (3.0.4: at 22.05 kHz, then up: phys_dsp.c) */
+        {
+            int32_t yh[CTL / 2 + 1];
+            uint32_t h = px_up2_need(W->uhas, n), f2 = f0 > 0x7FFFFFFFu ? 0xFFFFFFFFu : f0 << 1;
+            px_modal_block(&B, M, f2, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0, 1);
+            px_bow_run(&B, M, W, v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, yh, ax, h, 1);
+            px_up2(W->uh, &W->uc, &W->uhas, yh, y, n);
+        }
+#else
+        px_modal_block(&B, M, f0, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0, 0);
+        px_bow_run(&B, M, W, v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, y, ax, n, 0);
+#endif
         exc = 0;
         break;
     }
     case PM_BLOW: {
         px_modal_blk_t B;
         px_modal_t *M = &S->u.m;
+        px_blow_t *W = (px_blow_t *)PHYS_SOLO(S);
         M->gen = PX_GEN_BLOW;
-        px_modal_block(&B, M, f0, strc, brit, damp, acc, pos * 129, 0);
-        px_blow_run(&B, M, (px_blow_t *)PHYS_SOLO(S), f0, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, y, ax, n);
+#if PHYS_HALF                                              /* (3.0.4: at 22.05 kHz, then up: phys_dsp.c) */
+        {
+            int32_t yh[CTL / 2 + 1];
+            uint32_t h = px_up2_need(W->uhas, n), f2 = f0 > 0x7FFFFFFFu ? 0xFFFFFFFFu : f0 << 1;
+            px_modal_block(&B, M, f2, strc, brit, damp, acc, pos * 129, 0, 1);
+            px_blow_run(&B, M, W, f2, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, yh, ax, h, 1);
+            px_up2(W->uh, &W->uc, &W->uhas, yh, y, n);
+        }
+#else
+        px_modal_block(&B, M, f0, strc, brit, damp, acc, pos * 129, 0, 0);
+        px_blow_run(&B, M, W, f0, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, y, ax, n, 0);
+#endif
         exc = 0;
         break;
     }

@@ -2404,6 +2404,9 @@ static struct {
     uint16_t bt[9];              /* (2026-10-31) the last beats' times (ms, low 16 bits: spans of seconds): the tempo
                                   * over up to 8 beats */
     uint8_t nbt;                 /* beats in bt */
+    uint8_t skip;                /* (3.0.4) pulses after START / CONTINUE not yet timed (the first beat: see mclk_event) */
+    int16_t mbpm;                /* (3.0.4) the master's tempo as last measured (0: none yet): START / CONTINUE start
+                                  * at it (STOP in song mode brings the project's own tempo back: song_restore) */
     uint8_t have, n24;           /* a pulse since START; pulses towards the next tempo reading */
     uint8_t alive;               /* pulses are coming (from the SYNC source) */
 } mclk;
@@ -2470,9 +2473,14 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
         return;
     }
     if (st == 0xFAu || st == 0xFBu || st == 0xFCu)
-        mclk.nbt = 0;                              /* (2026-10-31) the tempo measured afresh: a pause in the pulses is
+        mclk.nbt = 0, mclk.skip = (uint8_t)(st == 0xFCu ? 0u : 24u);                              /* (2026-10-31) the tempo measured afresh: a pause in the pulses is
                                                     * never part of a beat (STOP, PLAY quickly: 104, then 122) */
     if (st == 0xFAu || st == 0xFBu) {              /* START: from the top; CONTINUE: on from where it stopped */
+        if (mclk.mbpm && fm1_ms - mclk.last_ms < 30000u)   /* (3.0.4, the Ableton test: a STOP in song mode brought the project's
+                                                    * 125 back, and the first beats after PLAY ran at it before the
+                                                    * master's 120 was timed again) the master's tempo, at once (heard in
+                                                    * the last 30 s: an old one is not the master's any more) */
+            song.g[G_BPM] = mclk.mbpm;
         mclk.pos = mclk.done = 0;
         mclk.have = 0;
         song_end_ext = 0;
@@ -2497,7 +2505,14 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
         uint32_t iv = now - mclk.last_ms;
         mclk.iv_ms = mclk.iv_ms ? (mclk.iv_ms * 3u + iv + 2u) / 4u : iv;
     }
-    if (!mclk.alive || now - mclk.last_ms >= 500u || !mclk.nbt) {   /* (re)started: count a fresh beat */
+    if (mclk.skip) {                               /* (3.0.4, 2026-11-06, the Ableton test: after each STOP / PLAY the
+                                                    * FM-1 read 144, 131, 127 BPM and rushed for a beat or two: the first
+                                                    * pulses after START come in a clump, the render late while the section
+                                                    * is set up, and the tempo was timed from the first of them.) The first
+                                                    * beat after START / CONTINUE is not timed: the tempo from the next */
+        mclk.skip--;
+        mclk.nbt = 0;
+    } else if (!mclk.alive || now - mclk.last_ms >= 500u || !mclk.nbt) {   /* (re)started: count a fresh beat */
         mclk.n24 = 0;
         mclk.bt[0] = (uint16_t)now;
         mclk.nbt = 1;
@@ -2524,6 +2539,7 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
             uint32_t thr = beats >= 6u ? 600u : beats >= 3u ? 1500u : beats == 2u ? 3000u : 8000u;
             if (mbpm > cur + thr || mbpm + thr < cur)
                 song.g[G_BPM] = (int16_t)clamp((int32_t)((mbpm + 500u) / 1000u), 40, 240);
+            mclk.mbpm = song.g[G_BPM];             /* (the master's, kept for the next START) */
         }
     }
     mclk.alive = 1;
@@ -2535,6 +2551,12 @@ static void mclk_event(uint32_t st, uint32_t src, uint32_t val)   /* a realtime 
     }
 }
 
+/* (3.0.4, 2026-11-06, Ariel, synced to Ableton: "the bpm lost it in a few points") the gap was closed a quarter a block
+ * (0.73 ms) at up to 1/8 of the tempo: every pulse's jitter (Ableton's +-8 ms) and every few pulses held back while the
+ * render ran late were chased at once, the tempo swung +-13 % over 20 ms (seq2 t_mclk_smooth). Now a 128th a block (~0.1 s)
+ * at up to 1/32 (3 %): the jitter averages out, a real drift is still closed in a fraction of a beat */
+#define MCLK_GAIN 128
+#define MCLK_LIM 64
 static uint32_t mclk_adv(uint32_t n)               /* units to advance this block (mclk_on) */
 {
     /* (2026-10-28, Ariel: freezes and rushes with SYNC = USB on the FM-1) the master's tempo (G_BPM, measured over its
@@ -2542,7 +2564,7 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
      * faster or slower: pulses that come in a burst (the render late, USB) are smoothed out, not caught up at twice
      * the tempo (a rush) or waited for (a freeze). More than a beat behind (a long stall): up to twice the tempo */
     uint32_t el, off = 0, tgt;
-    int32_t rate = (int32_t)(n * (uint32_t)song.g[G_BPM]), err, corr, lim = rate / 8;
+    int32_t rate = (int32_t)(n * (uint32_t)song.g[G_BPM]), err, corr, lim = rate / MCLK_LIM;
     if (!mclk.have)
         return 0;                                  /* START seen: wait for the downbeat */
     el = fm1_ms - mclk.last_ms;
@@ -2557,7 +2579,9 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
     err = (int32_t)(tgt - mclk.done);
     if (err > (int32_t)BEAT_U)
         lim = rate;                                /* (a beat or more behind: catch up faster) */
-    corr = err / 4;
+    else if (err > (int32_t)(BEAT_U / 4u) || err < -(int32_t)(BEAT_U / 4u))
+        lim = rate / 8;                            /* (a quarter of a beat out: a real stall, never jitter: as before) */
+    corr = (err > (int32_t)(BEAT_U / 4u) || err < -(int32_t)(BEAT_U / 4u)) ? err / 4 : err / MCLK_GAIN;
     corr = corr > lim ? lim : corr < -lim ? -lim : corr;
     err = rate + corr;
     mclk.done += (uint32_t)(err > 0 ? err : 0);
@@ -2566,6 +2590,7 @@ static uint32_t mclk_adv(uint32_t n)               /* units to advance this bloc
 
 /* everything that happens between two rendered blocks: transport, input, the steps of every
  * track at the clock, the click, the rolls and the arps; then the clock moves on by n samples */
+static uint32_t mi_trk_held[NTRK][4];          /* (3.0.4) the notes MIDI in holds on each track (midi_in_lost) */
 static void events_block(uint32_t n)
 {
     uint32_t i, pr, adv;
@@ -2808,12 +2833,28 @@ static void events_block(uint32_t n)
                 mi_pen[d1 >> 5] |= 1u << (d1 & 31u);
             }
             step_in_push(d1 | 0x80u | trk_index(t) << 8);
+            mi_trk_held[trk_index(t) % NTRK][d1 >> 5] |= 1u << (d1 & 31u);
             input_on(t, d1, d2);
         } else {
             mi_pen[d1 >> 5] &= ~(1u << (d1 & 31u));
+            mi_trk_held[trk_index(t) % NTRK][d1 >> 5] &= ~(1u << (d1 & 31u));
             step_in_push(d1 | trk_index(t) << 8);
             input_off(t, d1);
         }
+    }
+    if (midi_in_lost) {                               /* (3.0.4, after SLOOP 2.8.3) a note message was lost (the ring
+                                                       * full), once what came is read: the notes MIDI holds end, none
+                                                       * stays stuck for a lost note-off */
+        uint32_t ti, w, b;
+        midi_in_lost = 0;
+        for (ti = 0; ti < NTRK; ti++)
+            for (w = 0; w < 4u; w++)
+                for (b = 0; b < 32u; b++)
+                    if ((mi_trk_held[ti][w] >> b) & 1u) {
+                        mi_trk_held[ti][w] &= ~(1u << b);
+                        input_off(&trk[ti], w * 32u + b);
+                    }
+        mi_pen[0] = mi_pen[1] = mi_pen[2] = mi_pen[3] = 0;
     }
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], adv);

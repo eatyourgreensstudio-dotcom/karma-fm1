@@ -95,6 +95,7 @@ int main(int argc, char **argv)
             G[k].gh = (int32_t)lrint(g * h * 1073741824.0);
             G[k].w = (int32_t)lrint(amp * 8.0 * 16777216.0);
             G[k].delay = el_bow_delay((uint32_t)k, (uint32_t)d);
+            G[k].frac = 0;                           /* (hers: whole samples) */
             if (G[k].delay != (uint32_t)d) ok = 0;   /* (the cases fit our shorter loops) */
         }
         b = 0;

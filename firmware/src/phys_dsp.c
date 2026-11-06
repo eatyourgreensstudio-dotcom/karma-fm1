@@ -20,6 +20,20 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+/* KARMA 3.0.4 (2026-11-06, Ariel's FM-1: a held BOW STRING took ~40 % of a core and a busy pattern broke up): BOW and
+ * BLOW run at half the rate, 22.05 kHz, as OMIN does (firmware/mi/elx.cc), and are brought back up to 44.1 kHz by the
+ * same 4-point midpoint interpolation. Their bank keeps its modes below 11 kHz (the bowed and blown sounds have
+ * little above); the modes' Q, their tilt, the bow's band-passes and its noise rate keep their values in Hz (hr below).
+ * PHYS_HALF 0 builds them at the full rate (tests/elem_half_test.c compares the two) */
+#ifndef PHYS_HALF
+#define PHYS_HALF 1
+#endif
+#if PHYS_HALF && !defined(EL_DIFF_D1)                       /* the diffuser's loops at 22.05 kHz (hers: 125 179 268 443 at 32) */
+#define EL_DIFF_D1 86
+#define EL_DIFF_D2 124
+#define EL_DIFF_D3 184
+#define EL_DIFF_D4 305
+#endif
 #include "strike_dsp.c"          /* Elements' strike exciters (MIT, Emilie Gillet): BOUNCE, PICK on the modal bank */
 #include "bow_dsp.c"             /* .. and her bow and blow: BOW, BLOW */
 /* Physical models of DaisySP (Source/PhysicalModeling, Filters, Noise, Utility; MIT) in fixed
@@ -173,6 +187,33 @@ static void px_svf_coef(px_svf_t *c, uint32_t f, uint32_t q8)
     c->gh = (int32_t)(((uint64_t)h * (uint32_t)g) >> 28);
 }
 
+/* (3.0.4) the same, in tune near the top of the band, for the banks at half the rate (hr): px_fasttan is right below
+ * a quarter of the rate and flat above it (measured: -16 cents at 0.30, -99 at 0.40, -237 at 0.49): at 22.05 kHz that
+ * is 5.5 kHz up, where the bowed partials are. Above 0.25: tan(pi f) = 1 / tan(pi (1/2 - f)), in float (the FPU).
+ * f is held to 0.42 (tan 3.9: rpg stays in int32); the banks at half the rate stop their modes there */
+#define PX_HR_TOP 1803886264u                            /* 0.42 cycles, Q32 */
+static void px_svf_coef_hr(px_svf_t *c, uint32_t f, uint32_t q8)
+{
+    int32_t g;
+    uint32_t r;
+    uint64_t den;
+    uint32_t d24, h;
+    if (f <= 0x40000000u) {
+        px_svf_coef(c, f, q8);
+        return;
+    }
+    if (f > PX_HR_TOP)
+        f = PX_HR_TOP;
+    g = (int32_t)(72057594037927936.0f / (float)px_fasttan(0x80000000u - f));   /* 2^56 / tan(pi (1/2 - f)), Q28 */
+    r = (uint32_t)((((uint64_t)1 << 36) + q8 - 1u) / q8);
+    den = ((uint64_t)1 << 28) + (((uint64_t)r * (uint32_t)g) >> 28) + (((uint64_t)g * (uint32_t)g) >> 28);
+    d24 = (uint32_t)((den + 15u) >> 4);
+    h = (uint32_t)(((uint64_t)1 << 54) / d24);
+    c->g = g;
+    c->rpg = (int32_t)(r + (uint32_t)g);
+    c->gh = (int32_t)(((uint64_t)h * (uint32_t)g) >> 28);
+}
+
 /* --------------------------------------------- Svf (double-sampled, Q20) --- */
 typedef struct { int32_t freq, damp, drive; } px_csvf_t; /* Q30, Q28, Q30 */
 typedef struct { int32_t low, band; } px_csvf_st_t;
@@ -314,8 +355,9 @@ static uint64_t px_modal_q(int32_t structure, int32_t b, int32_t d, int32_t *ql)
  * structure, brightness, damping, accent, pos: Q16 0..1; bow: Q16, 0 = struck (ModalVoice
  * sustain off), > 0 = sustained by Dust at that level (sustain on) */
 static __attribute__((noinline)) void px_modal_block(px_modal_blk_t *B, px_modal_t *M, uint32_t f0, int32_t structure, int32_t brightness,
-                           int32_t damping, int32_t accent, int32_t pos, int32_t bow)
-{
+                           int32_t damping, int32_t accent, int32_t pos, int32_t bow, uint32_t hr)
+{   /* hr: 1 = the bank runs at half the rate (f0 is the note at that rate: twice the cycles); the modes' Q and tilt
+     * are taken from the frequency at the full rate (mf >> hr), so they ring as long and as bright as at 44.1 kHz */
     int32_t b = brightness + px_m(accent >> 2, 65536 - brightness, 16);
     int32_t d = damping + px_m(accent >> 2, 65536 - damping, 16);
     int32_t stiff = px_stiff(structure), st2, stretch = 65536, ql;
@@ -332,15 +374,18 @@ static __attribute__((noinline)) void px_modal_block(px_modal_blk_t *B, px_modal
     for (i = 0; i < PX_NMODE; i++) {
         uint64_t mf = (harm * (uint32_t)stretch) >> 16;
         int32_t att, amp;
-        if (mf >= 2143260078u)
+        if (mf >= (hr ? PX_HR_TOP : 2143260078u))
             break;
         if (i < EL_BOW_N)
             B->mf[i] = (uint32_t)mf;
-        att = 65536 - (int32_t)(mf >> 15);               /* 1 - 2 f */
+        att = 65536 - (int32_t)(mf >> (15u + hr));       /* 1 - 2 f */
         amp = px_m(px_sin(phs + 0x40000000u), 16384, 16);   /* cos(2 pi pos i) / 4, Q30 * Q16 -> Q30 */
         {
             px_svf_t c;
-            px_svf_coef(&c, (uint32_t)mf, (uint32_t)(256u + ((mf * q8) >> 32)));
+            if (hr)
+                px_svf_coef_hr(&c, (uint32_t)mf, (uint32_t)(256u + (((mf >> hr) * q8) >> 32)));
+            else
+                px_svf_coef(&c, (uint32_t)mf, (uint32_t)(256u + ((mf * q8) >> 32)));
             B->m[i].g = c.g;
             B->m[i].rpg = c.rpg;
             B->m[i].gh = c.gh;
@@ -532,6 +577,8 @@ typedef struct {
     el_bow_t w;
     el_flow_t fl;
     int32_t v;                                           /* the bow's pressure at the end of the last block, Q16 */
+    int32_t uh[3], uc;                                   /* (half rate) the up-sampler: the last three samples, a carry */
+    uint8_t uhas;
 } px_bow_t;
 typedef struct {
     el_tube_t t;
@@ -539,7 +586,31 @@ typedef struct {
     uint32_t rng;
     int32_t n1, n2;                                      /* the breath's low-pass, Q24 */
     int32_t e;                                           /* the envelope at the end of the last block, Q16 */
+    int32_t uh[3], uc;                                   /* (half rate) the up-sampler: the last three samples, a carry */
+    uint8_t uhas;
 } px_blow_t;
+/* (3.0.4) half rate -> 44.1 kHz: n out of the h half-rate samples in x[] (h = what n needs, less a carry), as
+ * elx.cc: the midpoint between the last two (a 4-point interpolation), then the last; one sample of latency */
+static void px_up2(int32_t *uh, int32_t *uc, uint8_t *uhas, const int32_t *x, int32_t *out, uint32_t n)
+{
+    uint32_t i = 0, j = 0;
+    if (*uhas && n) {
+        out[i++] = *uc;
+        *uhas = 0;
+    }
+    while (i < n) {
+        int32_t xi = x[j++], a = (int32_t)((9 * ((int64_t)uh[1] + uh[2]) - uh[0] - xi) >> 4), b = uh[2];
+        uh[0] = uh[1];
+        uh[1] = uh[2];
+        uh[2] = xi;
+        out[i++] = a;
+        if (i < n)
+            out[i++] = b;
+        else
+            *uc = b, *uhas = 1;
+    }
+}
+static uint32_t px_up2_need(uint8_t uhas, uint32_t n) { return (n - (uhas && n ? 1u : 0u) + 1u) / 2u; }
 #define PX_FLOW_SCALE 15735                              /* her bow's noise: parameter 0.7, ^4 */
 #define PX_FLOW_THR 93839722u                            /* (0.0001 + that / 8) of 2^32 a sample, x 32 / 44.1 (hers: 32 kHz) */
 
@@ -554,31 +625,43 @@ static uint32_t px_tone_cut(int32_t t)
  * bowed waveguides beside it. v: the bow's pressure now (her envelope x level), tone: its noise, accent: Q16
  * (how rough the bow is) */
 static __attribute__((noinline)) void px_bow_run(px_modal_blk_t *B, px_modal_t *M, px_bow_t *W, int32_t v, int32_t tone,
-                                                 int32_t accent, int32_t *out, int32_t *aux, uint32_t n)
-{
+                                                 int32_t accent, int32_t *out, int32_t *aux, uint32_t n, uint32_t hr)
+{   /* hr: 1 = at half the rate (px_modal_block's): the noise flips as often a second, the tone and the band-passes'
+     * Q stay where they are in Hz */
     int32_t ext[32], v0 = W->v, dv, g = 65536 + 7 * accent, vi;
     el_bowg_t G[EL_BOW_N];
-    uint32_t i, nw = B->n < EL_BOW_N ? B->n : EL_BOW_N;
+    uint32_t i, nw = B->n < EL_BOW_N ? B->n : EL_BOW_N, cut = px_tone_cut(tone);
     if (n > 32u)
         n = 32u;
+    if (hr)
+        cut = cut >= 1071630039u ? 2143260078u : cut << 1;
     dv = n ? (v - v0) / (int32_t)n : 0;
     for (i = 0, vi = v0; i < n; i++) {                   /* her input: noise x pressure / 128 (x her accent: here 1 to */
         vi += dv;                                        /* 8, a rough bow speaks sooner); the bank here takes 4 of hers */
-        ext[i] = px_m(el_flow_tick(&W->fl, PX_FLOW_SCALE, PX_FLOW_THR), px_m(vi, g, 16), 13);   /* (its modes' gains: a quarter) */
+        ext[i] = px_m(el_flow_tick(&W->fl, PX_FLOW_SCALE, PX_FLOW_THR << hr), px_m(vi, g, 16), 13);   /* (its modes' gains: a
+                                                         * quarter; half rate: it flips as often a second, its level as
+                                                         * it is: measured, the bow speaks as at 44.1 kHz that way) */
     }
-    px_svf_coef(&B->ex, px_tone_cut(tone), 128u);        /* her q: 0.5 */
+    if (hr)
+        px_svf_coef_hr(&B->ex, cut, 128u);               /* her q: 0.5 */
+    else
+        px_svf_coef(&B->ex, cut, 128u);
     B->ext = ext;
     px_modal_run(B, M, out, aux, n);
     for (i = 0; i < nw; i++) {                           /* Resonator::ComputeFilters, the bowed part */
         px_svf_t c;
         uint32_t mf = B->mf[i];
-        px_svf_coef(&c, mf, 256u + (uint32_t)(((uint64_t)mf * 529200u) >> 32));   /* q = 1 + 1500 f (of 32 kHz) */
+        if (hr)
+            px_svf_coef_hr(&c, mf, 256u + (uint32_t)(((uint64_t)(mf >> hr) * 529200u) >> 32));   /* q = 1 + 1500 f (of 32 kHz) */
+        else
+            px_svf_coef(&c, mf, 256u + (uint32_t)(((uint64_t)mf * 529200u) >> 32));
         G[i].g = c.g;
         G[i].rpg = c.rpg;
         G[i].gh = c.gh;
         G[i].r = c.rpg - c.g;
         G[i].w = B->m[i].a * 2;                          /* x 8, and the quarter back */
-        G[i].delay = el_bow_delay(i, 0xFFFFFFFFu / mf);
+        G[i].delay = el_bow_delay_q16(i, (uint32_t)((((uint64_t)1 << 48) / mf) > 0xFFFFFFFFu ? 0xFFFFFFFFu : ((uint64_t)1 << 48) / mf),
+                                      &G[i].frac);      /* (3.0.4: in tune between samples) */
     }
     el_bow_run(&W->w, G, nw, aux, v0, v, out, n);        /* (aux: the bank's input / 4 = hers, as Q22) */
     W->v = v;
@@ -588,8 +671,8 @@ static __attribute__((noinline)) void px_bow_run(px_modal_blk_t *B, px_modal_t *
  * knob), smeared, into the bank. f0: the note; level, tone, damping, accent: Q16 0..1; e: the envelope, Q16 */
 static __attribute__((noinline)) void px_blow_run(px_modal_blk_t *B, px_modal_t *M, px_blow_t *W, uint32_t f0, int32_t level,
                                                   int32_t tone, int32_t damping, int32_t e, int32_t accent,
-                                                  int32_t *out, int32_t *aux, uint32_t n)
-{
+                                                  int32_t *out, int32_t *aux, uint32_t n, uint32_t hr)
+{   /* hr: 1 = at half the rate: f0 is the note at that rate, the breath's low-pass stays where it is in Hz */
     int32_t io[32], bl = level + (level >> 1), tube, e0 = W->e, de, g = 32768 + accent, n1 = W->n1, n2 = W->n2;
     px_svf_t lp;
     el_tube_blk_t TB;
@@ -598,7 +681,13 @@ static __attribute__((noinline)) void px_blow_run(px_modal_blk_t *B, px_modal_t 
         n = 32u;
     tube = bl > 65536 ? (bl - 65536) * 2 : 0;
     bl = px_m(bl > 65536 ? 65536 : bl, 26214, 16);       /* x 0.4 */
-    px_svf_coef(&lp, px_tone_cut(tone), 179u);
+    {
+        uint32_t cut = px_tone_cut(tone);
+        if (hr)
+            px_svf_coef_hr(&lp, cut >= 1071630039u ? 2143260078u : cut << 1, 179u);
+        else
+            px_svf_coef(&lp, cut, 179u);
+    }
     for (i = 0; i < n; i++) {                            /* the breath: white noise, low-passed */
         int32_t in = (int32_t)(el_word(&W->rng) >> 8) - (1 << 23), t, bp;
         t = (int32_t)(((int64_t)lp.gh * (in - px_m(lp.rpg, n1, 28) - n2)) >> 30);
@@ -607,7 +696,7 @@ static __attribute__((noinline)) void px_blow_run(px_modal_blk_t *B, px_modal_t 
         t = px_m(lp.g, bp, 28);
         bp = n2 + t;
         n2 = bp + t;
-        io[i] = bp >> 4;
+        io[i] = hr ? px_m(bp >> 4, 46341, 16) : bp >> 4;   /* (half rate: 1 / sqrt 2, as the bow's noise) */
     }
     W->n1 = px_clamp(n1, -(1 << 28), 1 << 28);
     W->n2 = px_clamp(n2, -(1 << 28), 1 << 28);

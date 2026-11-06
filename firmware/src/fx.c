@@ -48,7 +48,8 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
         int32_t x = b[i], y;
         t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
         x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
-        y = softclip((((x >> 2) * g) >> 10) + bias) - b0;   /* >> 2 first: no overflow for loud poly */
+        y = softclip(MULQ12R(x, g, 2) + bias) - b0;         /* (as (x >> 2) * g >> 10 in 32 bits: no overflow for loud
+                                                             * poly; 3.0.4 after SLOOP 2.8.4: rounded) */
         t->dist_lp1 += mulq15(y - t->dist_lp1, k);         /* two poles: tames the fizz */
         t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
         b[i] = mulq15(t->dist_lp2, mk);
@@ -672,8 +673,19 @@ static uint32_t w_n, w_job;                     /* the block's length, the track
  * mean of ticks; after each block CPU0 picks the tracks CPU1 renders next so that the two finish together (the larger
  * of the two loads the least), a change only when it is clearly better (by 1/16: no back and forth) */
 static uint32_t w_mask = 6u;                    /* tracks 2 and 3 to start */
-static uint32_t core_cost[NPART + 1];           /* ticks x 8: the three parts, the drums */
-static inline void cost_put(uint32_t k, uint32_t ticks) { core_cost[k] += ticks - (core_cost[k] >> 3); }
+static uint32_t core_cost[NPART + 1];           /* ticks x 8: the three parts, the drums (a running mean: the console's) */
+/* (3.0.4, 2026-11-06: Ariel's FM-1 moved its tracks between the cores every second or so: the 8-block mean swung from a
+ * held note's cost to nothing between notes, and the split chased it.) The balance now takes each part's PEAK: up at
+ * once to a block that cost more, down slowly (~0.4 s, 2^9 blocks), so a part is weighed by what it costs when it
+ * sounds; and a split stays at least CORE_DWELL blocks */
+static uint32_t core_peak[NPART + 1];           /* ticks x 16 */
+#define CORE_DWELL 256u                         /* blocks (~0.19 s) */
+static inline void cost_put(uint32_t k, uint32_t ticks)
+{
+    uint32_t c = ticks << 4, p = core_peak[k];
+    core_cost[k] += ticks - (core_cost[k] >> 3);
+    core_peak[k] = c >= p ? c : p - ((p - c) >> 9);
+}
 static int32_t stem_buf[NTRK][CTL];            /* (below: USB STEMS) */
 static uint8_t fx_stems;
 static int32_t stem_pre1[CTL];                  /* CPU1's own (stem_take's is CPU0's) */
@@ -698,22 +710,29 @@ static void core1_parts(void *ctx)
 }
 static void core_balance(void)                  /* CPU0, after the join: the next block's split */
 {
+    static uint32_t since;
     uint32_t m, best = w_mask, k, bl = 0xFFFFFFFFu, cur = 0;
+    if (since < CORE_DWELL) {
+        since++;
+        return;
+    }
     for (m = 1; m < (1u << NPART); m++) {               /* (CPU1 always has one: else nothing would measure it) */
-        uint32_t l0 = core_cost[NPART], l1 = 0, l;
+        uint32_t l0 = core_peak[NPART], l1 = 0, l;
         for (k = 0; k < NPART; k++)
             if ((m >> k) & 1u)
-                l1 += core_cost[k];
+                l1 += core_peak[k];
             else
-                l0 += core_cost[k];
+                l0 += core_peak[k];
         l = l0 > l1 ? l0 : l1;
         if (m == w_mask)
             cur = l;
         if (l < bl)
             bl = l, best = m;
     }
-    if (best != w_mask && bl + (cur >> 4) < cur)
+    if (best != w_mask && bl + (cur >> 3) < cur) {     /* clearly better (by 1/8) */
         w_mask = best;
+        since = 0;
+    }
 }
 #endif
 static void mix_part_run(track_t *t, uint32_t n, const mixbus_t *o)
@@ -761,10 +780,13 @@ static void mix_part_run(track_t *t, uint32_t n, const mixbus_t *o)
         int32_t lvl0 = t->lvl ? t->lvl : lvl, dl = (lvl - lvl0) >> CTL_LOG2;   /* a new sound's trim: ramped */
         t->lvl = lvl;
         for (i = 0; i < n; i++) {
-            int32_t x = ((b[i] >> 2) * (lvl0 + dl * (int32_t)i)) >> 10, a;   /* pre-shift: 8 loud voices */
+            int32_t lv = lvl0 + dl * (int32_t)i, bi = b[i], x = MULQ12R(bi, lv, 2), a;   /* (3.0.4 after SLOOP 2.8.4)
+                                                         * rounded, all of b: 8 loud voices in 32 bits as ((b >> 2) * lv) >> 10 was */
             int32_t xs, g = ga + (((gb - ga) * (int32_t)i) >> CTL_LOG2);
-            if (g < 32767)
-                x = (x >> 4) * (g >> 3) >> 8;           /* (Q15 in two halves: no 32-bit overflow) */
+            if (g < 32767) {                            /* (always, at rest: mulq15(32767, 32767) is 32766) */
+                g >>= 3;                                /* (Q12: no 32-bit overflow) */
+                x = MULQ12R(x, g, 4);
+            }
             a = x < 0 ? -x : x;
             xs = clamp(x, -xmax, xmax);                 /* sends: mulq15 would overflow */
             if (a > pk)
@@ -777,8 +799,9 @@ static void mix_part_run(track_t *t, uint32_t n, const mixbus_t *o)
                 o->v[i] += mulq15(xs, r);
             if (cs)
                 o->cl[i] += mulq15(xs, cs);
-            o->l[i] += ((x >> 4) * gl) >> 8;            /* (x may pass 2^19: >> 4 first) */
-            o->r[i] += ((x >> 4) * gr) >> 8;
+            o->l[i] += (x * (gl >> 4) + 128) >> 8;      /* (x may pass 2^19: PAN's Q12 to Q8, exact at rest; 3.0.4 after
+                                                         * SLOOP 2.8.4: x >> 4 floored the part to 16 LSB) */
+            o->r[i] += (x * (gr >> 4) + 128) >> 8;
         }
         t->peak = pk;
     }
@@ -1273,15 +1296,17 @@ static void mix_block(int32_t *out, uint32_t n)
         static uint8_t usb_was;
         for (i = 0; i < n; i++) {
             int32_t m = m0 + (((m1 - m0) * (int32_t)i) >> CTL_LOG2);
-            ol[i] = ((mix_l[i] >> 2) * m) >> 10;
-            orr[i] = ((mix_r[i] >> 2) * m) >> 10;
+            ol[i] = MULQ12R(mix_l[i], m, 2);           /* (3.0.4 after SLOOP 2.8.4: rounded; (x >> 2) * m >> 10 floored
+                                                         * to 4 LSB) */
+            orr[i] = MULQ12R(mix_r[i], m, 2);
             master_pre(&ol[i], &orr[i]);
             if ((i & 1u)) {                             /* the visualiser: every other sample, as audio.c reads it */
                 vis_tap[2u * i] = (int16_t)knee(mix_l[i]);
                 vis_tap[2u * i + 1u] = (int16_t)knee(mix_r[i]);
             }
             if (usb_full_now) {                         /* USB AUDIO = FULL: MASTER all the way up (4096) */
-                ul[i] = (mix_l[i] >> 2) << 2, ur[i] = (mix_r[i] >> 2) << 2;
+                ul[i] = mix_l[i], ur[i] = mix_r[i];     /* (3.0.4 after SLOOP 2.8.4: x 4096 / 4096, every bit; it was
+                                                         * floored to 4 LSB) */
                 master_pre_usb(&ul[i], &ur[i]);
             }
         }

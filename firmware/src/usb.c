@@ -199,6 +199,8 @@ static volatile uint32_t so_w, so_r;
 #define MQ 64u
 static uint32_t midi_in_q[MQ], midi_out_q[MQ];
 static volatile uint32_t mi_w, mi_r, mo_w, mo_r;
+static volatile uint8_t midi_in_lost;               /* (3.0.4, after SLOOP 2.8.3 / Melodee 1.5) a note message did not fit the
+                                                     * ring: seq.c ends the notes MIDI holds (a lost note-off: no stuck note) */
 static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 {
     if (usb.config && mo_w - mo_r < MQ) {
@@ -854,6 +856,8 @@ static void midi_in_event(uint32_t pkt)
             midi_in_q[mi_w % MQ] = pkt;
             RING_PUBLISH();
             mi_w++;
+        } else if (cin == 8u || cin == 9u) {
+            midi_in_lost = 1;
         }
         return;
     }

@@ -27,7 +27,8 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_BK_LIST, ED_BK_GET, ED_BK_PUT,                                        /* v6: backup / restore */
        ED_LOCK_GET, ED_LOCK_SET, ED_MICRO_GET, ED_MICRO_SET,                    /* v7: parameter locks, nudges */
        ED_FILL_GET, ED_FILL_SET,                                                /* v8: fill conditions */
-       ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE };                /* v9: FM6 patches (Felucca's numbers) */
+       ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE,                  /* v9: FM6 patches (Felucca's numbers) */
+       ED_STAT = 90 };                                                          /* (3.0.4) the load and the USB, read only */
 /* v10 (SLOOP 2.5): DSYN_LIST .. DSYN_PLAY = 72..76, editor_dsyn.c; backup object 9 = the SYN kits */
 #define ED_PROTO 11u                                   /* the protocol version INFO ends with */
 
@@ -926,6 +927,44 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         break;
     case ED_PING:
         ed_b(0);
+        break;
+    case ED_STAT:                                          /* (3.0.4) the FM-1's load and its USB, readable in USB STEMS (no
+                                                            * console there): 5-byte numbers, in this order (tools/karma_stat.py) */
+        ed_bk_u32(fm1_ms);
+        ed_bk_u32(felucca_dbg.halves);
+        ed_bk_u32(felucca_dbg.late);
+        ed_bk_u32(felucca_dbg.max_us);
+        ed_bk_u32(felucca_dbg.last_us);
+        ed_bk_u32(song.cpu_q8);
+        ed_bk_u32(shed_count);
+        ed_bk_u32(voice_kills);
+        ed_bk_u32(song.playing);
+        ed_bk_u32((uint32_t)song.g[G_BPM]);
+#if KARMA_DUAL_CORE
+        ed_bk_u32((uint32_t)audio_worker_online | (uint32_t)fm1_core1_barred() << 1);
+        ed_bk_u32(fm1_core1_fault.count);
+        ed_bk_u32(audio_worker.timeouts);
+        ed_bk_u32(w_mask);
+        for (i = 0; i <= NPART; i++)
+            ed_bk_u32(core_peak[i] / 16u / FM1_TICKS_PER_US);
+#else
+        for (i = 0; i < 4u + NPART + 1u; i++)
+            ed_bk_u32(0);
+#endif
+#if FELUCCA_UAC
+        ed_bk_u32(usb_stems);
+        ed_bk_u32(uac.underruns);
+        ed_bk_u32(uac.overruns);
+        ed_bk_u32(uac.missed);
+        ed_bk_u32(uac.stalls);
+#else
+        for (i = 0; i < 5u; i++)
+            ed_bk_u32(0);
+#endif
+        ed_bk_u32(felucca_dbg.nested);
+        ed_bk_u32(t5_nested_ticks / FM1_TICKS_PER_US);
+        ed_bk_u32(prof_blk_max / FM1_TICKS_PER_US);
+        ed_bk_u32(usb.rx_pkts);
         break;
     case ED_TRACK:                                         /* [track] -> selected, NTRK, per track: engine, preset, level, mute, armed */
         if (na >= 1u && a[0] < NTRK && a[0] != song.sel) {

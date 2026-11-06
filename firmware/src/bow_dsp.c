@@ -52,6 +52,7 @@ typedef struct {                                      /* a waveguide's block: th
     int32_t r;                                        /* 1 / q, Q28 */
     int32_t w;                                        /* its share of the sound (her amplitude x 8), Q24 */
     uint32_t delay;                                   /* samples */
+    uint32_t frac;                                    /* (3.0.4) and a fraction of one, Q14: read between two (0: hers) */
 } el_bowg_t;
 
 /* the delay of waveguide i for a period (samples): halved until it fits, as hers (she has 1024 for each) */
@@ -61,6 +62,16 @@ static inline uint32_t el_bow_delay(uint32_t i, uint32_t period)
     while (period >= size)
         period >>= 1;
     return period;
+}
+
+/* (3.0.4) the same for a period in Q16: the whole samples (*frac: the fraction, Q14) */
+static inline uint32_t el_bow_delay_q16(uint32_t i, uint32_t period, uint32_t *frac)
+{
+    uint32_t size = (uint32_t)(EL_BOW_AT[i + 1] - EL_BOW_AT[i]);
+    while ((period >> 16) >= size - 1u)
+        period >>= 1;
+    *frac = (period & 0xFFFFu) >> 2;
+    return period >> 16;
 }
 
 /* BowTable: the push of the bow (pressing at velocity, Q16) on a body moving at x (Q22) */
@@ -96,7 +107,8 @@ static void el_bow_run(el_bow_t *E, const el_bowg_t *G, uint32_t nw, const int32
         for (k = 0; k < nw; k++) {
             const el_bowg_t *c = &G[k];
             uint32_t base = EL_BOW_AT[k], mask = (uint32_t)(EL_BOW_AT[k + 1] - EL_BOW_AT[k]) - 1u;
-            int32_t s = (E->line[base + ((wp + c->delay) & mask)] * 16220) >> 8;   /* 0.99 of it, Q16 -> Q22 */
+            int32_t l0 = E->line[base + ((wp + c->delay) & mask)], l1 = E->line[base + ((wp + c->delay + 1u) & mask)];
+            int32_t s = ((l0 + (((l1 - l0) * (int32_t)c->frac) >> 14)) * 16220) >> 8;   /* 0.99 of it, Q16 -> Q22 */
             int32_t s1 = E->s[k][0], s2 = E->s[k][1], t, v;
             sum += s;
             t = (int32_t)(((int64_t)c->gh * (x + s - (int32_t)(((int64_t)c->rpg * s1) >> 28) - s2)) >> 30);
@@ -140,7 +152,9 @@ static void el_bow_run(el_bow_t *E, const el_bowg_t *G, uint32_t nw, const int32
         float x = (float)(in[i] + push), acc = 0.0f;
         for (k = 0; k < nw; k++) {
             uint32_t base = EL_BOW_AT[k], mask = (uint32_t)(EL_BOW_AT[k + 1] - EL_BOW_AT[k]) - 1u;
-            int32_t si = (E->line[base + ((wp + G[k].delay) & mask)] * 16220) >> 8, o;   /* 0.99 of it, Q16 -> Q22 */
+            int32_t l0 = E->line[base + ((wp + G[k].delay) & mask)], l1 = E->line[base + ((wp + G[k].delay + 1u) & mask)];
+            int32_t si = ((l0 + (((l1 - l0) * (int32_t)G[k].frac) >> 14)) * 16220) >> 8, o;   /* 0.99 of it, Q16 -> Q22
+                                                         * (3.0.4: between two samples: a loop in tune at half the rate) */
             float t, v, y;
             sum += si;
             t = fgh[k] * (x + (float)si - frpg[k] * s1[k] - s2[k]);

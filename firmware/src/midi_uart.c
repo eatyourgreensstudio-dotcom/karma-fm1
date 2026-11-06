@@ -75,6 +75,8 @@ static void um_byte(uint32_t b)
             um.msgs++;
         } else {
             um.drops++;
+            if ((um.st & 0xE0u) == 0x80u)          /* (3.0.4) a note on / off lost: seq.c ends the MIDI notes held */
+                midi_in_lost = 1;
         }
     }
 }

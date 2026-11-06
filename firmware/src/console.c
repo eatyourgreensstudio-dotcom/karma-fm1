@@ -219,6 +219,10 @@ static void con_status(void)
     con_kv("cost_t2_us", (int32_t)(core_cost[1] / 8u / FM1_TICKS_PER_US));
     con_kv("cost_t3_us", (int32_t)(core_cost[2] / 8u / FM1_TICKS_PER_US));
     con_kv("cost_drums_us", (int32_t)(core_cost[NPART] / 8u / FM1_TICKS_PER_US));
+    con_kv("peak_t1_us", (int32_t)(core_peak[0] / 16u / FM1_TICKS_PER_US));   /* (3.0.4: what the balance weighs) */
+    con_kv("peak_t2_us", (int32_t)(core_peak[1] / 16u / FM1_TICKS_PER_US));
+    con_kv("peak_t3_us", (int32_t)(core_peak[2] / 16u / FM1_TICKS_PER_US));
+    con_kv("peak_drums_us", (int32_t)(core_peak[NPART] / 16u / FM1_TICKS_PER_US));
 #endif
 }
 
