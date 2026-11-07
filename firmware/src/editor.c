@@ -973,6 +973,9 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             const uint32_t *w = (const uint32_t *)&fm1_crash;
             for (i = 0; i < sizeof fm1_crash / 4u; i++)
                 ed_bk_u32(w[i]);
+            w = (const uint32_t *)&fm1_core1_last;          /* then the last CPU1 fault (hal fm1_irq.h) */
+            for (i = 0; i < sizeof fm1_core1_last / 4u; i++)
+                ed_bk_u32(w[i]);
         }
         break;
 #if KARMA_PCOST

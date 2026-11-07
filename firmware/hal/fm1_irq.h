@@ -61,6 +61,11 @@ static inline uint32_t fm1_cnum(void) { uint32_t v; __asm__ volatile("%0 = cnum"
  * whose own state is intact: CPU1 is held, the fault recorded, the audio worker retires (audio_worker.h) and CPU0
  * resumes. CPU1 can also take the exception itself: it records it and holds itself */
 static struct { volatile uint32_t count; uint32_t echoes, cpu, dbg, emu, pc, rets; } fm1_core1_fault;
+/* (KARMA 3.0.5) the last CPU1 fault, kept over resets and updates until power-off (fm1_core1_fault above is cleared at
+ * boot: AW_FAULTS() counts this run's): editor SysEx 93 reads it after fm1_crash */
+typedef struct { uint32_t magic, count, cpu, dbg, emu, pc, rets, uptime_ms; } fm1_core1_last_t;
+#define FM1_CORE1_LAST_MAGIC 0x43314654u    /* "C1FT" */
+fm1_core1_last_t fm1_core1_last __attribute__((section(".noinit")));
 static int fm1_core1_fault_c(const uint32_t *f)   /* 1: handled, CPU0 resumes */
 {
 #if KARMA_DUAL_CORE
@@ -68,6 +73,12 @@ static int fm1_core1_fault_c(const uint32_t *f)   /* 1: handled, CPU0 resumes */
     if (!cpu && (dbg & FM1_DBG_C0))
         return 0;                                   /* CPU0's own */
     if (!cpu && !(dbg & FM1_DBG_C1)) {              /* CPU1 took it too and cleared DBG_MSG first: once per CPU1 fault */
+        uint32_t spin;
+        /* (3.0.5, 2026-11-07: two red CRASH screens with no cause, CPU0 in the worker's join and in the key scan: CPU0
+         * got here between CPU1's clearing DBG_MSG and its count++, took the echo for its own and reset.) CPU1's
+         * record is a few instructions behind: wait for it a little (~1 ms at most) before deciding */
+        for (spin = 0; spin < 100000u && fm1_core1_fault.echoes >= fm1_core1_fault.count; spin++)
+            __asm__ volatile("" ::: "memory");
         if (fm1_core1_fault.echoes >= fm1_core1_fault.count)
             return 0;                               /* else CPU0's own */
         fm1_core1_fault.echoes++;
@@ -82,6 +93,14 @@ static int fm1_core1_fault_c(const uint32_t *f)   /* 1: handled, CPU0 resumes */
     fm1_core1_fault.emu = *(volatile uint32_t *)(cpu ? 0x1EEF2D4u : 0x1EEF0D4u);   /* the faulting core's EMU_MSG */
     fm1_core1_fault.pc = f[16];
     fm1_core1_fault.rets = f[25];
+    fm1_core1_last.count = fm1_core1_last.magic == FM1_CORE1_LAST_MAGIC ? fm1_core1_last.count + 1u : 1u;
+    fm1_core1_last.magic = FM1_CORE1_LAST_MAGIC;
+    fm1_core1_last.cpu = cpu;
+    fm1_core1_last.dbg = dbg;
+    fm1_core1_last.emu = fm1_core1_fault.emu;
+    fm1_core1_last.pc = f[16];
+    fm1_core1_last.rets = f[25];
+    fm1_core1_last.uptime_ms = *(volatile uint32_t *)0x10804u / 24000u;
     fm1_core1_fault.count++;
     was = FM1_DBG_WR_EN & 1u;                       /* (writing 0xE7 toggles the unlock) */
     if (!was)
