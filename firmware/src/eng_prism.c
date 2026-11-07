@@ -144,7 +144,11 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
             uint32_t k = n - done < 16u ? n - done : 16u, i;
             q.trigger = v->s[6] ? PLX_TRIG_RISE | PLX_TRIG_HIGH : v->gate ? PLX_TRIG_HIGH : PLX_TRIG_LOW;
             v->s[6] = 0;
-            plx_render(in, &q, b, aux, k);
+            {
+                PC_T0();
+                plx_render(in, &q, b, aux, k);
+                PC_MARK(PC_PLX);
+            }
             for (i = 0; i < k; i++) {
                 float f = b[i] * 32767.0f;
                 int32_t x = f > 32767.0f ? 32767 : f < -32767.0f ? -32767 : (int32_t)f;
@@ -169,6 +173,7 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     s.gain = v->s[2];
     s.high = (uint8_t)v->s[3];
     s.on = (uint8_t)v->s[4];
+    PC_T0();
     while (done < n) {                                   /* (the mix runs in blocks of CTL) */
         int16_t b[CTL];
         uint32_t k = n - done < CTL ? n - done : CTL, i;
@@ -192,6 +197,7 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
         }
         done += k;
     }
+    PC_MARK(PC_PRISM);
     v->ph[0] = s.phase;
     v->ph[2] = ph2;
     v->s[0] = s.next;

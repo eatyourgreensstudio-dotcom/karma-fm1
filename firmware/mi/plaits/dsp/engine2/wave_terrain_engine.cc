@@ -228,7 +228,8 @@ void WaveTerrainEngine::Render(
       aux_s += y + z;
     }
     out[i] = kScale * out_s;
-    aux[i] = Sine(1.0f + 0.5f * kScale * aux_s);
+    if (KARMA_AUX)   // (KARMA: aux alone)
+      aux[i] = Sine(1.0f + 0.5f * kScale * aux_s);
   }
 }
 

@@ -31,6 +31,16 @@
 #include <algorithm>
 #include <cstdio>
 
+#ifdef KARMA_PCOST_CXX   // (KARMA 3.0.5 measuring build only: firmware/src/dsp.c PC_OM_*)
+extern "C" { uint32_t karma_pc_now(void); void karma_pc_add(uint32_t k, uint32_t t0); }
+#define OM_T0() uint32_t om_t_ = karma_pc_now()
+#define OM_MARK(k) do { karma_pc_add(k, om_t_); om_t_ = karma_pc_now(); } while (0)
+#else
+#define OM_T0() do { } while (0)
+#define OM_MARK(k) do { } while (0)
+#endif
+enum { OM_OSC = 11, OM_IIR = 12, OM_FIR = 13, OM_REST = 14 };
+
 namespace elements {
 
 using namespace std;
@@ -215,6 +225,7 @@ void OminousVoice::Process(
     float* center,
     float* sides,
     size_t size) {
+  OM_T0();
   uint8_t flags = GetGateFlags(gate_in);
   
   // Compute the envelope.
@@ -250,6 +261,7 @@ void OminousVoice::Process(
   const float rotation_speed[2] = { 1.0f, 1.123456f };
   feedback_ += 0.01f * (patch.exciter_bow_timbre - feedback_);
   frequency += kOversamplingDownMidi;
+  OM_MARK(OM_REST);
   for (size_t i = 0; i < 2; ++i) {
     Upsample<kOversamplingUp>(
         &external_fm_state_[i],
@@ -277,13 +289,16 @@ void OminousVoice::Process(
         external_fm_oversampled_,
         osc_oversampled_,
         size * kOversamplingUp);
+    OM_MARK(OM_OSC);
     
     iir_downsampler_[i].Process<FILTER_MODE_LOW_PASS>(
         osc_oversampled_,
         osc_oversampled_,
         size * kOversamplingUp,
         1);
+    OM_MARK(OM_IIR);
     fir_downsampler_[i].Process(osc_oversampled_, osc_, size * kOversamplingUp);
+    OM_MARK(OM_FIR);
     
     // Copy to raw buffer.
     float level_state = osc_level_[i];
@@ -313,6 +328,7 @@ void OminousVoice::Process(
     spatializer_[i].Rotate(f * rotation_speed[i]);
     spatializer_[i].set_distance(distance * (2.0f - distance));
     spatializer_[i].Process(osc_, center, sides, size);
+    OM_MARK(OM_REST);
   }
   
   level_state_ = level;

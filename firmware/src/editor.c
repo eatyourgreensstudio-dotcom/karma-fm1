@@ -28,7 +28,8 @@ enum { ED_INFO = 1, ED_GET, ED_SET, ED_DUMP, ED_DESC, ED_STEP_GET, ED_STEP_SET, 
        ED_LOCK_GET, ED_LOCK_SET, ED_MICRO_GET, ED_MICRO_SET,                    /* v7: parameter locks, nudges */
        ED_FILL_GET, ED_FILL_SET,                                                /* v8: fill conditions */
        ED_FM6_GET = 68, ED_FM6_PUT, ED_FM6_LIST, ED_FM6_ERASE,                  /* v9: FM6 patches (Felucca's numbers) */
-       ED_STAT = 90 };                                                          /* (3.0.4) the load and the USB, read only */
+       ED_STAT = 90,                                                            /* (3.0.4) the load and the USB, read only */
+       ED_PCOST = 91, ED_PVAR = 92, ED_CRASH = 93 };                                                         /* (3.0.5) KARMA_PCOST builds: the stages' time */
 /* v10 (SLOOP 2.5): DSYN_LIST .. DSYN_PLAY = 72..76, editor_dsyn.c; backup object 9 = the SYN kits */
 #define ED_PROTO 11u                                   /* the protocol version INFO ends with */
 
@@ -966,6 +967,30 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_bk_u32(prof_blk_max / FM1_TICKS_PER_US);
         ed_bk_u32(usb.rx_pkts);
         break;
+    case ED_CRASH:                                         /* (3.0.5) the last crash's record (hal fm1_crash, kept over resets and
+                                                            * updates until power-off), any USB mode: every word of it */
+        {
+            const uint32_t *w = (const uint32_t *)&fm1_crash;
+            for (i = 0; i < sizeof fm1_crash / 4u; i++)
+                ed_bk_u32(w[i]);
+        }
+        break;
+#if KARMA_PCOST
+    case ED_PCOST:                                         /* (3.0.5) per stage (dsp.c PC_*): us, then calls; cleared */
+        for (i = 0; i < PC_N; i++) {
+            ed_bk_u32(pc_ticks[i] / FM1_TICKS_PER_US);
+            ed_bk_u32(pc_calls[i]);
+            pc_ticks[i] = pc_calls[i] = 0;
+        }
+        ed_bk_u32(felucca_dbg.late);
+        ed_bk_u32(song.cpu_q8);
+        break;
+    case ED_PVAR:                                          /* [v]: which variant of a stage runs (dsp.c pc_var); -> v */
+        if (na >= 1u)
+            pc_var = a[0];
+        ed_bk_u32(pc_var);
+        break;
+#endif
     case ED_TRACK:                                         /* [track] -> selected, NTRK, per track: engine, preset, level, mute, armed */
         if (na >= 1u && a[0] < NTRK && a[0] != song.sel) {
             track_select(a[0]);

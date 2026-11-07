@@ -243,6 +243,8 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
     phys_slot_t *S = phys_slot_of(t, v, elem);
     uint32_t md = phys_md(t, elem), i, f0 = m->inc;
     int32_t y[CTL], ax[CTL];
+    union { px_modal_blk_t m; px_string_blk_t s; } bk;   /* (3.0.5) the block's numbers, one place for every model: each
+                                                        * case's own was 1.5 KB of CPU1's 4 KB stack (bow: near its end) */
     int32_t strc = p[P_E1] * 516, brit = clamp(p[P_E2] * 516 + m->cutoff * 2, 0, 65536);   /* Q16 0..1 */
     int32_t damp = p[P_E3] * 516, pos = p[P_E4], exc = p[P_E7] * 258;   /* exc Q15 */
     int32_t bow = p[P_E6] * 206;                         /* BOW: Dust at up to 0.4 (DaisySP's sustain: 1) */
@@ -254,26 +256,29 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         n = CTL;
     if (S->model != md)                                  /* MODEL changed under a sounding note */
         phys_reset(S, md, rng());
+    PC_T0();
     switch (md) {
     case PM_MODAL: {
-        px_modal_blk_t B;
-        px_modal_block(&B, &S->u.m, f0, strc, brit, damp, acc, pos * 129, bow, 0);   /* pos 0..1/4 */
-        px_modal_run(&B, &S->u.m, y, ax, n);
+        px_modal_blk_t *const B = &bk.m;
+        px_modal_block(B, &S->u.m, f0, strc, brit, damp, acc, pos * 129, bow, 0);   /* pos 0..1/4 */
+        px_modal_run(B, &S->u.m, y, ax, n);
         break;
     }
     case PM_BOUNCE:
     case PM_PICK: {                                      /* the modal bank under Elements' strikes; LAST / GAP */
-        px_modal_blk_t B;
+        px_modal_blk_t *const B = &bk.m;
         px_modal_t *M = &S->u.m;
         M->gen = md == PM_BOUNCE ? PX_GEN_BOUNCE : PX_GEN_PICK;
         M->gate = v->gate;
         M->par = p[P_E6] * 516;
-        px_modal_block(&B, M, f0, strc, brit, clamp(damp - (md == PM_PICK ? M->pk.damp >> 3 : 0), 0, 65536), acc, pos * 129, 0, 0);
-        px_modal_run(&B, M, y, ax, n);
+        px_modal_block(B, M, f0, strc, brit, clamp(damp - (md == PM_PICK ? M->pk.damp >> 3 : 0), 0, 65536), acc, pos * 129, 0, 0);
+        PC_MARK(PC_SETUP);
+        px_modal_run(B, M, y, ax, n);
+        PC_MARK(PC_BANK);
         break;
     }
     case PM_BOW: {                                       /* BOW: the pressure (never none: the model always sounds), */
-        px_modal_blk_t B;                                /* TONE: her bow timbre, darker on a dark body as hers */
+        px_modal_blk_t *const B = &bk.m;                                /* TONE: her bow timbre, darker on a dark body as hers */
         px_modal_t *M = &S->u.m;
         int32_t lv = 16384 + p[P_E6] * 387, v = px_m(m->envq15 * 2, lv, 16);
         px_bow_t *W = (px_bow_t *)PHYS_SOLO(S);
@@ -282,19 +287,22 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         {
             int32_t yh[CTL / 2 + 1];
             uint32_t h = px_up2_need(W->uhas, n), f2 = f0 > 0x7FFFFFFFu ? 0xFFFFFFFFu : f0 << 1;
-            px_modal_block(&B, M, f2, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0, 1);
-            px_bow_run(&B, M, W, v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, yh, ax, h, 1);
+            px_modal_block(B, M, f2, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0, 1);
+            PC_MARK(PC_SETUP);
+            px_bow_run(B, M, W, v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, yh, ax, h, 1);
+            PC_SYNC();
             px_up2(W->uh, &W->uc, &W->uhas, yh, y, n);
+            PC_MARK(PC_UP);
         }
 #else
-        px_modal_block(&B, M, f0, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0, 0);
-        px_bow_run(&B, M, W, v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, y, ax, n, 0);
+        px_modal_block(B, M, f0, strc, brit, clamp(damp - px_m(px_m(65536 - v, lv, 16), 4096, 16), 0, 65536), acc, pos * 129, 0, 0);
+        px_bow_run(B, M, W, v, px_m(p[P_E7] * 516, 26214 + px_m(brit, 39322, 16), 16), acc, y, ax, n, 0);
 #endif
         exc = 0;
         break;
     }
     case PM_BLOW: {
-        px_modal_blk_t B;
+        px_modal_blk_t *const B = &bk.m;
         px_modal_t *M = &S->u.m;
         px_blow_t *W = (px_blow_t *)PHYS_SOLO(S);
         M->gen = PX_GEN_BLOW;
@@ -302,42 +310,46 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         {
             int32_t yh[CTL / 2 + 1];
             uint32_t h = px_up2_need(W->uhas, n), f2 = f0 > 0x7FFFFFFFu ? 0xFFFFFFFFu : f0 << 1;
-            px_modal_block(&B, M, f2, strc, brit, damp, acc, pos * 129, 0, 1);
-            px_blow_run(&B, M, W, f2, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, yh, ax, h, 1);
+            px_modal_block(B, M, f2, strc, brit, damp, acc, pos * 129, 0, 1);
+            PC_MARK(PC_SETUP);
+            px_blow_run(B, M, W, f2, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, yh, ax, h, 1);
+            PC_SYNC();
             px_up2(W->uh, &W->uc, &W->uhas, yh, y, n);
+            PC_MARK(PC_UP);
         }
 #else
-        px_modal_block(&B, M, f0, strc, brit, damp, acc, pos * 129, 0, 0);
-        px_blow_run(&B, M, W, f0, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, y, ax, n, 0);
+        px_modal_block(B, M, f0, strc, brit, damp, acc, pos * 129, 0, 0);
+        px_blow_run(B, M, W, f0, 16384 + p[P_E6] * 387, p[P_E7] * 516, damp, m->envq15 * 2, acc, y, ax, n, 0);
 #endif
         exc = 0;
         break;
     }
     case PM_MEMB: {
-        px_modal_blk_t B;
-        px_memb_block(&B, &S->u.m, f0, strc, brit, damp, acc, pos * 516, p[P_E6] * 6192);   /* BEND 0..12 st */
-        px_modal_run(&B, &S->u.m, y, ax, n);
+        px_modal_blk_t *const B = &bk.m;
+        px_memb_block(B, &S->u.m, f0, strc, brit, damp, acc, pos * 516, p[P_E6] * 6192);   /* BEND 0..12 st */
+        px_modal_run(B, &S->u.m, y, ax, n);
         break;
     }
     case PM_STRING: {
-        px_string_blk_t B;
-        px_string_block(&B, &S->u.s, f0, strc, brit, damp, acc, bow, pos * 516);   /* 0..1/2 period */
-        px_string_excite(&B, &S->u.s, ax, n);
-        px_string_run(&B, &S->u.s, ax, y, n);
+        px_string_blk_t *const B = &bk.s;
+        px_string_block(B, &S->u.s, f0, strc, brit, damp, acc, bow, pos * 516);   /* 0..1/2 period */
+        px_string_excite(B, &S->u.s, ax, n);
+        px_string_run(B, &S->u.s, ax, y, n);
         break;
     }
     default: {                                           /* SYMP */
-        px_string_blk_t B;
+        px_string_blk_t *const B = &bk.s;
         uint32_t f[PX_NSYMP];
         phys_symp_pitches(t, m, f);
-        px_string_block(&B, &S->u.y.s, f0, 16384 - p[P_E6] * 129, brit, damp, acc, 0, 0);   /* BUZZ: STRC 0.25 .. 0 */
-        px_string_excite(&B, &S->u.y.s, ax, n);
-        px_string_run(&B, &S->u.y.s, ax, y, n);
+        px_string_block(B, &S->u.y.s, f0, 16384 - p[P_E6] * 129, brit, damp, acc, 0, 0);   /* BUZZ: STRC 0.25 .. 0 */
+        px_string_excite(B, &S->u.y.s, ax, n);
+        px_string_run(B, &S->u.y.s, ax, y, n);
         px_symp_block(&S->u.y, f, brit, damp, pos * 516);
         px_symp_run(&S->u.y, y, y, n);
         break;
     }
     }
+    PC_SYNC();
     for (i = 0; i < n; i++) {
         int32_t s = px_m(y[i] + px_m(ax[i], exc, 15), g, 20), a = s < 0 ? -s : s;
         if (a > 24000) {                                 /* soft knee: only peaks saturate */
@@ -346,6 +358,7 @@ static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, cons
         }
         out[i] += voice_amp(s, m, i) << 1;
     }
+    PC_MARK(PC_OUT_E);
 }
 
 static void phys_note_on(track_t *t, voice_t *v) { phys_note_on_e(t, v, 0); }

@@ -71,6 +71,13 @@ void PhaseDistortionEngine::Render(
   float* free_running = &temp_buffer_[2 * size];
   shaper_.Render<true, true>(
       f0, modulator_f, pw, 0.0f, amount, synced, 2 * size);
+  if (!KARMA_AUX) {   // (KARMA: the free-running one is aux alone; out as below)
+    for (size_t i = 0; i < size; ++i) {
+      out[i] = 0.5f * Sine(*synced++ + 0.25f);
+      out[i] += 0.5f * Sine(*synced++ + 0.25f);
+    }
+    return;
+  }
   modulator_.Render<false, true>(
       f0, modulator_f, pw, 0.0f, amount, free_running, 2 * size);
   

@@ -177,12 +177,22 @@ def build_loader():
 CXXFLAGS = ["-Os", "-ffunction-sections", "-fdata-sections", "-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics",
             "-fno-use-cxa-atexit", "-std=c++11", "-DTEST", "-DPLX_TARGET", "-w", "-Ifirmware/mi", "-Ifirmware/cxx"]
 
+# (3.0.5) the hot voices, built for speed (-O2 after -Os: the last wins), the rest stays small
+# (measured on the FM-1, one core: these gain at -O2; 6OP, PHDIS, GRAIN, VCF, FM, NOISE, SPEECH, PARTICLES lose: small)
+CXX_FAST = ("elements/dsp/ominous_voice.cc", "plaits/dsp/engine/modal_engine.cc", "plaits/dsp/physical_modelling/modal_voice.cc",
+            "plaits/dsp/physical_modelling/resonator.cc", "plaits/dsp/engine2/wave_terrain_engine.cc",
+            "plaits/dsp/engine/virtual_analog_engine.cc", "plaits/dsp/engine/bass_drum_engine.cc", "plaits/dsp/engine/hi_hat_engine.cc",
+            "plaits/dsp/engine2/string_machine_engine.cc")
+if os.environ.get("KARMA_CXX_FAST") is not None:     # (measuring: another set, comma-separated; touch the .cc files)
+    CXX_FAST = tuple(h for h in os.environ["KARMA_CXX_FAST"].split(",") if h)
+
 
 def build_plx():
     """compile firmware/mi/**.cc with the toolchain's clang++ (no C++ library: firmware/cxx holds the few <algorithm>
     templates the sources use), only what changed; one container for all (the JieLi clang may crash at random:
     each file is tried three times). Returns the objects."""
-    PO = OUT / "plx"
+    pcost = os.environ.get("KARMA_PCOST", "0") not in ("", "0")   # (3.0.5: the measuring build's own objects)
+    PO = OUT / ("plx-pcost" if pcost else "plx")
     PO.mkdir(parents=True, exist_ok=True)
     inc = "/opt/jieli/pi32v2/include" if use_docker() else str(toolchain() / "pi32v2" / "include")
     cxx = "/opt/jieli/pi32v2/bin/clang++" if use_docker() else str(toolchain() / "pi32v2" / "bin" / "clang++")
@@ -195,8 +205,9 @@ def build_plx():
         if not obj.exists() or obj.stat().st_mtime < max(src_.stat().st_mtime, hdr):
             todo.append((rel, obj.relative_to(SRC)))
     if todo:
-        flags = " ".join(["-target pi32v2", *FPU, *CXXFLAGS, f"-isystem {inc}"])
-        lines = ["set -e"] + [f"for t in 1 2 3; do {cxx} {flags} -c {s_} -o {o} 2>/tmp/plx_err && break; "
+        flags = " ".join(["-target pi32v2", *FPU, *CXXFLAGS, *(["-DKARMA_PCOST_CXX=1"] if pcost else []), f"-isystem {inc}"])
+        fast = lambda s_: " -O2" if any(h in str(s_) for h in CXX_FAST) else ""
+        lines = ["set -e"] + [f"for t in 1 2 3; do {cxx} {flags}{fast(s_)} -c {s_} -o {o} 2>/tmp/plx_err && break; "
                               f"grep -q Segmentation /tmp/plx_err || {{ cat /tmp/plx_err; exit 1; }}; done"
                               for s_, o in todo]
         script = OUT / "plx_build.sh"
@@ -219,7 +230,7 @@ def build_plx():
 def build_app():
     flags = [*CFLAGS, *FPU, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_CDC", "FELUCCA_UART",
-                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FM1_AUDIO_RX_CLOCK", "KARMA_DUAL_CORE"):
+                 "FELUCCA_ICONS", "FELUCCA_SLICE", "FM1_AUDIO_RX_CLOCK", "KARMA_DUAL_CORE", "KARMA_PCOST"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/felucca.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -302,7 +313,54 @@ def check(img, syms, dis, rt):
         errors.append("RAM region overflow")
     if 0x54000 - pool < 8192:                     # keep >= 8 KiB of the pool spare
         errors.append(f"pool headroom {0x54000 - pool} B < 8192 B")
+    depth, path = stack_worst(dis)
+    notes.append(f"stack: deepest voice {depth} B + CPU1's job {CPU1_JOB_STACK} B of {CPU1_STACK} ({' > '.join(path[:4])})")
+    if depth + CPU1_JOB_STACK > CPU1_STACK - 512:  # (keep 512 B spare)
+        errors.append(f"a voice's stack {depth} B + {CPU1_JOB_STACK} B is within 512 B of CPU1's {CPU1_STACK} B: {' > '.join(path)}")
     return errors, notes
+
+
+# (3.0.5) CPU1 runs tracks on a 3968-byte stack (app.ld: _cpu1_ustack_top); 3.0.5's first ELEMENTS loop passed it and
+# crashed the FM-1. The deepest render path, from the disassembly: each function's pushes and sp adjustment, its
+# direct calls (the engines' render, called through pointers, are each a root here). CPU1_JOB_STACK: the job above
+# them (worker loop, core1_parts, mix_part_to, mix_part_run), measured 2026-11-07 with some room
+CPU1_STACK = 0xF80
+CPU1_JOB_STACK = 400
+
+
+def stack_worst(dis):
+    fn, frame, calls = None, {}, {}
+    for ln in dis.splitlines():
+        mm = re.match(r"^([A-Za-z_][\w.$]*):\s*$", ln)
+        if mm:
+            fn = mm.group(1)
+            frame.setdefault(fn, 0)
+            calls.setdefault(fn, set())
+            continue
+        if not fn:
+            continue
+        mm = re.search(r"\[--sp\] = \{([^}]*)\}", ln)
+        if mm:
+            for part in mm.group(1).split(","):
+                r = re.match(r"r(\d+)-r(\d+)", part.strip())
+                frame[fn] += 4 * ((int(r.group(1)) - int(r.group(2)) + 1) if r else 1)
+        mm = re.search(r"sp \+= -(\d+)", ln)
+        if mm:
+            frame[fn] += int(mm.group(1))
+        mm = re.search(r"call [-\d]+ <([\w.$]+)", ln)
+        if mm:
+            calls[fn].add(mm.group(1))
+    memo = {}
+
+    def depth(f, seen=()):
+        if f in seen:
+            return 0, []
+        if f not in memo:
+            best = max((depth(c, seen + (f,)) for c in calls.get(f, ())), default=(0, []), key=lambda x: x[0])
+            memo[f] = (frame.get(f, 0) + best[0], [f] + best[1])
+        return memo[f]
+    roots = [f for f in frame if re.search(r"_render$|Engine\d*6Render", f)]
+    return max((depth(f) for f in roots), default=(0, []), key=lambda x: x[0])
 
 
 # Every hardware register access lives in hal/. In src/ and loader/ (comments stripped):
@@ -391,6 +449,8 @@ def main():
         karma = "karma-rxclock.fwsc" if os.environ.get("FM1_AUDIO_RX_CLOCK", "0") not in ("", "0") else "karma.fwsc"
         if os.environ.get("KARMA_DUAL_CORE", "") == "0":
             karma = karma.replace(".fwsc", "-single.fwsc")   # (one core: its own name; dual core is the default)
+        if os.environ.get("KARMA_PCOST", "0") not in ("", "0"):
+            karma = karma.replace(".fwsc", "-pcost.fwsc")    # (3.0.5: the measuring build, never a release)
         (OUT / karma).write_bytes(pkg)
         print(f"package  {OUT / karma}  (the same: flash this one)")
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"

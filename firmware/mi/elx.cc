@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// ELX: the Ominous Voice of Emilie Gillet's Elements (MIT: firmware/mi/elements, unchanged), the module's hidden
+// ELX: the Ominous Voice of Emilie Gillet's Elements (MIT: firmware/mi/elements; KARMA 3.0.5: its FIR folded), the module's hidden
 // mode: two FM oscillators (8 x oversampled) through two filters, circling in space. Behind a C interface for the
 // ELEMENTS engine's OMIN model (firmware/src/eng_elem.c). Elements runs at 32 kHz; here the voice runs at HALF the
 // firmware's rate, 22.05 kHz, and elx_render brings it up to 44.1 kHz (a 4-point midpoint interpolation): on the

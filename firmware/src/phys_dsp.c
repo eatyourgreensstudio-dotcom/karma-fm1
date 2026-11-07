@@ -254,6 +254,13 @@ static inline void px_csvf_pass(const px_csvf_t *c, px_csvf_st_t *s, int32_t in)
 }
 
 /* ------------------------------------------------------------- Modal --- */
+typedef struct { int32_t g, rpg, gh, a; } px_mode_t;    /* px_svf_t + the mode's gain (Q28) */
+typedef struct {                                         /* (3.0.5) the modes as the last block made them, and from what */
+    int32_t key[6];                                      /* f0, structure, b, d, pos, hr (valid: 1 + hr; 0 = none) */
+    px_mode_t m[PX_NMODE];
+    uint32_t n;
+    uint32_t mf[EL_BOW_N];
+} px_modes_memo_t;
 typedef struct {
     int32_t s[PX_NMODE][2];                              /* mode states (s1, s2), Q22 */
     int32_t e1, e2;                                      /* exciter (ResonatorSvf<1>, low-pass), Q24 */
@@ -266,13 +273,13 @@ typedef struct {
     int32_t par;                                         /* her parameter, Q16: how long the bounces last / the pick's bend */
     el_bounce_t bn;
     el_pick_t pk;
+    px_modes_memo_t memo;
 } px_modal_t;
 enum { PX_GEN_STRIKE, PX_GEN_BOUNCE, PX_GEN_PICK,
        PX_GEN_BOW, PX_GEN_BLOW };                        /* fed from outside (px_bow_run, px_blow_run): ext below */
 #define PX_BOUNCE_SPAN (44100u * 15u / 100u)             /* her 0.15 s, in samples */
 #define PX_PICK_SCALE 90317u                             /* samples here for one of her 32 kHz, Q16 */
 
-typedef struct { int32_t g, rpg, gh, a; } px_mode_t;    /* px_svf_t + the mode's gain (Q28) */
 typedef struct {                                         /* per block */
     px_mode_t m[PX_NMODE];
     uint32_t n;                                          /* modes below 0.499 */
@@ -363,7 +370,25 @@ static __attribute__((noinline)) void px_modal_block(px_modal_blk_t *B, px_modal
     int32_t stiff = px_stiff(structure), st2, stretch = 65536, ql;
     uint32_t i, phs;
     uint64_t q8, harm;
+    px_modes_memo_t *mm = &M->memo;
     px_modal_exciter(B, M, f0 > 0x40000000u ? 0x40000000u : f0, brightness, b, d, accent, bow);
+    /* (3.0.5) the modes depend on these alone: while they hold (a held note, its knobs still), the last block's are
+     * the same numbers, taken as they are instead of made again (they were 1/4 of the bank's time) */
+    if (mm->key[5] == (int32_t)(1u + hr) && mm->key[0] == (int32_t)f0 && mm->key[1] == structure && mm->key[2] == b &&
+        mm->key[3] == d && mm->key[4] == pos) {
+        for (i = 0; i < PX_NMODE; i++)
+            B->m[i] = mm->m[i];
+        for (i = 0; i < EL_BOW_N; i++)
+            B->mf[i] = mm->mf[i];
+        B->n = mm->n;
+        goto states;
+    }
+    mm->key[0] = (int32_t)f0;
+    mm->key[1] = structure;
+    mm->key[2] = b;
+    mm->key[3] = d;
+    mm->key[4] = pos;
+    mm->key[5] = (int32_t)(1u + hr);
     /* the modes */
     f0 = (uint32_t)(((uint64_t)f0 * (uint32_t)(((uint64_t)1 << 32) /   /* NthHarmonicCompensation(3) */
                      (uint32_t)(65536 + stiff + px_m(stiff, stiff < 0 ? 60948 : 64225, 16)))) >> 16);
@@ -398,7 +423,13 @@ static __attribute__((noinline)) void px_modal_block(px_modal_blk_t *B, px_modal
         phs += (uint32_t)pos << 16;
     }
     B->n = i;
-    for (; i < PX_NMODE; i++)                            /* out of the band: silent */
+    for (i = 0; i < PX_NMODE; i++)
+        mm->m[i] = B->m[i];
+    for (i = 0; i < EL_BOW_N; i++)
+        mm->mf[i] = B->mf[i];
+    mm->n = B->n;
+states:
+    for (i = B->n; i < PX_NMODE; i++)                    /* out of the band: silent */
         M->s[i][0] = M->s[i][1] = 0;
     for (i = 0; i < B->n; i++) {                         /* bound the states at +-64 (far beyond any real use): */
         M->s[i][0] = px_clamp(M->s[i][0], -(1 << 28), 1 << 28);   /* every sum of the next block fits */
@@ -469,6 +500,50 @@ static __attribute__((noinline)) void px_memb_block(px_modal_blk_t *B, px_modal_
 
 /* n (<= 32) samples: out[i] = the resonator (Q20), aux[i] = the exciter (Q20). The exciter first (skipped
  * once a strike has rung out), then the modes */
+/* (3.0.5) the modes' loop turned over: through the block two modes at a time, their numbers held in registers, the
+ * block's sum in an array (the loop by sample before it loaded and stored every mode's numbers at every sample: 1/4
+ * slower on the FM-1). Each mode's arithmetic and the order of the sum are the loop by sample's: the very same result */
+static void px_modes_by_pair(const float *fg, const float *frpg, const float *fgh, const float *fa, float *s1, float *s2,
+                             uint32_t nm, const int32_t *x, int32_t *out, uint32_t n)
+{
+    float xf[32], acc[32];
+    uint32_t i, k;
+    for (i = 0; i < n; i++) {
+        xf[i] = (float)x[i];
+        acc[i] = 0.0f;
+    }
+    for (k = 0; k + 2u <= nm; k += 2u) {
+        float g2 = 2.0f * fg[k], rp = frpg[k], gh = fgh[k], a = fa[k], p1 = s1[k], p2 = s2[k];
+        float h2 = 2.0f * fg[k + 1], rq = frpg[k + 1], hh = fgh[k + 1], b = fa[k + 1], q1 = s1[k + 1], q2 = s2[k + 1];
+        for (i = 0; i < n; i++) {
+            float xi = xf[i], t = gh * (xi - rp * p1 - p2), v = p1 + t;
+            float u = hh * (xi - rq * q1 - q2), w = q1 + u;
+            p1 = v + t;
+            p2 += g2 * v;
+            q1 = w + u;
+            q2 += h2 * w;
+            acc[i] = (acc[i] + a * v) + b * w;
+        }
+        s1[k] = p1;
+        s2[k] = p2;
+        s1[k + 1] = q1;
+        s2[k + 1] = q2;
+    }
+    for (; k < nm; k++) {
+        float g2 = 2.0f * fg[k], rp = frpg[k], gh = fgh[k], a = fa[k], p1 = s1[k], p2 = s2[k];
+        for (i = 0; i < n; i++) {
+            float t = gh * (xf[i] - rp * p1 - p2), v = p1 + t;
+            p1 = v + t;
+            p2 += g2 * v;
+            acc[i] += a * v;
+        }
+        s1[k] = p1;
+        s2[k] = p2;
+    }
+    for (i = 0; i < n; i++)
+        out[i] = (int32_t)acc[i];
+}
+
 static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, int32_t *aux, uint32_t n)
 {
     uint32_t i, k, nm = B->n;
@@ -550,16 +625,7 @@ static void px_modal_run(const px_modal_blk_t *B, px_modal_t *M, int32_t *out, i
             s1[k] = (float)M->s[k][0];
             s2[k] = (float)M->s[k][1];
         }
-        for (i = 0; i < n; i++) {
-            float acc = 0.0f, xi = (float)x[i];
-            for (k = 0; k < nm; k++) {
-                float t = fgh[k] * (xi - frpg[k] * s1[k] - s2[k]), v = s1[k] + t;
-                s1[k] = v + t;
-                s2[k] += 2.0f * fg[k] * v;
-                acc += fa[k] * v;
-            }
-            out[i] = (int32_t)acc;
-        }
+        px_modes_by_pair(fg, frpg, fgh, fa, s1, s2, nm, x, out, n);
         for (k = 0; k < nm; k++) {
             float a1 = s1[k] > 1.0e9f ? 1.0e9f : s1[k] < -1.0e9f ? -1.0e9f : s1[k];   /* (in int32's range) */
             float a2 = s2[k] > 1.0e9f ? 1.0e9f : s2[k] < -1.0e9f ? -1.0e9f : s2[k];
@@ -633,6 +699,7 @@ static __attribute__((noinline)) void px_bow_run(px_modal_blk_t *B, px_modal_t *
     uint32_t i, nw = B->n < EL_BOW_N ? B->n : EL_BOW_N, cut = px_tone_cut(tone);
     if (n > 32u)
         n = 32u;
+    PC_T0();
     if (hr)
         cut = cut >= 1071630039u ? 2143260078u : cut << 1;
     dv = n ? (v - v0) / (int32_t)n : 0;
@@ -647,7 +714,9 @@ static __attribute__((noinline)) void px_bow_run(px_modal_blk_t *B, px_modal_t *
     else
         px_svf_coef(&B->ex, cut, 128u);
     B->ext = ext;
+    PC_MARK(PC_BOWNOISE);
     px_modal_run(B, M, out, aux, n);
+    PC_MARK(PC_BANK);
     for (i = 0; i < nw; i++) {                           /* Resonator::ComputeFilters, the bowed part */
         px_svf_t c;
         uint32_t mf = B->mf[i];
@@ -663,7 +732,9 @@ static __attribute__((noinline)) void px_bow_run(px_modal_blk_t *B, px_modal_t *
         G[i].delay = el_bow_delay_q16(i, (uint32_t)((((uint64_t)1 << 48) / mf) > 0xFFFFFFFFu ? 0xFFFFFFFFu : ((uint64_t)1 << 48) / mf),
                                       &G[i].frac);      /* (3.0.4: in tune between samples) */
     }
+    PC_MARK(PC_SETUP);
     el_bow_run(&W->w, G, nw, aux, v0, v, out, n);        /* (aux: the bank's input / 4 = hers, as Q22) */
+    PC_MARK(PC_BOWLOOP);
     W->v = v;
 }
 
@@ -673,6 +744,7 @@ static __attribute__((noinline)) void px_blow_run(px_modal_blk_t *B, px_modal_t 
                                                   int32_t tone, int32_t damping, int32_t e, int32_t accent,
                                                   int32_t *out, int32_t *aux, uint32_t n, uint32_t hr)
 {   /* hr: 1 = at half the rate: f0 is the note at that rate, the breath's low-pass stays where it is in Hz */
+    PC_T0();
     int32_t io[32], bl = level + (level >> 1), tube, e0 = W->e, de, g = 32768 + accent, n1 = W->n1, n2 = W->n2;
     px_svf_t lp;
     el_tube_blk_t TB;
@@ -712,7 +784,9 @@ static __attribute__((noinline)) void px_blow_run(px_modal_blk_t *B, px_modal_t 
     }
     W->e = e;
     B->ext = io;
+    PC_MARK(PC_BLOW);
     px_modal_run(B, M, out, aux, n);
+    PC_MARK(PC_BANK);
 }
 
 /* ------------------------------------------------------------ String --- */

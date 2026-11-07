@@ -66,11 +66,28 @@ class FIRDownsampler {
         ptr_ = (ptr_ + (buffer_size - 1)) & (buffer_size - 1);
         size--;
       }
-      float s = 0.0f;
-      for (int32_t i = 0; i < filter_size; ++i) {
-        s += buffer_[ptr_ + i + 1] * coefficients_[i];
+      // KARMA 3.0.5: the same sum, faster on the FM-1, whose FPU waited on the one running sum (this filter was 57 %
+      // of OMIN's time). The filter is symmetric (c[i] == c[filter_size - 1 - i]: kDownsamplingFilter), so each
+      // pair shares a multiply, and four sums run side by side. (The same result to float rounding.)
+      const float* x = &buffer_[ptr_ + 1];
+      const float* c = coefficients_;
+      const int32_t h = filter_size / 2;
+      const int32_t e = filter_size - 1;
+      float s0 = 0.0f, s1 = 0.0f, s2 = 0.0f, s3 = 0.0f;
+      int32_t i = 0;
+      for (; i + 4 <= h; i += 4) {
+        s0 += (x[i] + x[e - i]) * c[i];
+        s1 += (x[i + 1] + x[e - i - 1]) * c[i + 1];
+        s2 += (x[i + 2] + x[e - i - 2]) * c[i + 2];
+        s3 += (x[i + 3] + x[e - i - 3]) * c[i + 3];
       }
-      *out++ = s;
+      for (; i < h; ++i) {
+        s0 += (x[i] + x[e - i]) * c[i];
+      }
+      if (filter_size & 1) {
+        s1 += x[h] * c[h];
+      }
+      *out++ = (s0 + s1) + (s2 + s3);
     }
   }
   

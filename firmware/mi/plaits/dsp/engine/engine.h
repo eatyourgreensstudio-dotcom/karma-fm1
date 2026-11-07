@@ -49,6 +49,16 @@ enum TriggerState {
   TRIGGER_HIGH = 4,
 };
 
+// KARMA 3.0.5: the firmware plays an engine's out alone (plx.cc; aux is dropped). KARMA_AUX 0: the engines leave out
+// what only aux holds (a second oscillator, a second drum, filters of their own), out the very same; aux then holds
+// nothing meant. (The measuring build: by editor command 92, variant 2 = left out.)
+#ifdef KARMA_PCOST_CXX
+extern "C" uint32_t karma_pc_var(void);
+#define KARMA_AUX (karma_pc_var() != 2u)
+#else
+#define KARMA_AUX 0
+#endif
+
 struct EngineParameters {
   int trigger;
   float note;

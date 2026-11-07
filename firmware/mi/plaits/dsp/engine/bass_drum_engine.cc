@@ -77,6 +77,7 @@ void BassDrumEngine::Render(
       out,
       size);
 
+  if (KARMA_AUX)   // (KARMA: the synthetic drum is aux alone)
   synthetic_bass_drum_.Render(
       sustain,
       parameters.trigger & TRIGGER_RISING_EDGE,

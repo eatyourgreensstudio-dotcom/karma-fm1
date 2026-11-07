@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// PLX: Plaits' synthesis models (Emilie Gillet, MIT: firmware/mi/plaits, unchanged) behind a C interface, for the
+// PLX: Plaits' synthesis models (Emilie Gillet, MIT: firmware/mi/plaits; KARMA 3.0.5: aux left out, engine.h KARMA_AUX) behind a C interface, for the
 // PLAITS engine (firmware/src/eng_prism.c). One model instance in a block of memory the caller gives (the part's
 // engine arena): the engine object, a limiter, then the engine's own buffers (stmlib BufferAllocator).
 // Plaits runs at 48 kHz (its pitch tuned for 47872.34 Hz); this firmware at 44.1 kHz: plx_render adds the

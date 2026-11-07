@@ -63,6 +63,7 @@ void SnareDrumEngine::Render(
       out,
       size);
   
+  if (KARMA_AUX)   // (KARMA: the synthetic drum is aux alone)
   synthetic_snare_drum_.Render(
       parameters.trigger & TRIGGER_UNPATCHED,
       parameters.trigger & TRIGGER_RISING_EDGE,

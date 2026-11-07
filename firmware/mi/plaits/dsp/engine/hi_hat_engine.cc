@@ -64,6 +64,7 @@ void HiHatEngine::Render(
       out,
       size);
   
+  if (KARMA_AUX)   // (KARMA: the second hat is aux alone)
   hi_hat_2_.Render(
       parameters.trigger & TRIGGER_UNPATCHED,
       parameters.trigger & TRIGGER_RISING_EDGE,

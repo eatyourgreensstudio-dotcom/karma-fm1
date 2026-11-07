@@ -109,14 +109,17 @@ void FMEngine::Render(
       float modulator = SinePM(
           modulator_phase_, modulator_fb * previous_sample_);
       float carrier = SinePM(carrier_phase_, amount * modulator);
-      float sub = SinePM(sub_phase_, amount * carrier * 0.25f);
       ONE_POLE(previous_sample_, carrier, 0.05f);
       carrier_downsampler.Accumulate(j, carrier);
-      sub_downsampler.Accumulate(j, sub);
+      if (KARMA_AUX) {   // (KARMA: the sub is aux alone)
+        float sub = SinePM(sub_phase_, amount * carrier * 0.25f);
+        sub_downsampler.Accumulate(j, sub);
+      }
     }
     
     *out++ = carrier_downsampler.Read();
-    *aux++ = sub_downsampler.Read();
+    if (KARMA_AUX)
+      *aux++ = sub_downsampler.Read();
   }
 }
 

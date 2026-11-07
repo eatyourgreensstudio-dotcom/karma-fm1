@@ -186,10 +186,12 @@ void VirtualAnalogEngine::Render(
   CONSTRAIN(pw, 0.5f, 0.995f);
   
   // Render monster sync to AUX.
+  if (KARMA_AUX) {   // (KARMA: aux alone: out is made again below)
   primary_.Render(primary_f, primary_sync_f, pw, shape, out, size);
   auxiliary_.Render(auxiliary_f, auxiliary_sync_f, pw, shape, aux, size);
   for (size_t i = 0; i < size; ++i) {
     aux[i] = (aux[i] - out[i]) * 0.5f;
+  }
   }
   
   // Render double varishape to OUT.

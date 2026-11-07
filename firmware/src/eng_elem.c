@@ -72,6 +72,7 @@ static void elem_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     q.brightness = (float)clamp((p[P_E5] << 8) + m->cutoff, 0, 127 << 8) * (1.0f / (127 << 8));   /* (ENV, LFO > FLT) */
     q.shape = (float)clamp((p[P_E6] << 8) + m->shape - (64 << 8), 0, 127 << 8) * (1.0f / (127 << 8));   /* (LFO > SHP) */
     q.space = p[P_E7] * (1.0f / 127.0f);
+    PC_T0();
     while (done < n) {
         float b[ELX_MAX_BLOCK];
         uint32_t k = n - done < ELX_MAX_BLOCK ? n - done : ELX_MAX_BLOCK;
@@ -83,6 +84,7 @@ static void elem_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         }
         done += k;
     }
+    PC_MARK(PC_OMIN);
 }
 
 /* (2026-10-28: OMIN played 11.1 semitones sharp before; OMINOUS and OMEN BELL +12, DARK DRONE 0 keep their register,

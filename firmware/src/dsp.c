@@ -6,6 +6,29 @@
 #define VOICE_FS 24000           /* per-voice level: one voice peaks near -6 dBFS before the master */
 
 static inline int32_t mulq15(int32_t a, int32_t b) { return (a * b) >> 15; }
+/* (3.0.5) KARMA_PCOST=1 builds karma-pcost.fwsc: where a voice's time goes, by stage, read and cleared over MIDI (editor
+ * command 91, tools/karma_pcost.py). Off (the default and every release): nothing at all */
+#ifndef KARMA_PCOST
+#define KARMA_PCOST 0
+#endif
+enum { PC_SETUP, PC_BANK, PC_BOWLOOP, PC_BOWNOISE, PC_BLOW, PC_UP, PC_OUT_E, PC_OMIN, PC_PLX, PC_PLX_OUT, PC_PRISM,
+       PC_OM_OSC, PC_OM_IIR, PC_OM_FIR, PC_OM_REST,     /* (inside OMIN: mi/elements/dsp/ominous_voice.cc, the same numbers) */
+       PC_N };
+#if KARMA_PCOST
+static volatile uint32_t pc_ticks[PC_N], pc_calls[PC_N];
+static volatile uint32_t pc_var;                         /* (a stage's variant under test: editor command 92) */
+#define PC_T0() uint32_t pc_t_ = fm1_ticks()
+#define PC_SYNC() (pc_t_ = fm1_ticks())
+#define PC_MARK(k) do { uint32_t pc_n_ = fm1_ticks(); pc_ticks[k] += pc_n_ - pc_t_; pc_calls[k]++; pc_t_ = pc_n_; } while (0)
+/* (the C++ voices' way in) */
+uint32_t karma_pc_now(void) { return fm1_ticks(); }
+uint32_t karma_pc_var(void) { return pc_var; }
+void karma_pc_add(uint32_t k, uint32_t t0) { if (k < PC_N) { pc_ticks[k] += fm1_ticks() - t0; pc_calls[k]++; } }
+#else
+#define PC_T0() do { } while (0)
+#define PC_SYNC() ((void)0)
+#define PC_MARK(k) do { } while (0)
+#endif
 /* (3.0.4, from SLOOP 2.8.4 by isod89, "clean fades") x * g / 4096 rounded to the nearest, in 32 bits wherever
  * ((x >> k) * g) >> (12 - k) fits (the same bound): the k low bits of x go in apart instead of being dropped. The mix's
  * gains (fx.c: a part's LEVEL, mute / duck, PAN, the MASTER, DIST's drive) took x >> k first and lost them: a floor to
