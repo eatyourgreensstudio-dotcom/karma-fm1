@@ -211,7 +211,10 @@ static void prism_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
                 ph2 += m->inc >> 1;
                 x += mulq15(osc_sine(ph2), sub);
             }
-            out[done + i] += mulq15(mulq15(x, amp_at(m, done + i)), VOICE_FS) << (model == PRM_SWARM ? 2 : 1);   /* (the swarm: quieter) */
+            out[done + i] += mulq15(mulq15(x, amp_at(m, done + i)), VOICE_FS) << 1;   /* (3.0.5: the swarm's x 2 gone: a
+                                                * chord of its eight saws a key clipped the part, 2026-11-07, Ariel:
+                                                * "white noise distortion" from the sequencer; its presets' trims
+                                                * give it back where one note was quiet) */
         }
         done += k;
     }
