@@ -659,8 +659,11 @@ static void mix_part_to(track_t *t, uint32_t n, const mixbus_t *o)
     memcpy(t->p, o->pnew, sizeof pnew0);
 }
 static void mix_part(track_t *t, uint32_t n) { mix_part_to(t, n, &BUS0); }
-#define STEM_SH 3                               /* a part's stem: (L + R) / 2, 12 dB down (2026-10-28, Ariel: they came hot;
-                                                 * measured: drums and track 1 at full scale, the drums clipping) */
+#define STEM_SH 4                               /* a part's stem: (L + R) / 2, 18 dB down (2026-10-28, Ariel: they came hot;
+                                                 * measured: drums and track 1 at full scale, the drums clipping. 3.0.5,
+                                                 * 2026-11-07: 12 dB down still had PLAITS' SWARM at full scale in a
+                                                 * pattern, and the four summed to 1.6 (white noise in Ariel's mix): 6 dB
+                                                 * more room, the FX return with them) */
 #if KARMA_DUAL_CORE
 /* CPU1's job (2026-10-28, Ariel: a busy section overloaded one core): tracks 2 and 3 (ELEMENTS, PLAITS) into buses of its
  * own while CPU0 renders track 1 and the drums; CPU0 joins before the effects and adds them. What the two share is read
@@ -1287,7 +1290,7 @@ static void mix_block(int32_t *out, uint32_t n)
     PROF(PF_CLOUD);
     if (fx_stems)                                       /* ... what the buses, the CLOUD and TEXTURE added */
         for (i = 0; i < n; i++)
-            stem_fx[0][i] = (mix_l[i] - stem_fx[0][i]) >> 2, stem_fx[1][i] = (mix_r[i] - stem_fx[1][i]) >> 2;   /* (12 dB down too) */
+            stem_fx[0][i] = (mix_l[i] - stem_fx[0][i]) >> 3, stem_fx[1][i] = (mix_r[i] - stem_fx[1][i]) >> 3;   /* (18 dB down too) */
     dust_process(mix_l, mix_r, n);
     punch_process(mix_l, mix_r, n);
     djf_process(mix_l, mix_r, n);
