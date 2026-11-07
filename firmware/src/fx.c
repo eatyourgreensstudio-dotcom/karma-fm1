@@ -678,13 +678,18 @@ static uint32_t core_cost[NPART + 1];           /* ticks x 8: the three parts, t
  * held note's cost to nothing between notes, and the split chased it.) The balance now takes each part's PEAK: up at
  * once to a block that cost more, down slowly (~0.4 s, 2^9 blocks), so a part is weighed by what it costs when it
  * sounds; and a split stays at least CORE_DWELL blocks */
+/* (3.0.5, 2026-11-07: switching PLAITS presets with a song playing, the split went back and forth six times in five
+ * seconds, each move a burst of late blocks and USB dropouts: a part that moves runs slowly a while on the other
+ * core (its code not in that core's cache). A preset's set-up made one block cost far more, the split followed it,
+ * then came back as the peak fell.) Now the peak rises by a quarter of the gap a block (~90 % in 8 blocks: a held
+ * sound's cost, not one block's set-up), a split stays ~0.75 s, and a new one must be better by a quarter */
 static uint32_t core_peak[NPART + 1];           /* ticks x 16 */
-#define CORE_DWELL 256u                         /* blocks (~0.19 s) */
+#define CORE_DWELL 1024u                        /* blocks (~0.75 s) */
 static inline void cost_put(uint32_t k, uint32_t ticks)
 {
     uint32_t c = ticks << 4, p = core_peak[k];
     core_cost[k] += ticks - (core_cost[k] >> 3);
-    core_peak[k] = c >= p ? c : p - ((p - c) >> 9);
+    core_peak[k] = c >= p ? p + ((c - p) >> 2) : p - ((p - c) >> 9);
 }
 static int32_t stem_buf[NTRK][CTL];            /* (below: USB STEMS) */
 static uint8_t fx_stems;
@@ -729,7 +734,7 @@ static void core_balance(void)                  /* CPU0, after the join: the nex
         if (l < bl)
             bl = l, best = m;
     }
-    if (best != w_mask && bl + (cur >> 3) < cur) {     /* clearly better (by 1/8) */
+    if (best != w_mask && bl + (cur >> 2) < cur) {     /* clearly better (by 1/4) */
         w_mask = best;
         since = 0;
     }

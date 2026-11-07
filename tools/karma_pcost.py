@@ -12,7 +12,7 @@ import time
 import mido
 
 STAGES = ["setup", "bank", "bowloop", "bownoise", "blow", "upsample", "out", "omin", "plaits", "plaits_out", "prism",
-          "om_osc", "om_iir", "om_fir", "om_rest"]
+          "om_osc", "om_iir", "om_fir", "om_rest", "plx_init", "init_max"]
 CHORD = [48, 55, 60, 64]
 
 
@@ -64,7 +64,7 @@ def main():
         for p in rng:
             o.send(mido.Message("program_change", channel=ch, program=p))
             time.sleep(0.6)
-            pcost(i, o)                                   # (clear: the preset change, the old notes)
+            st0, _, _ = pcost(i, o)                       # (clear: the preset change, the old notes)
             late0 = None
             t0 = time.time()
             for n in CHORD:
@@ -74,11 +74,14 @@ def main():
             secs = time.time() - t0
             for n in CHORD:
                 o.send(mido.Message("note_off", channel=ch, note=n, velocity=0))
-            pct = {s: round(st[s][0] / secs / 10000.0, 2) for s in STAGES if st[s][0]}
+            pct = {s: round(st[s][0] / secs / 10000.0, 2) for s in STAGES if st[s][0] and s not in ("plx_init", "init_max")}
             total = round(sum(pct.values()), 1)
-            res.append(dict(engine=eng, program=p, total_pct=total, stages=pct, late=late, cpu_q8=cpu))
+            ini = st["plx_init"]
+            res.append(dict(engine=eng, program=p, total_pct=total, stages=pct, late=late, cpu_q8=cpu,
+                            init_us=ini[0] // max(1, ini[1]), init_n=ini[1], init_max_us=st["init_max"][0]))
             top = ", ".join(f"{s} {v:.1f}%" for s, v in sorted(pct.items(), key=lambda x: -x[1])[:4])
-            print(f"{eng:8} {p:2}  {total:5.1f}% of a core   {top}", flush=True)
+            print(f"{eng:8} {p:2}  {total:5.1f}% of a core   {top}" +
+                  (f"   set-up {ini[0] // ini[1]} us x{ini[1]}, longest {st['init_max'][0]} us" if ini[1] else ""), flush=True)
             time.sleep(0.8)
     json.dump(res, open(out, "w"), indent=1)
     print("saved", out)

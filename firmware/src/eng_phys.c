@@ -142,9 +142,10 @@ static uint32_t phys_poly_md(uint32_t md)
 }
 static uint32_t phys_poly(const track_t *t) { return phys_poly_md(phys_md(t, 0)); }
 static uint32_t elem_poly(const track_t *t) { return elem_omin(t) ? 1u : phys_poly_md(phys_md(t, 1)); }
-static phys_slot_t *phys_slot_of(track_t *t, voice_t *v, uint32_t elem)
+/* (3.0.5) md: the model the caller read once and plays (the UI may write another meanwhile while CPU1 plays the part:
+ * read again here, a BOW / BLOW render took a small layout's second slot and wrote its delay memory past the arena) */
+static phys_slot_t *phys_slot_of(track_t *t, voice_t *v, uint32_t elem, uint32_t md)
 {
-    uint32_t md = phys_md(t, elem);
     uint32_t i, p, big, k, sz;
     uint8_t *a;
     if (t < &trk[0] || t >= &trk[NPART])
@@ -203,8 +204,8 @@ static void phys_reset(phys_slot_t *S, uint32_t md, uint32_t seed)
 
 static void phys_note_on_e(track_t *t, voice_t *v, uint32_t elem)
 {
-    phys_slot_t *S = phys_slot_of(t, v, elem);
     uint32_t md = phys_md(t, elem);
+    phys_slot_t *S = phys_slot_of(t, v, elem, md);
     if (!S)
         return;
     if ((!v->env && !v->env_out) || S->model != md)     /* a fresh voice (not a retrigger): from rest */
@@ -240,8 +241,8 @@ static __attribute__((noinline)) void phys_symp_pitches(const track_t *t, const 
 static void phys_render_e(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m, uint32_t elem)
 {
     const int16_t *p = t->p;
-    phys_slot_t *S = phys_slot_of(t, v, elem);
     uint32_t md = phys_md(t, elem), i, f0 = m->inc;
+    phys_slot_t *S = phys_slot_of(t, v, elem, md);
     int32_t y[CTL], ax[CTL];
     union { px_modal_blk_t m; px_string_blk_t s; } bk;   /* (3.0.5) the block's numbers, one place for every model: each
                                                         * case's own was 1.5 KB of CPU1's 4 KB stack (bow: near its end) */

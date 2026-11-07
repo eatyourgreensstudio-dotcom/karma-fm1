@@ -55,7 +55,11 @@ static uint8_t plx_ready[NPART][NVOICE];
 static uint32_t plx_gen_seen[NPART];
 static void *plx_slot(track_t *t, voice_t *v, uint32_t k)
 {
-    uint32_t p = (uint32_t)(t - trk), st = plx_stride(k), n = prism_poly(t), i = (uint32_t)(v - t->v) % NVOICE;
+    uint32_t p = (uint32_t)(t - trk), st = plx_stride(k), i = (uint32_t)(v - t->v) % NVOICE;
+    /* (3.0.5) the voices model k fits, from k itself: prism_poly(t) read the model again, and a preset loaded meanwhile
+     * (the UI writes the sound while CPU1 plays it) gave another model's count: an instance of k set up past the
+     * arena's end, over the next part's (2026-11-07: a crash browsing PLAITS presets to and from FOLD) */
+    uint32_t fit = eng_arena_size(t) / st, n = PLX_VOICES[k] < fit ? PLX_VOICES[k] : fit;
     uint8_t *a;
     if (p >= NPART)
         return 0;
@@ -67,13 +71,27 @@ static void *plx_slot(track_t *t, voice_t *v, uint32_t k)
         plx_gen_seen[p] = eng_arena_gen[p];
     }
     i %= n ? n : 1u;                                     /* (one instance: every note plays it) */
+    if ((i + 1u) * st > eng_arena_size(t))               /* (never past the arena's end, whatever the above) */
+        return 0;
     if (plx_ready[p][i] != k + 1u) {
         uint32_t j;
         for (j = 0; j < NVOICE; j++)                     /* (another model's instances overlap this one) */
             if (plx_ready[p][j] != k + 1u)
                 plx_ready[p][j] = 0;
+#if KARMA_PCOST
+        {
+            uint32_t t0 = fm1_ticks(), r = (uint32_t)plx_init((int)k, a + i * st, st), d = fm1_ticks() - t0;
+            pc_ticks[PC_PLX_INIT] += d;
+            pc_calls[PC_PLX_INIT]++;
+            if (d > pc_ticks[PC_INIT_MAX])
+                pc_ticks[PC_INIT_MAX] = d;
+            if (r)
+                return 0;
+        }
+#else
         if (plx_init((int)k, a + i * st, st))
             return 0;
+#endif
         plx_ready[p][i] = (uint8_t)(k + 1u);
         for (j = 0; j < NVOICE; j++)                     /* (2026-10-31) PRISM's own slots share this arena: written */
             t->v[j].s[5] = 0;                            /* over, each sets itself up again (prism_slot_init) */
