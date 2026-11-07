@@ -144,21 +144,6 @@ static void ag_mutate(track_t *t, const ag_cfg_t *g, int len, uint32_t *rng)
 }
 
 /* the page's knobs -> the selected synth track's line, once a frame (ui_studio.c pads_tick) */
-/* the track's sound a bass? Its preset's kind in the PRESETS list (ui.c BANK); a sound from no factory preset (a user
- * preset, an edit of the engine's defaults): ACID's is a bass, the others not */
-static int ag_bass(const track_t *t)
-{
-    const engine_t *e = ENGINES[t->engine % NENGINES];
-    uint32_t i;
-    if (!t->user && e->npresets && t->preset < e->npresets) {
-        const char *nm = e->presets[t->preset].name;
-        for (i = 0; i < sizeof BANK / sizeof BANK[0]; i++)
-            if (BANK[i].e == t->engine && str_eq(BANK[i].name, nm))
-                return BANK[i].kind == BK_BASS;
-    }
-    return t->engine == ENGI_ACID;
-}
-
 static void acid_gen_sync(void)
 {
     static int16_t was[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
@@ -194,8 +179,7 @@ static void acid_gen_sync(void)
         c.scale = (uint8_t)g[G_AGSCALE];
         c.oct_range = (uint8_t)g[G_AGOCT];
         c.root = (uint8_t)g[G_AGROOT];
-        c.base_oct = ag_bass(t) ? 2u : 4u;           /* C2.. for a bass (TB-3PO's: C1), C4.. for any other sound (3.0.5,
-                                                      * Ariel: a pad's lines down at C2 rumbled, SWARM most) */
+        c.base_oct = 2;                              /* C2.. (TB-3PO's: C1; a bass track transposes as it likes) */
         undo_mark(t, undo_sess);
         if (mut) {
             ag_mutate(t, &c, len, &mut_rng);
