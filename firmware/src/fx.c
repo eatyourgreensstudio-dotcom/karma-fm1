@@ -659,11 +659,12 @@ static void mix_part_to(track_t *t, uint32_t n, const mixbus_t *o)
     memcpy(t->p, o->pnew, sizeof pnew0);
 }
 static void mix_part(track_t *t, uint32_t n) { mix_part_to(t, n, &BUS0); }
-#define STEM_SH 4                               /* a part's stem: (L + R) / 2, 18 dB down (2026-10-28, Ariel: they came hot;
-                                                 * measured: drums and track 1 at full scale, the drums clipping. 3.0.5,
-                                                 * 2026-11-07: 12 dB down still had PLAITS' SWARM at full scale in a
-                                                 * pattern, and the four summed to 1.6 (white noise in Ariel's mix): 6 dB
-                                                 * more room, the FX return with them) */
+#define STEM_Q11 181                            /* a part's stem: (L + R) x 181 / 2048, ~15 dB down (2026-10-28, Ariel: they came
+                                                 * hot, the drums clipping, then 12 dB down. 3.0.5, 2026-11-07: PLAITS' SWARM
+                                                 * at full scale in a pattern, the four summed to 1.6: white noise in Ariel's
+                                                 * mix. 6 dB more was clean but low; 3 dB, Ariel's pick. The FX return with
+                                                 * them. ((L + R) is under 2^22 here: x 181 fits 32 bits.) */
+#define STEM_OF(x) (((x) * STEM_Q11) >> 11)
 #if KARMA_DUAL_CORE
 /* CPU1's job (2026-10-28, Ariel: a busy section overloaded one core): tracks 2 and 3 (ELEMENTS, PLAITS) into buses of its
  * own while CPU0 renders track 1 and the drums; CPU0 joins before the effects and adds them. What the two share is read
@@ -712,7 +713,7 @@ static void core1_parts(void *ctx)
             mix_part_to(&trk[k], n, &BUS1);
             if (fx_stems)
                 for (i = 0; i < n; i++)
-                    stem_buf[k][i] = (w_l[i] + w_r[i] - stem_pre1[i]) >> STEM_SH;
+                    stem_buf[k][i] = STEM_OF(w_l[i] + w_r[i] - stem_pre1[i]);
             cost_put(k, fm1_ticks() - t0);
         }
 }
@@ -1160,7 +1161,7 @@ static __attribute__((noinline)) void stem_take(uint32_t k, uint32_t n, int post
             stem_pre[i] = mix_l[i] + mix_r[i];
     else
         for (i = 0; i < n; i++)
-            stem_buf[k][i] = (mix_l[i] + mix_r[i] - stem_pre[i]) >> STEM_SH;
+            stem_buf[k][i] = STEM_OF(mix_l[i] + mix_r[i] - stem_pre[i]);
 }
 
 /* where a block's time goes (2026-10-28: the FM-1 overloaded with HEX drums and three tracks): the timer's ticks summed
@@ -1290,7 +1291,7 @@ static void mix_block(int32_t *out, uint32_t n)
     PROF(PF_CLOUD);
     if (fx_stems)                                       /* ... what the buses, the CLOUD and TEXTURE added */
         for (i = 0; i < n; i++)
-            stem_fx[0][i] = (mix_l[i] - stem_fx[0][i]) >> 3, stem_fx[1][i] = (mix_r[i] - stem_fx[1][i]) >> 3;   /* (18 dB down too) */
+            stem_fx[0][i] = STEM_OF(2 * (mix_l[i] - stem_fx[0][i])), stem_fx[1][i] = STEM_OF(2 * (mix_r[i] - stem_fx[1][i]));   /* (as far down) */
     dust_process(mix_l, mix_r, n);
     punch_process(mix_l, mix_r, n);
     djf_process(mix_l, mix_r, n);
