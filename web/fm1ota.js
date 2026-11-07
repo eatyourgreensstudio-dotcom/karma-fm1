@@ -123,18 +123,33 @@ export class Updater {
   // every in/out pair with the same port name that answers the handshake
   async find(filter) {
     const outs = [...this.access.outputs.values()];
+    // (3.0.4, 2026-11-07: 4 in 10 installs ended "not found") what this search met, for why: probe.ports MIDI inputs,
+    // probe.fm1 with an FM-1's name, probe.busy of them could not be opened (another app holds it), probe.silent did not
+    // answer
+    const probe = this.probe = { ports: 0, fm1: 0, busy: 0, silent: 0 };
     for (const input of this.access.inputs.values()) {
       if (input.state === "disconnected") continue;
+      probe.ports++;
       if (!FM1_PORT.test(input.name || "")) continue;   // never probe other gear
+      probe.fm1++;
       const output = outs.find((o) => o.name === input.name) || (outs.length === 1 ? outs[0] : null);
-      if (!output) continue;
-      try { await input.open(); await output.open(); } catch (_) { continue; }
+      if (!output) { probe.busy++; continue; }
+      try { await input.open(); await output.open(); } catch (_) { probe.busy++; continue; }
       const link = new Link(input, output);
       const id = await handshake(link, 2);
       if (id && (!filter || filter(id))) return { link, id, name: input.name };
+      if (!id) probe.silent++;
       link.close();
     }
     return null;
+  }
+
+  // why the last find() met no FM-1: "noports" (no MIDI device at all: a charging-only cable, the FM-1 off, the system
+  // not letting it in), "nofm1" (other MIDI gear only), "busy" (an FM-1 another app holds), "silent" (an FM-1 that did
+  // not answer)
+  why() {
+    const p = this.probe || { ports: 0, fm1: 0, busy: 0, silent: 0 };
+    return !p.ports ? "noports" : !p.fm1 ? "nofm1" : p.busy && !p.silent ? "busy" : "silent";
   }
 
   // the MIDI inputs there are, for the "not found" message: " (MIDI: a, b)" (a port the installer skipped shows)
@@ -186,7 +201,11 @@ export class Updater {
   async install(image, product, onStep) {
     const step = onStep || (() => {});
     const dev = await this.find((id) => !IS_OTA(id));
-    if (!dev) throw fail("notfound", "FM-1 not found (USB cable, and no other app using it?)", this.seen());
+    if (!dev) {
+      const e = fail("notfound", "FM-1 not found (USB cable, and no other app using it?)", this.seen());
+      e.reason = this.why();
+      throw e;
+    }
     const [model] = product.split("_");
     if (dev.id.model !== model) { dev.link.close(); throw fail("model", `the device is ${dev.id.text}, the package is for ${product}`); }
     step("start", dev.id.text);

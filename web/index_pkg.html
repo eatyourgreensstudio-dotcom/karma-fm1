@@ -33,6 +33,9 @@
               padding: 16px 0; width: 100%; cursor: pointer; letter-spacing: .08em; text-transform: uppercase; }
   button#go:disabled { background: var(--tile); color: var(--dim); cursor: default; }
   #status { margin-top: 14px; min-height: 1.6em; font-variant-numeric: tabular-nums; }
+  #help { background: var(--tile); border-left: 3px solid var(--orange); padding: 12px 14px 4px; margin: 0 0 14px; }
+  #help p { margin: 0 0 8px; font-weight: 600; } #help ol { margin: 0 0 10px 20px; padding: 0; } #help li { margin: 0 0 6px; }
+  #help.found { border-left-color: var(--green); } #help.found p { color: var(--green); }
   .small { color: var(--dim); font-size: 12.5px; }
   .small a, a { color: inherit; }
   progress { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; margin-top: 16px; border: 0; background: var(--tile); }
@@ -69,6 +72,7 @@
   <p><button id="go" disabled data-t="install"></button></p>
   <progress id="bar" max="100" value="0"></progress>
   <p id="status"></p>
+  <div id="help" hidden><p id="help-head"></p><ol id="help-list"></ol></div>
   <pre id="log"></pre>
   <a class="ed" href="../editor/" data-t="editor"></a>
   <p class="small"><a href="../editor/karma-editor.html" download="karma-editor.html" data-t="edOffline"></a></p>
@@ -117,6 +121,19 @@ const TEXT = {
     error: "エラー: ",
     denied: "MIDI（SysEx）の使用が許可されませんでした。アドレスバーのサイト設定で MIDI を許可して、もう一度押してください。",
     notfound: "FM-1 が見つかりません。USB ケーブル（データ通信用か）を確かめ、MIDI を使う他のアプリを閉じてから、もう一度押してください。",
+    nf_noports: "パソコンに MIDI 機器がひとつも見えていません。FM-1 がまだブラウザに届いていません:",
+    nf_nofm1: "ほかの MIDI 機器は見えていますが、FM-1 が見えていません:",
+    nf_busy: "FM-1 はつながっていますが、ほかのアプリが使っています:",
+    nf_silent: "FM-1 はつながっていますが、応答しませんでした:",
+    h_cable: "データ通信用のケーブルを使ってください。USB-C ケーブルには充電専用のものが多くあります。別のケーブル（できれば FM-1 付属のもの）を試してください。",
+    h_direct: "ハブ・ドック・モニター経由ではなく、パソコンに直接つないでください。",
+    h_on: "FM-1 の電源を入れ、ホーム画面が出るまで待ってください。",
+    h_mac: "Mac の場合: 「アクセサリの接続を許可しますか」と出たら「許可」を押してください（システム設定 → プライバシーとセキュリティ → アクセサリの接続を許可）。",
+    h_close: "MIDI を使うほかのアプリとブラウザのタブをすべて閉じてください（DAW、KARMA などのエディタ、M-UPGRADE、FM-SWITCH）。Windows では FM-1 を同時に使えるアプリはひとつだけです。",
+    h_replug: "USB ケーブルを抜いて 5 秒待ち、挿し直してください。",
+    h_power: "FM-1 の電源を一度切って、もう一度入れてください。",
+    h_again: "そのあと、もう一度「インストール」を押してください。",
+    found: "FM-1 がつながりました。「インストール」を押してください。",
     model: "接続されている機器は FM-1 ではありません。",
     lost: "USB の接続が切れました。挿し直してもう一度押してください。",
     noloader: "書き込みモードの FM-1 が見つかりません。USB を挿し直してもう一度押してください（終わるまで書き込みモードのままです）。",
@@ -155,6 +172,19 @@ const TEXT = {
     error: "Error: ",
     denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
     notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+    nf_noports: "Your computer sees no MIDI device at all, so the FM-1 is not reaching the browser yet:",
+    nf_nofm1: "Your computer sees other MIDI gear, but no FM-1:",
+    nf_busy: "The FM-1 is connected, but another app is using it:",
+    nf_silent: "The FM-1 is connected but did not answer:",
+    h_cable: "Use a data cable. Many USB-C cables only charge: try another one, ideally the cable that came with the FM-1.",
+    h_direct: "Plug it straight into the computer, not into a hub, dock or monitor.",
+    h_on: "Switch the FM-1 on and wait until its screen shows the home page.",
+    h_mac: "On a Mac: if a message asks to allow the accessory to connect, click Allow (System Settings → Privacy & Security → Allow accessories to connect).",
+    h_close: "Close every other app and browser tab that uses MIDI: a DAW, the KARMA or another editor, M-UPGRADE, FM-SWITCH. On Windows only one app at a time can use the FM-1.",
+    h_replug: "Unplug the USB cable, wait 5 seconds and plug it back in.",
+    h_power: "Switch the FM-1 off and on again.",
+    h_again: "Then press Install again.",
+    found: "FM-1 connected. Press Install.",
     model: "The connected device is not an FM-1.",
     lost: "The USB connection was lost. Replug it and press Install again.",
     noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
@@ -182,11 +212,31 @@ let lastKey = null, lastArg = "";
 /* (2026-11-01) phones: iPhone / iPad cannot (no Web MIDI in any iOS browser): the FM-SWITCH app can; Android Chrome can */
 const DEV = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) ? "devIOS"
   : /Android/.test(navigator.userAgent) ? "devAndroid" : "";
+/* (3.0.4, 2026-11-07: 4 in 10 installs ended "not found") what to try, by why the FM-1 was not found (fm1ota.js why()),
+   shown as a list under the status; it turns green when an FM-1 is plugged in meanwhile */
+const HELP = { noports: ["h_cable", "h_direct", "h_on", "h_mac", "h_again"], nofm1: ["h_cable", "h_direct", "h_on", "h_mac", "h_again"],
+               busy: ["h_close", "h_replug", "h_again"], silent: ["h_replug", "h_power", "h_close", "h_again"] };
+let helpReason = null, helpFound = false;
+const showHelp = (reason) => {
+  helpReason = reason;
+  const box = $("help");
+  if (!reason) { box.hidden = true; return; }
+  box.hidden = false;
+  box.classList.toggle("found", helpFound);
+  $("help-head").textContent = helpFound ? t("found") : t("nf_" + reason);
+  const ol = $("help-list");
+  ol.textContent = "";
+  if (!helpFound)
+    for (const k of HELP[reason] || HELP.noports) { const li = document.createElement("li"); li.textContent = t(k); ol.appendChild(li); }
+};
+const OS = /Android/.test(navigator.userAgent) ? "android" : /CrOS/.test(navigator.userAgent) ? "chromeos"
+  : /Mac/.test(navigator.platform) ? "mac" : /Win/.test(navigator.platform) ? "windows" : /Linux/.test(navigator.platform) ? "linux" : "other";
 function applyLang() {
   document.documentElement.lang = lang;
   document.querySelectorAll("[data-t]").forEach((e) => { e.textContent = t(e.dataset.t); });
   $("lang").textContent = t("other");
   if (lastKey) $("status").textContent = t(lastKey) + lastArg;
+  if (helpReason) showHelp(helpReason);
   if (DEV) { $("dev-note").hidden = false; $("dev-text").textContent = t(DEV); $("dev-link").hidden = DEV !== "devIOS"; }
 }
 $("lang").addEventListener("click", () => { lang = lang === "ja" ? "en" : "ja"; applyLang(); });
@@ -247,8 +297,21 @@ const step = (k, a) => {
   if (k === "done") { $("bar").value = 100; sayK("done"); gc(`${job}-done`, `${job} done`, true); }
 };
 let job = "install";                               /* (what the counts call it: install, official) */
-const failed = (e) => {
-  gc(`${job}-failed`, `${job} failed: ${(e && (e.code || e.message)) || "?"}`.slice(0, 120), true);
+const failed = (e, midi) => {
+  const why = e && e.code === "notfound" && e.reason ? `/${e.reason} (${OS})` : "";   /* (3.0.4: the counts say why, which system) */
+  gc(`${job}-failed`, `${job} failed: ${(e && (e.code || e.message)) || "?"}${why}`.slice(0, 120), true);
+  if (e && e.code === "notfound") {
+    helpFound = false;
+    showHelp(e.reason || "noports");
+    if (midi)                                      /* an FM-1 plugged in now: say so (no install by itself) */
+      midi.onstatechange = (ev) => {
+        if (ev.port && ev.port.type === "input" && ev.port.state === "connected" && FM1_PORT.test(ev.port.name || "")) {
+          helpFound = true;
+          say("");                                 /* (the "not found" line is old news: the green box says it) */
+          showHelp(helpReason);
+        }
+      };
+  }
   if (job === "official" && e && e.code === "stopped" && /nothing was written/.test(e.message)) sayK("stockRefused");   /* (step 1: another head) */
   else if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.detail || "");
   else sayK("error", e && e.message);
@@ -262,6 +325,8 @@ $("go").addEventListener("click", async () => {
   try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
   catch (e) { sayK("denied"); lockAll(false); return; }
   job = "install";
+  showHelp(null);
+  midi.onstatechange = null;
   gc("install-start", `install KARMA ${meta.version}`, true);
   try {
     const up = new Updater(midi, log);
@@ -274,7 +339,7 @@ $("go").addEventListener("click", async () => {
     } else {
       await up.install(image, meta.product, step);
     }
-  } catch (e) { failed(e); }
+  } catch (e) { failed(e, midi); }
   lockAll(false);
 });
 

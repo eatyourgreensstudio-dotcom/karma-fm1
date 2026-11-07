@@ -1522,6 +1522,23 @@ async function updater() {
     const e6 = await new Updater(other.access).install(image, "FM-1_900").then(() => null, (x) => x);
     ok(e6 && e6.code === "notfound" && other.served === 0 && /Arturia KeyStep Pro/.test(e6.detail),
        `fm1ota.js: a port of other gear is left alone; 'not found' lists it${e6 ? e6.detail : ""}`);
+    {   /* (3.0.4, 2026-11-07: 4 in 10 installs ended "not found") why: no MIDI at all, other gear only, an FM-1 another app
+         * holds (open fails), an FM-1 that does not answer; the page shows a checklist for each */
+      const port = (name, { busy = false } = {}) => ({ id: name, name, state: "connected", onmidimessage: null,
+        open: async () => { if (busy) throw new Error("in use"); }, send: () => {} });
+      const acc = (...names) => {
+        const m = (o) => new Map(names.map(([n, opt]) => [n, port(n, opt)]));
+        return { inputs: m(), outputs: m() };
+      };
+      const why = async (a) => { const x = await new Updater(a).install(image, "FM-1_900").then(() => null, (y) => y); return x && x.code === "notfound" ? x.reason : `?${x && x.code}`; };
+      const r = [await why({ inputs: new Map(), outputs: new Map() }), await why(acc(["Arturia KeyStep Pro"])),
+                 await why(acc(["FM-1 KARMA", { busy: true }])), await why(acc(["FM-1 KARMA"]))];
+      ok(r.join() === "noports,nofm1,busy,silent", `fm1ota.js: 'not found' says why: no MIDI, other gear, FM-1 in use, FM-1 silent (${r.join()})`);
+      const page = readFileSync(new URL("./index_pkg.html", import.meta.url), "utf8");
+      ok(["nf_noports", "nf_nofm1", "nf_busy", "nf_silent", "h_cable", "h_direct", "h_on", "h_mac", "h_close", "h_replug", "h_power", "h_again", "found"]
+           .every((k) => (page.match(new RegExp(`(^|[^A-Za-z_])${k}: "`, "gm")) || []).length === 2),
+         "installer: every 'not found' help text in English and Japanese");
+    }
     ok(["FM-1", "FM-1 KARMA", "Felucca", "Felucca Update", "Clipper", "SLOOP", "MIDIIN2 (Clipper)", "USB-MIDI"].every((n) => FM1_PORT.test(n)) &&
        !["Arturia KeyStep Pro", "loopMIDI Port", "Microsoft GS Wavetable Synth"].some((n) => FM1_PORT.test(n)),
        "fm1ota.js: FM1_PORT takes the FM-1's names (SLOOP, CLIPPER, the loader, the stock firmware), not other gear");
