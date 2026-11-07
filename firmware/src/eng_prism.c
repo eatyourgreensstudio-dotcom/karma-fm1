@@ -135,7 +135,10 @@ static void prism_note_on(track_t *t, voice_t *v)
     v->s[3] = 1;                 /* high */
     v->s[4] = 0;                 /* on: the shape and the gain start where they are asked */
     v->s[6] = 1;                 /* (Plaits' models: a trigger at the next render) */
-    if (prism_model(t) < PRM_PLX)
+    /* (3.0.5) a fresh voice, or another model: its slot from the start. A voice retriggered or stolen while it sounds
+     * goes on from where it is (voice.c keeps its phases for that): its slot set up again wiped eight saws mid-wave,
+     * a click a note (2026-11-07, Ariel: SWARM gritty under ACID GEN's sixteenths) */
+    if (prism_model(t) < PRM_PLX && ((!v->env && !v->env_out) || v->s[5] != (int32_t)prism_model(t) + 1))
         prism_slot_init(t, v);
 }
 

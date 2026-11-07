@@ -241,7 +241,9 @@ static void pr_swarm_init(pr_swarm_t *s)
         v->fm = 0;
         v->amp = 16384;
         v->coef = 0;
-        v->phase = 0;
+        v->phase = pr_rand16() << 16;                /* (3.0.5: each saw somewhere in its wave: in step, the eight
+                                                      * began a note as one spike, a click a note in fast patterns;
+                                                      * hers never start over) */
         v->inc = 0;                                  /* (hers glides from 0.01; here: from the note) */
         v->next = 0;
         v->gain = 0;
