@@ -540,6 +540,22 @@ static void t_shed(void)
     for (k = 0, i = 0; i < NVOICE; i++)
         k += t->v[i].note == 76 && t->v[i].stage == 4u;
     check(k == 1u, "overload: the releasing voice goes first, faded (stage 4)");
+    {   /* (3.0.5) over SHED_BLOCKS (~7 ms), not 1.5 ms: no click on a pad; still half there two blocks in */
+        voice_t *sv = 0;
+        int32_t e0;
+        uint32_t blocks = 0, half_ok;
+        for (i = 0; i < NVOICE; i++)
+            if (t->v[i].note == 76 && t->v[i].stage == 4u)
+                sv = &t->v[i];
+        e0 = sv ? sv->env : 0;
+        run_block();
+        run_block();
+        half_ok = sv && sv->active && sv->env > e0 / 2;
+        for (blocks = 2; sv && sv->active && blocks < 40u; blocks++)
+            run_block();
+        check(half_ok && blocks >= SHED_BLOCKS - 1u && blocks <= SHED_BLOCKS + 1u,
+              "overload: a shed voice fades over ~7 ms (SHED_BLOCKS), not cut");
+    }
     for (k = 0; k < 6u; k++)
         shed_voice();
     for (i = 0; i < NVOICE; i++) {

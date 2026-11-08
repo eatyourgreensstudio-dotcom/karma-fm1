@@ -129,17 +129,20 @@ static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
 
 static uint32_t voice_kills;                            /* voices given up (budget, overload): console, hostsim */
 #define KILL_BLOCKS 2u                                  /* 1.5 ms: no click on a bass, little extra load */
-static void voice_kill(voice_t *v)                      /* fade out over the next blocks (env_tick stage 4) */
+#define SHED_BLOCKS 10u                                 /* (3.0.5) the overload's: ~7 ms (2026-11-08, Ariel: notes the
+                                                         * safety net took ended as if cut; 1.5 ms is a click on a pad) */
+static void voice_kill_n(voice_t *v, uint32_t blocks)   /* fade out over the next blocks (env_tick stage 4) */
 {
     v->gate = 0;
     if (v->stage != 4u)
-        v->kill = KILL_BLOCKS;
+        v->kill = (uint8_t)blocks;
     v->stage = 4;
     voice_kills++;
 }
+static void voice_kill(voice_t *v) { voice_kill_n(v, KILL_BLOCKS); }
 
 /* overload (after Felucca 1.0; audio.c asks for it when two halves in a row took > 85 % of their time):
- * fade one voice out over the next blocks (voice_kill: no click), one more each half while it lasts. A
+ * fade one voice out over SHED_BLOCKS (~7 ms: no click), one more each half while it lasts. A
  * single late half (a USB burst, a flash write) sheds nothing. First the quietest releasing voice; else
  * the oldest held one that is not a part's lowest POLY note nor its MONO / LEGATO / UNISON lead, as the
  * voice budget keeps them: a dense chord on a heavy engine thins out from the top, bass and lead stay. */
@@ -156,7 +159,7 @@ static void shed_voice(void)
                 best = v;
         }
     if (best) {
-        voice_kill(best);
+        voice_kill_n(best, SHED_BLOCKS);
         shed_count++;
         return;
     }
@@ -171,7 +174,7 @@ static void shed_voice(void)
         }
     }
     if (best) {
-        voice_kill(best);
+        voice_kill_n(best, SHED_BLOCKS);
         shed_count++;
     }
 }
