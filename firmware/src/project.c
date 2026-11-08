@@ -1171,6 +1171,10 @@ static void sections_write(void)                        /* the dirty sections an
  * whatever is only in RAM goes to flash now: the live sections, the song, the working project */
 static void persist_flush_now(void)
 {
+#if FELUCCA_FLASH
+    if (flash_ok && memcmp(&persist_saved.arrangement, &arrangement, sizeof arrangement))
+        song_dirty = 1;                                 /* (3.0.5) an edited song order, unsaved: before the reset too */
+#endif
     sections_write();
 #if FELUCCA_FLASH
     if (flash_ok && !arrangement_clock.running) {     /* (a song playing: the tracks hold a section) */
@@ -1225,6 +1229,12 @@ static void sections_flush(void)                        /* main loop */
         settings_later = 0;
         song_dirty = 1;                                 /* (settings_save when quiet, with the song) */
     }
+#if FELUCCA_FLASH
+    if (flash_ok && memcmp(&persist_saved.arrangement, &arrangement, sizeof arrangement))
+        song_dirty = 1;                                 /* (3.0.5; 2026-11-08, Ariel: a 3-part song came back as 1 after an
+                                                         * update) the song order edited on the SONG screen: kept when
+                                                         * quiet, as the other settings, no SAVE needed */
+#endif
 #if FELUCCA_ARRANGER
     section_keep_ui(fm1_ms, ui_input_ms);              /* edits stick (arranger_scene.c) */
     if (sec_kept) {                                     /* sections that kept edits while they played (the ISR) */
