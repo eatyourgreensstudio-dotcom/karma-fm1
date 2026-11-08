@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { logicalImage, productOf } from "./fm1pkg.js";
-import { Updater, pack7, unpack7, FM1_PORT } from "./fm1ota.js";
+import { Updater, pack7, unpack7, FM1_PORT, safeNames } from "./fm1ota.js";
 
 let failed = 0;
 const ok = (cond, what) => { console.log(`${what.padEnd(64)} ${cond ? "ok" : "FAIL"}`); if (!cond) failed++; };
@@ -1538,6 +1538,14 @@ async function updater() {
       ok(["nf_noports", "nf_nofm1", "nf_busy", "nf_silent", "h_cable", "h_direct", "h_on", "h_mac", "h_close", "h_replug", "h_power", "h_again", "found"]
            .every((k) => (page.match(new RegExp(`(^|[^A-Za-z_])${k}: "`, "gm")) || []).length === 2),
          "installer: every 'not found' help text in English and Japanese");
+      /* (2026-11-08) the counts name the other gear (is a new FM-1 under an unknown name?), never a person's device */
+      const e8 = await new Updater(acc(["Arturia KeyStep Pro"], ["Ari's iPhone"])).install(image, "FM-1_900").then(() => null, (y) => y);
+      ok(e8 && e8.reason === "nofm1" && e8.names.length === 2, "fm1ota.js: 'not found' lists the MIDI names it met");
+      const sn = safeNames(["IAC Driver Bus 1", "Ari\u2019s iPhone", "FM1 MIDI", "Network Session 1", "x"]);
+      ok(sn.join("|") === "IAC Driver Bus 1|*|FM1 MIDI", `fm1ota.js: safeNames: three at most, a person's device hidden (${sn.join("|")})`);
+      ok(!/stock-go|stock-file|validateStockPackage\(/.test(page) &&
+         ["stock1", "stock2", "stock3", "stock4", "stockNote", "stockEditor"].every((k) => (page.match(new RegExp(`(^|[^A-Za-z_])${k}: "`, "gm")) || []).length === 2),
+         "installer: back to the official firmware is M-UPGRADE's steps (no button), in English and Japanese");
     }
     ok(["FM-1", "FM-1 KARMA", "Felucca", "Felucca Update", "Clipper", "SLOOP", "MIDIIN2 (Clipper)", "USB-MIDI"].every((n) => FM1_PORT.test(n)) &&
        !["Arturia KeyStep Pro", "loopMIDI Port", "Microsoft GS Wavetable Synth"].some((n) => FM1_PORT.test(n)),
