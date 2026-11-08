@@ -11,6 +11,9 @@ static void panel_setup(void);
 static void project_load(uint32_t slot);
 static void project_erase(uint32_t slot);        /* SAVE > PROJECT > ERASE (2.6) */
 static int project_used(uint32_t slot);
+#define NSONG 3u                                 /* SAVE > SONGS (3.0.5): saved songs besides the one on the FM-1 */
+static void song_go(uint32_t op, uint32_t k);    /* project.c: 0 ERASE, 1 LOAD, 2 SAVE */
+static uint32_t song_info_of(uint32_t k);        /* 0 empty, else 0x80 | its parts */
 static int up_used(uint32_t k);              /* user presets: upreset.c */
 static int up_load(uint32_t k);
 static int up_load_to(track_t *t, uint32_t k);
@@ -64,6 +67,7 @@ static struct {
     uint8_t confirm;             /* 1 = "clear the sequence?" (REC held on SEQ / ARP), 2 = "clear track n?" (TRACKS) */
     uint8_t confirm_trk;         /* the track the dialog clears */
     uint8_t uslot;               /* SAVE > USER: the selected user preset slot */
+    uint8_t sslot;               /* SAVE > SONGS (3.0.5): the selected song */
     /* layers (ui_layers.c): a function button held, the keys and knobs do something else */
     uint8_t layer;               /* the layer drawn (LY_*), LY_PLAY = none */
     uint8_t layer_btn;           /* its button (B_*), NB = none */

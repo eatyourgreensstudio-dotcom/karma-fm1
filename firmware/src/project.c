@@ -828,6 +828,9 @@ _Static_assert(__builtin_offsetof(persist_t, arrangement) == 48u && sizeof(arr_c
 #if FELUCCA_FLASH
 static persist_t persist_saved;
 static void dsu_boot(void);
+#if FELUCCA_ARRANGER
+static void songs_boot(void);
+#endif
 #endif
 
 static void persist_boot(void)                    /* before settings_init / panel_init */
@@ -903,6 +906,9 @@ static void persist_boot(void)                    /* before settings_init / pane
     }
     dsu_boot();                                    /* SLOOP 2.5: the SYN kits (after the settings) */
     up_boot();                                     /* user presets */
+#if FELUCCA_ARRANGER
+    songs_boot();                                  /* (3.0.5) SAVE > SONGS */
+#endif
 #endif
 }
 
@@ -1252,5 +1258,188 @@ static void sections_flush(void)                        /* main loop */
     if (sec_dirty)
         ui_message("SAVE ERROR: RETRYING");
 }
+#if FELUCCA_FLASH
+/* ---- saved songs (KARMA 3.0.5; 2026-11-08, Ariel: "you should be able to save different projects"). SAVE > SONGS
+ * keeps NSONG songs besides the one on the FM-1. A song is what makes it: the four parts (slots 1..4), the song order
+ * and the loop you are on. Each is stored as its difference from the one before (the parts mostly match: Ariel's
+ * differ in 0..170 of 3840 bytes), LZ4-packed (lz.h): ~1 KB a song, one flash sector each (storage.c). LOAD puts it
+ * all back, in RAM and in flash, as if it had never left. Stopped only (the flash erases silence the audio) */
+#include "lz.h"
+#define SONG_MAGIC 0x31474E53u                  /* "SNG1" */
+#define SONG_BLOBS 5u                           /* parts 1..4, then the working loop */
+typedef struct {
+    uint32_t magic;
+    uint8_t parts, rsv[3];                      /* the parts in use: bit per slot */
+    arr_config_t arr;                           /* the song order */
+    uint16_t len[SONG_BLOBS];                   /* each packed difference (0: an empty part) */
+    uint16_t rsv2;
+} song_hdr_t;
+_Static_assert(sizeof(song_hdr_t) == 56u && sizeof(project_t) == ST_PAYLOAD_MAX, "a song's header; a part fills a payload");
+static uint8_t song_info[NSONG];                /* 0 empty, else 0x80 | its parts */
+
+static void song_scan(uint32_t k)
+{
+    song_hdr_t h;
+    int n = st_load(OBJ_SONG0 + k, &h, sizeof h);
+    song_info[k] = (uint8_t)(n == (int)sizeof h && h.magic == SONG_MAGIC ? 0x80u | (h.parts & 15u) : 0u);
+}
+static void songs_boot(void)                    /* persist_boot */
+{
+    uint32_t k;
+    for (k = 0; k < NSONG; k++)
+        song_scan(k);
+}
+static uint32_t song_info_of(uint32_t k) { return k < NSONG ? song_info[k] : 0u; }
+
+/* blob i of a song's payload into dst, the difference undone against prev (0: none): 0 ok */
+static int song_blob(const uint8_t *pay, const song_hdr_t *h, uint32_t i, uint8_t *dst, const uint8_t *prev)
+{
+    uint32_t off = sizeof *h, j;
+    for (j = 0; j < i; j++)
+        off += h->len[j];
+    if (lz_unpack(pay + off, h->len[i], dst, sizeof(project_t)) != (int)sizeof(project_t))
+        return -1;
+    if (prev)
+        for (j = 0; j < sizeof(project_t); j++)
+            dst[j] ^= prev[j];
+    return proj_ok((const project_t *)dst) ? 0 : -1;
+}
+
+static void song_save(uint32_t k)
+{
+    uint8_t *out = (uint8_t *)&autosave_buf, *dl = (uint8_t *)&proj_tmp;   /* (scratch: both refilled before use) */
+    const uint8_t *prev = 0;
+    uint16_t ht[LZ_HT];                         /* (2 KiB of the main loop's 24 KiB stack) */
+    song_hdr_t h;
+    uint32_t i, j, pos = sizeof h;
+    memset(&h, 0, sizeof h);
+    h.magic = SONG_MAGIC;
+    h.arr = arrangement;
+    proj_capture(&song_keep);                   /* the loop you are on (stopped: song mode keeps nothing there now) */
+    for (i = 0; i < SONG_BLOBS; i++) {
+        const uint8_t *p = i < 4u ? (const uint8_t *)&proj_slot[i] : (const uint8_t *)&song_keep;
+        uint32_t n;
+        if (i < 4u && !proj_ok(&proj_slot[i]))
+            continue;
+        if (i < 4u)
+            h.parts |= (uint8_t)(1u << i);
+        for (j = 0; j < sizeof(project_t); j++)
+            dl[j] = (uint8_t)(p[j] ^ (prev ? prev[j] : 0u));
+        n = lz_pack(dl, sizeof(project_t), out + pos, ST_PAYLOAD_MAX - pos, ht);
+        if (!n) {
+            ui_message("SONG TOO BIG");
+            return;
+        }
+        h.len[i] = (uint16_t)n;
+        pos += n;
+        prev = p;
+    }
+    memcpy(out, &h, sizeof h);
+    if (st_save(OBJ_SONG0 + k, out, pos)) {
+        ui_message("SAVE ERROR");
+        return;
+    }
+    song_scan(k);
+    {
+        char b[4] = {(char)('1' + k), 0};
+        ui_say(song_info[k] ? "SAVED SONG " : "SAVE ERROR ", b);
+    }
+}
+
+static void song_load(uint32_t k)
+{
+    const uint8_t *pay = (const uint8_t *)&autosave_buf;
+    uint8_t *a = (uint8_t *)&proj_tmp, *b = (uint8_t *)&song_keep, *cur;
+    const uint8_t *prev = 0;
+    song_hdr_t h;
+    uint32_t i, tot = sizeof h;
+    int n = st_load(OBJ_SONG0 + k, &autosave_buf, sizeof autosave_buf);
+    if (n < (int)sizeof h) {
+        ui_message("EMPTY SONG");
+        return;
+    }
+    memcpy(&h, pay, sizeof h);
+    for (i = 0; i < SONG_BLOBS; i++)
+        tot += h.len[i];
+    if (h.magic != SONG_MAGIC || tot != (uint32_t)n || (h.parts & ~15u) || !h.len[4] ||
+        !arr_valid(&h.arr, 15u)) {               /* (an order over empty parts: as one edited on the SONG screen) */
+        ui_message("SONG UNREADABLE");
+        return;
+    }
+    for (i = 0; i < SONG_BLOBS; i++) {          /* every part checked first: a bad one leaves the FM-1 as it was */
+        if (i < 4u && !((h.parts >> i) & 1u))
+            continue;
+        cur = prev == a ? b : a;
+        if (song_blob(pay, &h, i, cur, prev)) {
+            ui_message("SONG UNREADABLE");
+            return;
+        }
+        prev = cur;
+    }
+    prev = 0;                                   /* then for real: the parts into the slots */
+    for (i = 0; i < 4u; i++) {
+        uint8_t *dst = (uint8_t *)&proj_slot[i];
+        if (!((h.parts >> i) & 1u)) {
+            memset(dst, 0, sizeof proj_slot[i]);
+            continue;
+        }
+        (void)song_blob(pay, &h, i, dst, prev);
+        prev = dst;
+    }
+    (void)song_blob(pay, &h, 4u, a, prev);      /* the loop */
+    arrangement = h.arr;
+    project_apply((const project_t *)a);
+    live_sec = -1;
+    sec_dirty = 0;
+    for (i = 0; i < 4u; i++)                    /* the slots into flash now (stopped: ~50 ms of silence each) */
+        if (st_save(OBJ_PROJECT0 + i, &proj_slot[i], (h.parts >> i) & 1u ? sizeof proj_slot[i] : 0u) &&
+            ((h.parts >> i) & 1u))
+            sec_dirty |= (uint8_t)(1u << i);    /* (a failed write: again when quiet) */
+    song_dirty = 1;
+    persist_flush_now();                        /* the song order and the loop too */
+    {
+        char s[4] = {(char)('1' + k), 0};
+        ui_say("LOADED SONG ", s);
+    }
+}
+
+static void song_erase(uint32_t k)
+{
+    if (!song_info[k]) {
+        ui_message("EMPTY SONG");
+        return;
+    }
+    if (st_save(OBJ_SONG0 + k, &autosave_buf, 0)) {
+        ui_message("ERASE ERROR");
+        return;
+    }
+    song_scan(k);
+    ui_message("SONG ERASED");
+}
+
+static void song_go(uint32_t op, uint32_t k)    /* SAVE > SONGS: 0 ERASE, 1 LOAD, 2 SAVE */
+{
+    if (k >= NSONG)
+        return;
+    if (song.playing || transport_req) {
+        ui_message("STOP FIRST");
+        return;
+    }
+    if (!flash_ok) {
+        ui_message("NO FLASH");
+        return;
+    }
+    if (op == 0u)
+        song_erase(k);
+    else if (op == 1u)
+        song_load(k);
+    else
+        song_save(k);
+}
+#else
+static void songs_boot(void) {}
+static uint32_t song_info_of(uint32_t k) { (void)k; return 0; }
+static void song_go(uint32_t op, uint32_t k) { (void)op; (void)k; ui_message("NO FLASH"); }
+#endif
 #endif
 #endif /* PROJ_HOST */

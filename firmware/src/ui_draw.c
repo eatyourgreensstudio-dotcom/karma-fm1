@@ -405,6 +405,9 @@ static uint32_t graph_signature(void)
     if (pg->graph == GR_SLOTS)                       /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)project_used(i) << (20u + i);
+    if (pg->graph == GR_SONGS)                       /* (3.0.5) the saved songs, the one picked */
+        for (i = 0; i < NSONG; i++)
+            h ^= (song_info_of(i) + 1u + ui.sslot * 7u) * (2654435761u + i * 40503u);
     if (pg->graph == GR_DGEN) {                      /* DRUM GEN: its lanes, the step playing */
         const uint8_t *b = (const uint8_t *)TDRUM->dstep;
         for (i = 0; i < sizeof TDRUM->dstep; i++)
@@ -481,6 +484,32 @@ static void graph_slots(void)
             cv_rect(4, y + 6, 3, 3, C_WHITE);
         cv_text(14, y, &FONT_S, b, sel ? C_WHITE : C_GRAY);
         cv_text(40, y, &FONT_S, project_used(i) ? "USED" : "EMPTY", project_used(i) ? (sel ? C_WHITE : C_HI) : C_DIM);
+    }
+}
+
+/* (3.0.5) saved songs: "SONG 1  4 PARTS" / EMPTY, the selected one in white */
+static void graph_songs(void)
+{
+    uint32_t i;
+    for (i = 0; i < NSONG; i++) {
+        int32_t y = 8 + (int32_t)i * 26;
+        uint32_t inf = song_info_of(i), m = inf & 15u, np = (m & 1u) + (m >> 1 & 1u) + (m >> 2 & 1u) + (m >> 3 & 1u);
+        char b[12];
+        int sel = i == ui.sslot;
+        str_cpy(b, "SONG ", sizeof b);
+        b[5] = (char)('1' + i);
+        b[6] = 0;
+        if (sel)
+            cv_rect(4, y + 6, 3, 3, C_WHITE);
+        cv_text(14, y, &FONT_S, b, sel ? C_WHITE : C_GRAY);
+        if (inf) {
+            char t[12];
+            fmt_int(t, (int32_t)np);
+            str_cpy(t + str_len(t), np == 1u ? " PART" : " PARTS", sizeof t - str_len(t));
+            cv_text(90, y, &FONT_S, t, sel ? C_WHITE : C_HI);
+        } else {
+            cv_text(90, y, &FONT_S, "EMPTY", C_DIM);
+        }
     }
 }
 
@@ -796,6 +825,10 @@ static void draw_graph(void)
             cv_oy = 0;
             graph_slots();
             break;
+        case GR_SONGS:
+            cv_oy = 0;
+            graph_songs();
+            break;
         case GR_USER:
             cv_oy = 0;
             graph_user();
@@ -819,11 +852,11 @@ static void draw_graph(void)
         }
     }
     if (!ui.home && !drum_note && !is_drum(t) && !big_page(pg) && pg->graph != GR_BROWSE && pg->graph != GR_SLOTS &&
-        pg->graph != GR_USER) {                      /* over a graph (they keep to the lower rows): the track's sound */
+        pg->graph != GR_USER && pg->graph != GR_SONGS) {                      /* over a graph (they keep to the lower rows): the track's sound */
         cv_oy = 0;
         op_names(t);
     }
-    top = !ui.home && !drum_note && (pg->graph == GR_BROWSE || pg->graph == GR_SLOTS || pg->graph == GR_USER ||
+    top = !ui.home && !drum_note && (pg->graph == GR_BROWSE || pg->graph == GR_SLOTS || pg->graph == GR_USER || pg->graph == GR_SONGS ||
                                      big_page(pg));   /* these draw from the top */
     cv_oy = 0;
     if (ui.hot_t && settings.zoom && !(top && big_page(pg) && !drum_note)) {   /* (the big values show it already) */                 /* focus (menu ZOOM): the touched value, large and white */
@@ -919,6 +952,16 @@ static void draw_columns_set(void)
         draw_column(1, "ENG", ENGINES[TSEL->eng_req]->name, "", VAL(1u), -1, engine_icon(ENGINES[TSEL->eng_req]->name));
         draw_column(2, "", "", "", C_HI, -1, ICON_AUTO);
         draw_column(3, "", "", "", C_HI, -1, ICON_AUTO);
+        return;
+    }
+    if (cur_page()->graph == GR_SONGS) {                 /* (3.0.5) SONG, then three GO buttons */
+        int used = song_info_of(ui.sslot) != 0u;
+        val[0] = (char)('1' + ui.sslot);
+        val[1] = 0;
+        draw_column(0, "SONG", val, "", VAL(0u), (int32_t)ui.sslot * 1000 / (int32_t)(NSONG - 1u), ICON_AUTO);
+        draw_column(1, "ERASE", "--", "", used ? C_HI : C_DIM, -1, ICON_AUTO);
+        draw_column(2, "LOAD", "--", "", used ? C_HI : C_DIM, -1, ICON_AUTO);
+        draw_column(3, "SAVE", "--", "", C_HI, -1, ICON_AUTO);
         return;
     }
     if (cur_page()->graph == GR_USER) {                  /* SLOT, then three GO buttons */

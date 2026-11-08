@@ -59,6 +59,9 @@ static int project_used(uint32_t i) { return i < 2; }
 static void project_save(uint32_t i) { (void)i; saves++; ui_message("SAVED"); }
 static void project_load(uint32_t i) { (void)i; loads++; }
 static void project_erase(uint32_t i) { (void)i; erases++; ui_message("ERASED"); }
+static uint32_t song_ops[3], song_last = 99;                  /* (3.0.5) SAVE > SONGS: ERASE LOAD SAVE */
+static void song_go(uint32_t op, uint32_t k) { song_ops[op % 3u]++; song_last = k; }
+static uint32_t song_info_of(uint32_t k) { return k == 0u ? 0x83u : 0u; }   /* SONG 1: parts 1, 2 */
 static void arrangement_save(void) {}
 static uint32_t arrangement_ready(void) { return 3; }
 static void arrangement_apply(uint32_t s) { (void)s; }
@@ -1293,6 +1296,36 @@ int main(int argc, char **argv)
         encs[panel.enc[EN_K2]] = 1; frames(2);
         check(erases == e0 + 1u && ui.arm == 0xE8u, "  the arm runs out (~1.5 s): a detent after it arms again");
         ui.arm = 0; song.g[G_SLOT] = 1;
+        go_home(); frames(4);
+    }
+    {   /* 3.0.5 SAVE > SONGS: KNOB 1 the song (1..3), KNOB 2 ERASE, 3 LOAD, 4 SAVE: GO buttons, a detent arms, a second acts */
+        uint32_t i, sv = song_ops[2], ld = song_ops[1], er = song_ops[0];
+        song.playing = 0;
+        go_home(); frame();
+        for (i = 0; i < NPAGES; i++) if (!strcmp(PAGES[i].title, "SONGS")) break;
+        check(i < NPAGES && PAGES[i].fam == FAM_SAVE && PAGES[i].graph == GR_SONGS, "SAVE > SONGS: a page of the SAVE family");
+        check(i > 0 && !strcmp(PAGES[i - 1].title, "PROJECT"), "  right after PROJECT");
+        open_family(PAGES[i].fam); ui.page = (uint8_t)i; ui.fam_last[PAGES[i].fam] = (uint8_t)i; page_entered(); ui.force = 1; frame();
+        ui.sslot = 0;
+        encs[panel.enc[EN_K1]] = 5; frames(2);
+        check(ui.sslot == NSONG - 1u, "SONGS, KNOB 1: up to SONG 3, no further");
+        encs[panel.enc[EN_K1]] = -9; frames(2);
+        check(ui.sslot == 0u, "  down to SONG 1");
+        encs[panel.enc[EN_K4]] = 1; frames(2);
+        check(song_ops[2] == sv && !strcmp(ui.msg, "AGAIN: SAVE"), "SONGS, KNOB 4 one detent: AGAIN: SAVE, nothing saved");
+        ui.force = 1; frame(); ppm("page-songs");
+        encs[panel.enc[EN_K4]] = 1; frames(2);
+        check(song_ops[2] == sv + 1u && song_last == 0u && !ui.arm, "SONGS, KNOB 4 again: SONG 1 saved");
+        encs[panel.enc[EN_K1]] = 1; frames(2);
+        encs[panel.enc[EN_K3]] = 1; frames(2);
+        encs[panel.enc[EN_K2]] = 1; frames(2);            /* another knob: arms that one, not the load */
+        check(song_ops[1] == ld && song_ops[0] == er && !strcmp(ui.msg, "AGAIN: ERASE"), "  another GO knob re-arms, nothing done");
+        encs[panel.enc[EN_K3]] = 1; frames(2);
+        encs[panel.enc[EN_K3]] = 1; frames(2);
+        check(song_ops[1] == ld + 1u && song_last == 1u, "SONGS, KNOB 3 twice: SONG 2 loaded");
+        encs[panel.enc[EN_K2]] = -1; frames(2);
+        check(song_ops[0] == er, "SONGS, KNOB 2 left: nothing");
+        ui.arm = 0; ui.sslot = 0;
         go_home(); frames(4);
     }
     {   /* fuzz: 20000 frames of random buttons (held or tapped), knobs and keys, with the audio running

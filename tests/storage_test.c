@@ -95,10 +95,14 @@ int main(void)
                 uint32_t a = st_sector(o, c);
                 int data = a >= 0x97000u && a + 4096u <= 0xA0000u, ups = a >= 0xDC000u && a + 4096u <= 0xE0000u;
                 int glob = a >= 0xFC000u && a + 4096u <= 0xFF000u, fm6 = a >= 0xE5000u && a + 4096u <= 0xE7000u;
-                inside &= (data || ups || glob || fm6) && !(a & 0xFFFu);
+                int song3 = a == 0xFB000u;               /* (3.0.5) SONG 3, after the sample slot USR4 */
+                if (o == OBJ_FM6BANK)
+                    continue;                            /* (retired with FM6: its sectors are SONG 1, 2) */
+                inside &= (data || ups || glob || fm6 || song3) && !(a & 0xFFFu);
                 for (o2 = 0; o2 < OBJ_COUNT; o2++)
                     for (c2 = 0; c2 < 2u; c2++)
-                        if ((o2 != o || c2 != c) && st_sector(o2, c2) == a)
+                        if (o2 != OBJ_FM6BANK && (o2 != o || c2 != c) && st_sector(o2, c2) == a &&
+                            !(o2 == o && o >= OBJ_SONG0))   /* (a song: one sector, both copies) */
                             apart = 0;
             }
         bad += check("data stays in the Felucca regions (autosave too)", inside);
@@ -122,6 +126,30 @@ int main(void)
         n = st_load(OBJ_SETTINGS, got2, sizeof got2);
         bad += check("2.5: ... a torn save keeps the last one", n == (int)sizeof all && !memcmp(got2, all, sizeof all));
         bad += check("2.5: ... too big for a sector: refused", st_save2(OBJ_SETTINGS, p2, 3000, p2, 1000) == -1);
+    }
+    {   /* 3.0.5: a saved song, one sector (no A/B): saved, saved over, erased, the last one loads; a torn save loses
+         * that song only (it reads as empty, never as garbage) */
+        static uint8_t s1[3000], s2[1200], g[3840];
+        uint32_t k;
+        memset(s1, 'S', sizeof s1);
+        memset(s2, 'T', sizeof s2);
+        for (k = 0; k < 3u; k++) {
+            bad += check("3.0.5 song: empty at first", st_load(OBJ_SONG0 + k, g, sizeof g) < 0);
+            bad += check("3.0.5 song: saved", st_save(OBJ_SONG0 + k, s1, sizeof s1) == 0 &&
+                         st_load(OBJ_SONG0 + k, g, sizeof g) == (int)sizeof s1 && !memcmp(g, s1, sizeof s1));
+            bad += check("3.0.5 song: saved over (same sector)", st_save(OBJ_SONG0 + k, s2, sizeof s2) == 0 &&
+                         st_load(OBJ_SONG0 + k, g, sizeof g) == (int)sizeof s2 && !memcmp(g, s2, sizeof s2));
+            bad += check("3.0.5 song: and again", st_save(OBJ_SONG0 + k, s1, sizeof s1) == 0 &&
+                         st_load(OBJ_SONG0 + k, g, sizeof g) == (int)sizeof s1 && !memcmp(g, s1, sizeof s1));
+        }
+        bad += check("3.0.5 song: the three apart", st_load(OBJ_SONG0, g, sizeof g) == (int)sizeof s1 &&
+                     st_save(OBJ_SONG0 + 1u, s2, 0) == 0 && st_load(OBJ_SONG0 + 1u, g, sizeof g) == 0 &&
+                     st_load(OBJ_SONG0 + 2u, g, sizeof g) == (int)sizeof s1 && st_load(OBJ_SONG0, g, sizeof g) == (int)sizeof s1);
+        fail_after = 4;
+        st_save(OBJ_SONG0 + 2u, s2, sizeof s2);
+        fail_after = -1;
+        n = st_load(OBJ_SONG0 + 2u, g, sizeof g);
+        bad += check("3.0.5 song: a torn save reads as empty", n < 0);
     }
     {   /* 2.6: SAVE > PROJECT > ERASE (project.c project_erase), as the editor's restore of an empty slot: an object
          * of no bytes; a load reads 0 bytes (proj_fetch: no project), the next save works as ever */

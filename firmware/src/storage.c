@@ -21,7 +21,11 @@
  * (upreset.c); the working project (autosave, project.c): copy A 0x9F000, copy B 0xFE000 (the two sectors
  * left: A/B needs no two neighbours); the FM6 patch bank (fm6_bank.c, SLOOP 2.4): 0xE5000 / 0xE6000, the first
  * two sectors of the free 0xE5000..0xFBFFF after the update staging (FL_FM6, fm1_flash.h) */
-enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_AUTOSAVE = OBJ_UPRESET0 + 2, OBJ_FM6BANK, OBJ_COUNT };
+/* KARMA 3.0.5: the saved songs (project.c, SAVE > SONGS), one sector each (no A/B: an interrupted save loses that saved
+ * song only): SONG 1, 2 in the FM6 bank's sectors (FM6 is gone; an old bank there has another type: reads as empty),
+ * SONG 3 at 0xFB000 */
+enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_AUTOSAVE = OBJ_UPRESET0 + 2, OBJ_FM6BANK, OBJ_SONG0,
+       OBJ_COUNT = OBJ_SONG0 + 3 };
 
 typedef struct {
     uint32_t magic;
@@ -55,8 +59,11 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return 0xFC000u + copy * ST_SECTOR;
     if (obj == OBJ_AUTOSAVE)
         return copy ? 0xFE000u : 0x9F000u;
-    if (obj == OBJ_FM6BANK)
+    if (obj == OBJ_FM6BANK)                           /* (unused since FM6 went: its sectors hold SONG 1, 2) */
         return 0xE5000u + copy * ST_SECTOR;
+    if (obj >= OBJ_SONG0)                             /* one sector: both "copies" are it (the header's slot tells
+                                                     * which write it was; st_save3 alternates it) */
+        return obj == OBJ_SONG0 + 2u ? 0xFB000u : 0xE5000u + (obj - OBJ_SONG0) * ST_SECTOR;
     if (obj >= OBJ_UPRESET0 && obj < OBJ_AUTOSAVE)
         return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
