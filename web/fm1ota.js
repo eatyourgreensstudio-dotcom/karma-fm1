@@ -19,6 +19,14 @@ export const OUR_LOADER = (id) => /^ota-FM-1_9\d\d$/i.test(id.text);
 // the names Windows / macOS give the stock firmware
 export const FM1_PORT = /fm-1|felucca|karma|sloop|clipper|ota|composite|sinco|usb-midi/i;
 
+// (2026-11-08) the MIDI port names a failed search met, for the anonymous counts: is a new FM-1 (M-VAVE's V16) under a
+// name FM1_PORT does not know? At most three, 20 characters each; a name that may be a person's ("Ariel's iPhone",
+// a network session) is "*"
+export function safeNames(names) {
+  return (names || []).slice(0, 3).map((n) => /['\u2019@]|iphone|ipad|macbook|network|session/i.test(n) ? "*"
+    : String(n).replace(/[^\w .()\-]/g, "").slice(0, 20));
+}
+
 // errors carry a code the pages translate: notfound, model, stopped, noloader, lost, noreturn,
 // mismatch (detail: the identity the device reports), badreq, foreign (detail: the loader's identity)
 function fail(code, msg, detail = "") { const e = new Error(msg); e.code = code; e.detail = detail; return e; }
@@ -152,6 +160,11 @@ export class Updater {
     return !p.ports ? "noports" : !p.fm1 ? "nofm1" : p.busy && !p.silent ? "busy" : "silent";
   }
 
+  // the names of the MIDI inputs there are (connected)
+  names() {
+    return [...this.access.inputs.values()].filter((p) => p.state !== "disconnected").map((p) => p.name || "?");
+  }
+
   // the MIDI inputs there are, for the "not found" message: " (MIDI: a, b)" (a port the installer skipped shows)
   seen() {
     const names = [...this.access.inputs.values()].filter((p) => p.state !== "disconnected").map((p) => p.name || "?");
@@ -204,6 +217,7 @@ export class Updater {
     if (!dev) {
       const e = fail("notfound", "FM-1 not found (USB cable, and no other app using it?)", this.seen());
       e.reason = this.why();
+      e.names = this.names();
       throw e;
     }
     const [model] = product.split("_");
