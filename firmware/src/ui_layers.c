@@ -1071,8 +1071,8 @@ static void hold_screen_draw(void)
         str_cpy(b, "track 1", sizeof b);
         b[6] = (char)('1' + ui.hold_trk);
     } else {
-        str_cpy(b, "project in slot 1", sizeof b);
-        b[16] = (char)('0' + clamp(song.g[G_SLOT], 1, 4));
+        str_cpy(b, "into part A", sizeof b);
+        b[10] = (char)('A' - 1 + clamp(song.g[G_SLOT], 1, 4));
     }
     te_text_c(120, 4, b, TE_G4);
     te_text_c(120, 30, "keep holding", TE_G3);

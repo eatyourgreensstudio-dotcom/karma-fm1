@@ -1281,7 +1281,7 @@ int main(int argc, char **argv)
         uint32_t i, e0 = erases;
         song.playing = 0;
         go_home(); frame();
-        for (i = 0; i < NPAGES; i++) if (!strcmp(PAGES[i].title, "PROJECT")) break;
+        for (i = 0; i < NPAGES; i++) if (!strcmp(PAGES[i].title, "PARTS")) break;
         open_family(PAGES[i].fam); ui.page = (uint8_t)i; ui.fam_last[PAGES[i].fam] = (uint8_t)i; page_entered(); ui.force = 1; frame();
         check(PAGES[ui.page].graph == GR_SLOTS && PAGES[ui.page].id[1] == 0xFFu, "SAVE > PROJECT: KNOB 2 free for ERASE (no parameter)");
         song.g[G_SLOT] = 2;
@@ -1304,7 +1304,7 @@ int main(int argc, char **argv)
         go_home(); frame();
         for (i = 0; i < NPAGES; i++) if (!strcmp(PAGES[i].title, "SONGS")) break;
         check(i < NPAGES && PAGES[i].fam == FAM_SAVE && PAGES[i].graph == GR_SONGS, "SAVE > SONGS: a page of the SAVE family");
-        check(i > 0 && !strcmp(PAGES[i - 1].title, "PROJECT"), "  right after PROJECT");
+        check(i > 0 && !strcmp(PAGES[i - 1].title, "PARTS"), "  right after PARTS");
         open_family(PAGES[i].fam); ui.page = (uint8_t)i; ui.fam_last[PAGES[i].fam] = (uint8_t)i; page_entered(); ui.force = 1; frame();
         ui.sslot = 0;
         encs[panel.enc[EN_K1]] = 5; frames(2);

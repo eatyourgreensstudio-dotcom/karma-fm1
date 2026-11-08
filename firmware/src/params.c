@@ -170,6 +170,7 @@ static void preset_extras(int16_t *p, const preset_t *pr)
 }
 
 
+static const char *const PART_N[5] = {"", "A", "B", "C", "D"};   /* GLO G_SLOT (1..4): SAVE > PARTS */
 static const param_desc_t GP[G_COUNT] = {
     [G_BPM] = PD("BPM", F_BPM, 40, 240, 90),
     [G_SWING] = PD("SWING", F_SWING, 0, 100, 0),
@@ -188,7 +189,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_ROUTE] = PE("IN", N_MIN, 0),               /* MIDI IN: NOTES (and the clock), CLOCK only, or CH n: that channel plays the
                                                    * selected track (a setting of the FM-1; it starts at CH 1: panel.c lights_min) */
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
-    [G_SLOT] = PD("SLOT", F_INT, 1, 4, 1),
+    [G_SLOT] = {"PART", F_ENUM, 1, 4, 1, PART_N, 0},   /* (3.0.5) the song's part A..D, as the SONG screen names them */
     [G_NAME] = PE("NAME", N_DASH, 0),
     [G_LOAD] = PE("LOAD", N_GO, 0),
     [G_SAVE] = PE("SAVE", N_GO, 0),
@@ -514,7 +515,9 @@ static const page_t PAGES[] = {
     {"TEXTURE 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_TXRATE, G_TXWHEN, G_TXDUCK, 0xFF}},
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
-    {"PROJECT", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},   /* (KNOB 2: ERASE, 2.6: ui_input.c) */
+    {"PARTS", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},   /* (KNOB 2: ERASE, 2.6: ui_input.c; 3.0.5:
+                                                                         * PROJECT was SLOOP's name: they are the song's
+                                                                         * parts A..D, whole songs are on SONGS) */
     {"SONGS", FAM_SAVE, SC_GLOBAL, GR_SONGS, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (3.0.5) saved songs: SONG ERASE LOAD SAVE */
     {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_NONE, {G_CLRSEQ, G_INITSND, 0xFF, G_NEWPRJ}},
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},

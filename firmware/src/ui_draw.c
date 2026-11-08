@@ -470,7 +470,7 @@ static void graph_user(void)
     }
 }
 
-/* project slots: used / empty, the selected one in white */
+/* the song's parts A..D (SAVE > PARTS): used / empty, the selected one in white */
 static void graph_slots(void)
 {
     uint32_t i;
@@ -478,7 +478,7 @@ static void graph_slots(void)
         int32_t y = 8 + (int32_t)i * 26;
         char b[4];
         int sel = (int32_t)i + 1 == song.g[G_SLOT];
-        b[0] = (char)('1' + i);
+        b[0] = (char)('A' + i);
         b[1] = 0;
         if (sel)
             cv_rect(4, y + 6, 3, 3, C_WHITE);

@@ -672,7 +672,7 @@ static void project_erase(uint32_t slot)
     if (song.playing || transport_req) { ui_message("STOP BEFORE ERASE"); return; }
 #endif
     if (!proj_ok(&proj_slot[slot])) {
-        ui_message("EMPTY SLOT");
+        ui_message("EMPTY PART");
         return;
     }
 #if FELUCCA_FLASH
@@ -725,7 +725,7 @@ static void project_load(uint32_t slot)
         proj_fetch(slot);
 #endif
     if (!proj_ok(p)) {
-        ui_message("EMPTY SLOT");
+        ui_message("EMPTY PART");
         return;
     }
     project_apply(p);
