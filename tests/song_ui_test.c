@@ -18,7 +18,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
 enum {B_FX,B_SCL,B_ENV,B_LFO,B_EDIT,B_GLO,B_HOME,B_SAVE,B_ARP,B_SEQ,B_PLAY,B_REC,B_OCTDN,B_OCTUP,NB};
 enum {EN_SELECT,EN_ALGO,EN_PRESET,EN_K1,EN_K2,EN_K3,EN_K4,NE};
 static struct {uint8_t btn[NB];} panel;
-static struct {uint8_t home,page,force,msg_t;char msg[24];} ui;
+static struct {uint8_t home,page,force,msg_t,arm,arm_t,sslot;char msg[24];} ui;
 static int32_t enc[NE];
 static uint32_t ready, scene_saves, order_saves, loads;
 static uint32_t arrangement_ready(void) {return ready;}
@@ -32,6 +32,12 @@ static void project_load(uint32_t i) {(void)i;loads++;}
 static void settings_save(void) {}
 static void arrangement_save(void) {order_saves++;}
 static void ui_message(const char *s) {str_cpy(ui.msg,s,sizeof ui.msg);ui.msg_t=40;}
+static void ui_say(const char *a,const char *b) {str_cpy(ui.msg,a,sizeof ui.msg);str_cpy(ui.msg+str_len(ui.msg),b,sizeof ui.msg-str_len(ui.msg));ui.msg_t=40;}
+#define NSONG 3u                                     /* (3.0.5) the saved songs: project.c */
+static uint32_t song_gos;
+static void song_go(uint32_t op,uint32_t k) {(void)op;(void)k;song_gos++;}
+static uint32_t song_info_of(uint32_t k) {return k==0u?0x83u:0u;}
+static void project_erase(uint32_t i) {ready&=~(1u<<i);}
 static void go_home(void) {ui.home=1;}
 static void open_family(uint32_t f) {(void)f;ui.home=1;}
 static int32_t panel_enc(uint32_t i) {int32_t s=enc[i];enc[i]=0;return s;}

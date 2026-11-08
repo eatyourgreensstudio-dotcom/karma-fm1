@@ -442,25 +442,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         up_ui(slot - 1u, ui.uslot);
         return;
     }
-    if (pg->graph == GR_SONGS) {                          /* (3.0.5) KNOB 1 the song; ERASE / LOAD / SAVE: GO buttons */
-        static const char *const SG_GO[3] = {"ERASE", "LOAD", "SAVE"};
-        if (slot == 0u) {
-            ui.sslot = (uint8_t)clamp((int32_t)ui.sslot + steps, 0, (int32_t)NSONG - 1);
-            ui.arm = 0;
-            return;
-        }
-        if (steps <= 0)
-            return;
-        if (ui.arm != 0xF0u + slot) {                     /* one detent arms, a second one within ~1.5 s acts */
-            ui.arm = (uint8_t)(0xF0u + slot);
-            ui.arm_t = 90;
-            ui_say("AGAIN: ", SG_GO[slot - 1u]);
-            return;
-        }
-        ui.arm = 0;
-        song_go(slot - 1u, ui.sslot);
-        return;
-    }
     if (pg->graph == GR_SLOTS && slot == 1u) {           /* 2.6: KNOB 2 ERASE, a GO button (the slot KNOB 1 picks) */
         if (steps <= 0)
             return;
@@ -529,7 +510,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         }
 #endif
         project_new();
-        ui_message("NEW PROJECT");
+        ui_message("NEW LOOP");
         break;
     default:
         break;
@@ -688,6 +669,12 @@ static void layer_tap(uint32_t layer)
         break;
     case LY_ERASE:
     case LY_STEP:
+#if FELUCCA_ARRANGER
+        if (on_song_page() && layer == LY_ERASE) {         /* (3.0.5) SONG: EDIT twice erases the part at the cursor */
+            song_edit_tap();
+            break;
+        }
+#endif
         if (on_drum_page() && layer == LY_ERASE) {        /* DRUMS: EDIT -> the sound's pages (HEX OSC ..) */
             open_family(FAM_EDIT);
             break;
@@ -725,7 +712,7 @@ static void layer_tap(uint32_t layer)
         break;
     case LY_SONG:                                         /* SAVE tapped: TRACKS -> the song, else the SAVE pages */
         if (on_song_page())
-            arrangement_save();
+            song_save_tap();                              /* (3.0.5) the saved songs and back (the order keeps itself) */
         else if (!ui.home && cur_page()->scope == SC_TRK)
             studio_open(SC_SONG);
         else if (on_drum_page())
@@ -1136,7 +1123,7 @@ static void ui_input(void)
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
-            ((pg->graph == GR_USER || pg->graph == GR_SONGS) && k == 0u)) {   /* (not an empty column, nor "DRUM TRACK") */
+            (pg->graph == GR_USER && k == 0u)) {     /* (not an empty column, nor "DRUM TRACK") */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
         }

@@ -118,6 +118,10 @@ static void studio_open(uint32_t scope)
     uint32_t i;
     if (scope == SC_SONG && rec_wait)
         rec_wait = 0;                                   /* (an arm does not follow into the song page) */
+#if FELUCCA_ARRANGER
+    if (scope == SC_SONG)
+        song_bank = 0;                                  /* (3.0.5) the song first, its saved songs a SAVE away */
+#endif
     for (i = 0; i < NPAGES; i++) if (PAGES[i].scope == scope) {
         ui.page = (uint8_t)i; ui.home = 0; song.seq_mode = 0; ui.force = 1;
         ui.msg_t = 0; ui.entry_open = 0; return;

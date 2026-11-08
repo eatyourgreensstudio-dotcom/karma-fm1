@@ -464,7 +464,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
        FAM_COUNT };
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK, SC_SONG, SC_DRUM };
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
-       GR_SLCR, GR_INS, GR_HEX, GR_DGEN, GR_SONGS };
+       GR_SLCR, GR_INS, GR_HEX, GR_DGEN };
 
 typedef struct {
     const char *title;
@@ -515,10 +515,8 @@ static const page_t PAGES[] = {
     {"TEXTURE 2", FAM_GLO, SC_GLOBAL, GR_NONE, {G_TXRATE, G_TXWHEN, G_TXDUCK, 0xFF}},
     {"PRESETS", FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* browser: PRESETS knob / KNOB 1 */
     {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
-    {"PARTS", FAM_SAVE, SC_GLOBAL, GR_SLOTS, {G_SLOT, 0xFF, G_LOAD, G_SAVE}},   /* (KNOB 2: ERASE, 2.6: ui_input.c; 3.0.5:
-                                                                         * PROJECT was SLOOP's name: they are the song's
-                                                                         * parts A..D, whole songs are on SONGS) */
-    {"SONGS", FAM_SAVE, SC_GLOBAL, GR_SONGS, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (3.0.5) saved songs: SONG ERASE LOAD SAVE */
+    /* (3.0.5) PROJECT (PARTS) and SONGS are gone from SAVE: the song's parts and the saved songs live on the SONG screen
+     * (ui_song.c: REC stores, OCT+ x2 loads, EDIT x2 erases a part; SAVE: the songs). SAVE here is the sound's */
     {"TOOLS", FAM_SAVE, SC_GLOBAL, GR_NONE, {G_CLRSEQ, G_INITSND, 0xFF, G_NEWPRJ}},
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},

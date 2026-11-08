@@ -35,6 +35,8 @@ mkdir -p build/gen
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
+$CC -o "$OUT/lz_test" tests/lz_test.c -Ifirmware/src
+run "saved songs: LZ4 blocks round-trip, never overrun (3.0.5)" "$OUT/lz_test"
 
 $CC -o "$OUT/recovery_test" tests/recovery_test.c
 run "application USB recovery and boot-loop guard" "$OUT/recovery_test"
