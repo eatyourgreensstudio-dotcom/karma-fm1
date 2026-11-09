@@ -148,7 +148,7 @@ The layers are **FX** (punch-in effects), **EDIT** (erase), **ARP** (note repeat
 | --- | --- | --- |
 | **PLAY** | start / stop all tracks (in song mode: play the song). Works inside every layer | — |
 | **REC** | playing: record now / stop recording · stopped: arm (*rec ready*) · free take: close the loop · count-in: cancel | ~2 s: **clear the selected track** (a ring fills; let go before it is full and nothing happens) |
-| **SAVE** | on TRACKS or DRUMS: the **SONG** screen · on the SONG screen: save the song · elsewhere: the **SAVE pages** | the **song layer** (sections A–D, chain, song mode, SONG REC) |
+| **SAVE** | on TRACKS or DRUMS: the **SONG** screen · on the SONG screen: the **saved songs** (SONG 1–3) · elsewhere: the **SAVE pages** (the sound's presets, tools) | the **song layer** (sections A–D, chain, song mode, SONG REC) |
 | **HOME** | the **TRACKS** screen · on TRACKS: the **visualiser** (HOME again closes it) | 0.7 s: the **menu** (SCREEN, LIGHTS, AUDIO, SYSTEM); hold again to leave it |
 | **ENV** | ENV pages (ENV, ENV DEST) | — |
 | **LFO** | LFO pages (LFO, LFO DEST) | — |
@@ -567,10 +567,11 @@ A muted track fades out in a few milliseconds and plays no new notes; its patter
 | **Clear the selected track** | **hold REC** ~2 s (after 0.7 s a ring fills; let go before it is full: nothing). Undo brings it back |
 | **Clear the pattern** | SAVE → TOOLS → **CLRSQ** (GO) |
 | **Reset the sound** | SAVE → TOOLS → **INIT** (GO): the engine's defaults and first preset |
-| **New project** | SAVE → TOOLS → **NEW** (GO): the four tracks back to their power-on sounds, empty patterns, 90 BPM (stop the song first in song mode; undo brings back only the last track's pattern, so save a section first if in doubt) |
-| **Save the loop as a section / project** | **SAVE + key 5–8** (A–D = project slots 1–4) |
-| **Save / load a project** | SAVE → PROJECT: **SLOT** 1–4, **LOAD** (GO), **SAVE** (GO) |
-| **Erase a saved project / section** (2.6) | SAVE → PROJECT: **SLOT** 1–4 (= sections A–D), **ERASE** on KNOB 2 (GO), the song stopped: the slot is *EMPTY* again and its section key goes dark. The steps of the song that played it are taken out (the others keep their order; none left: the default song A B C D). Your working loop is not touched. No undo: save it into another slot first if in doubt |
+| **New loop** | SAVE → TOOLS → **NEW** (GO): the four tracks back to their power-on sounds, empty patterns, 90 BPM (stop the song first in song mode; undo brings back only the last track's pattern, so save a section first if in doubt) |
+| **Save the loop as a section** | **SAVE + key 5–8** (A–D), or **REC** on the SONG screen (the step's section). After SAVE + 5–8, what you change next stays in the loop (build the next section, then store it) until you pick a section again (SAVE + 1–4) |
+| **Load a section as the loop** | **SAVE + key 1–4** (stopped), or **OCT+ twice** on the SONG screen |
+| **Save / load a whole song** (3.0.5) | on the SONG screen tap **SAVE**: SONG 1–3 (see [Saved songs](#saved-songs-305)) |
+| **Erase a section** | on the SONG screen, the song stopped: **EDIT twice** (within 3 s) erases the step's section: it is *EMPTY* again and its section key goes dark. The steps of the song that played it are taken out (the others keep their order; none left: the default song A B C D). Your working loop is not touched. No undo: save it into another slot first if in doubt |
 | **Save a sound** | SAVE → USER: **SLOT** (1–32), **SAVE** (GO) |
 | **Autosave** | automatic: when the transport is stopped and you have not touched anything for 2.5 s (at most every 20 s), the working project is kept in flash; at power-on KARMA comes back exactly as you left it |
 
@@ -582,10 +583,9 @@ A **project** keeps the four tracks (sounds, patterns, kit, locks, nudges, fill 
 | --- | --- | --- | --- | --- |
 | **PRESETS** | the sound (factory by kind, then user presets) | the engine (next / previous) | — | — |
 | **USER** | **SLOT** 1–32 | **LOAD** (GO) | **ERASE** (GO) | **SAVE** (GO) |
-| **PROJECT** | **SLOT** 1–4 | **ERASE** (GO, 2.6) | **LOAD** (GO) | **SAVE** (GO) |
 | **TOOLS** | **CLRSQ** (GO) | **INIT** (GO) | — | **NEW** (GO) |
 
-GO: one click shows *AGAIN: SAVE* (or LOAD…), a second click within about 1.5 s does it. Presets and projects are written to flash only while the song is stopped.
+GO: one click shows *AGAIN: SAVE* (or LOAD…), a second click within about 1.5 s does it. Presets and projects are written to flash only while the song is stopped. (3.0.5: the sections and whole songs moved to the SONG screen.)
 
 ---
 
@@ -612,7 +612,8 @@ Open it with **SAVE tapped on TRACKS** (or on DRUMS), or **SAVE + key 16**. It s
 | KNOB 3 | its length: 1–64 bars (default 4), or below 1 **LOOP**: the section's own length, played once |
 | KNOB 4 | the number of steps in the song (1–16) |
 | **REC** | stores the current loop into the step's section (a used section: REC again within 3 s) |
-| **SAVE** (tap) | saves the song |
+| **SAVE** (tap) | the **saved songs** (below); SAVE again: back. The song order is kept by itself (3.0.5) |
+| **EDIT** twice (within 3 s) | erases the step's section (stopped) |
 | **OCT−** | loop / song mode |
 | **OCT+** twice (within 3 s) | loads the step's section (unsaved work is replaced) |
 | **PLAY** | play / stop |
@@ -621,7 +622,21 @@ Open it with **SAVE tapped on TRACKS** (or on DRUMS), or **SAVE + key 16**. It s
 
 The song's settings can only be edited while it is stopped (*STOP FIRST*). An empty section cannot play (*EMPTY SECTION: REC*).
 
-**Edits stick.** Whatever you change while a section plays (a step erased, a sound, a kit) is kept in that section: when the chain or the song comes back to it, it plays as you left it. Your changes are written to flash when the FM-1 is quiet.
+**Edits stick.** Whatever you change while a section plays (a step erased, a sound, a kit) is kept in that section: when the chain or the song comes back to it, it plays as you left it. Your changes are written to flash when the FM-1 is quiet. **Except right after SAVE + key 5–8 (3.0.5):** the section you just stored keeps what you stored, and your next changes stay in the loop, so you can build the next section and store it with its own key. Pick a section again (SAVE + key 1–4) and its edits stick again.
+
+### Saved songs (3.0.5)
+
+Besides the song you are working on, the FM-1 keeps **three saved songs**. Each holds the four sections, the song order and your loop. On the SONG screen tap **SAVE**:
+
+| Control | Does |
+| --- | --- |
+| KNOB 1 | the song: SONG 1–3 (each row shows its sections, or *empty*) |
+| KNOB 2 | **ERASE** (twice) |
+| KNOB 3 | **LOAD** (twice): the song becomes the one you work on (its sections, order and loop replace the current ones) |
+| KNOB 4 | **SAVE** (twice): the current sections, order and loop into that song |
+| **SAVE** | back to the SONG screen |
+
+Stop first (*STOP FIRST*). Save the current song before you load another if you want to keep it.
 
 ---
 
