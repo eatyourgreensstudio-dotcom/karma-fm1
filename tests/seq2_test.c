@@ -27,6 +27,15 @@ static struct { uint8_t force; } ui;
 static uint8_t sync_reload;
 #include "../firmware/src/arranger_scene.c"
 
+/* project.c section_store (firmware only, past PROJ_HOST): what SAVE + 5..8 does to the parts */
+static void store_part(uint32_t s)
+{
+    s &= 3u;
+    proj_capture(&proj_slot[s]);
+    live_sec = (int8_t)s;
+    sec_fresh = (int8_t)s;
+}
+
 static uint64_t blk;
 typedef struct { uint64_t blk; uint8_t note, vel; } hit_t;
 static hit_t hits[200000];
@@ -1609,6 +1618,44 @@ static void t_edits_stick(void)
          dstep_has(&TDRUM->dstep[12], 5) && live_sec == -1;
     check(ok, "edits stick in song mode: B keeps the erased hat; STOP brings back the loop from before the song");
     arrangement_enabled = 0;
+    for (i = 0; i < (uint32_t)(FS / CTL); i++)
+        run_block();
+    /* (3.0.5, GitHub issue #3) SAVE + 5 stores the loop in A; the next pattern built after it is not A's (it went
+     * into A, and SAVE + 6 then made A and B the same); A picked again (SAVE + 1): its edits stick again */
+    arrangement_enabled = 0;
+    chain_n = 0;
+    live_sec = -1;
+    proj_slot[0].magic = proj_slot[1].magic = proj_slot[2].magic = proj_slot[3].magic = 0;
+    for (i = 0; i < 16u; i++) {
+        dstep_clr(&TDRUM->dstep[i], 0); dstep_clr(&TDRUM->dstep[i], 2); dstep_clr(&TDRUM->dstep[i], 4); dstep_clr(&TDRUM->dstep[i], 5);
+    }
+    dstep_set(&TDRUM->dstep[0], 0, LV_NORM, 0);      /* pattern 1: a kick on 1 */
+    store_part(0);                                   /* SAVE + 5 (stopped) */
+    sec_kept = 0;
+    transport_req = 1;
+    run_block();
+    dstep_set(&TDRUM->dstep[4], 2, LV_NORM, 0);      /* the next pattern: a snare on 5 (a key at 5000 ms) */
+    for (i = 0; i < 4u * bar && (clk_beat & 3u) != 1u; i++)
+        run_block();
+    section_keep_ui(5400u, 5000u);                   /* (0.4 s later, on beat 2) */
+    ok = !dstep_has(&proj_slot[0].t[TRK_DRUM].dstep[4], 2) && !(sec_kept & 1u) && live_sec == 0;
+    store_part(1);                                   /* SAVE + 6 */
+    ok = ok && dstep_has(&proj_slot[1].t[TRK_DRUM].dstep[4], 2) && !dstep_has(&proj_slot[0].t[TRK_DRUM].dstep[4], 2);
+    check(ok, "issue #3: the pattern built after SAVE + 5 stays out of A; SAVE + 6 stores it in B, A as it was");
+    live_req = 0;                                    /* SAVE + 1: A on the next bar */
+    for (i = 0; i < 8u * bar && live_sec != 0; i++)
+        run_block();
+    ok = live_sec == 0 && sec_fresh == -1 && !dstep_has(&TDRUM->dstep[4], 2);
+    dstep_set(&TDRUM->dstep[12], 5, LV_NORM, 0);     /* A edited while it plays (a key at 9000 ms) */
+    for (i = 0; i < 4u * bar && (clk_beat & 3u) != 1u; i++)
+        run_block();
+    for (i = 0; i < 4u * bar && (clk_beat & 3u) != 2u; i++)
+        run_block();
+    section_keep_ui(9400u, 9000u);
+    ok = ok && dstep_has(&proj_slot[0].t[TRK_DRUM].dstep[12], 5) && !dstep_has(&proj_slot[1].t[TRK_DRUM].dstep[12], 5);
+    check(ok, "issue #3: A picked again (SAVE + 1): its edits stick to it again, B untouched");
+    transport_req = 2;
+    run_block();
     for (i = 0; i < (uint32_t)(FS / CTL); i++)
         run_block();
     reset(120);

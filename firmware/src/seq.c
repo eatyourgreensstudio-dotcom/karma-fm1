@@ -1753,6 +1753,8 @@ static void click_tick(void)
  * song chain (arrangement): each section with the bars it played, from the bar after the arm. */
 static volatile int8_t live_req = -1;              /* section asked for (UI), applied on the next bar */
 static volatile int8_t live_sec = -1;              /* the section playing: last jumped to, loaded or stored */
+static volatile int8_t sec_fresh = -1;             /* (3.0.5, issue #3) the part just stored (SAVE + 5..8): edits do
+                                                    * not stick to it until a part is picked or played again */
 static uint32_t live_bar = 0xFFFFFFFFu;            /* clk_beat / 4 of the last bar seen (= bars the section played) */
 /* QUICK CHAIN (SAVE held, two or more section keys tapped): the sections in order, looped, each for the bars its
  * longest pattern takes (section_bars); the UI writes it whole with the IRQ off, chain_n last (0 = none) */
@@ -1829,6 +1831,7 @@ static void live_block(void)                       /* once a block while playing
             arrangement_apply(s);
             song.rec = 0;                           /* (a take does not run on into another section) */
             live_sec = (int8_t)s;
+            sec_fresh = -1;                         /* (a part picked, or the chain moved on) */
             seq_reset_tracks(clk_pos);              /* on the bar: every track from its step 0 */
             live_bar = 0;
             if (chain_n)

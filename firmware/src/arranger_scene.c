@@ -32,13 +32,15 @@ static uint32_t arr_scene_bars(uint32_t scene) { return section_bars(scene & 3u)
 /* edits stick (2026-10-28, Ariel: erased hits came back each time the chain came round): the section playing (live_sec)
  * takes what was changed while it played, as a SAVE + 5..8 would: in the main loop a moment after the panel was last
  * touched, mid-bar (project.c section_keep_ui; at the section change it cost 0.6 ms on the downbeat, measured on the
- * FM-1), and here when the song stops. sec_kept tells the main loop to write it to flash when quiet */
+ * FM-1), and here when the song stops. sec_kept tells the main loop to write it to flash when quiet.
+ * (3.0.5, GitHub issue #3: the next pattern built after SAVE + 5..8 went into the part just stored, so storing it
+ * made the two equal) Not the part just stored (sec_fresh) until a part is picked again (SAVE + 1..4, a chain) */
 static volatile uint8_t sec_kept;
 static void section_keep(void)
 {
     int32_t s = live_sec;
     uint32_t was;
-    if (s < 0 || s > 3 || !proj_ok(&proj_slot[s]))
+    if (s < 0 || s > 3 || s == sec_fresh || !proj_ok(&proj_slot[s]))
         return;
     was = proj_slot[s].sum;
     proj_capture(&proj_slot[s]);
@@ -53,8 +55,8 @@ static void section_keep_ui(uint32_t now, uint32_t input_ms)
     static uint32_t kept_ms;
     int32_t s = live_sec;
     uint32_t b = clk_beat & 3u, pt0 = PROF_NOW(), was;
-    if (!song.playing || s < 0 || s > 3 || input_ms == kept_ms || now - input_ms <= 300u || (b != 1u && b != 2u) ||
-        !proj_ok(&proj_slot[s]))
+    if (!song.playing || s < 0 || s > 3 || s == sec_fresh || input_ms == kept_ms || now - input_ms <= 300u ||
+        (b != 1u && b != 2u) || !proj_ok(&proj_slot[s]))
         return;
     kept_ms = input_ms;
     was = proj_slot[s].sum;
@@ -87,12 +89,15 @@ static void arrangement_apply(uint32_t scene)
 static project_t song_keep __attribute__((section(".pool")));
 static uint8_t song_kept;
 static int8_t song_keep_sec = -1;              /* the section the loop was, before the song */
+static int8_t song_keep_fresh = -1;            /* .. and the part just stored then (sec_fresh) */
 static void song_backup(void)                  /* (audio ISR: seq_start) */
 {
     proj_capture(&song_keep);
     song_kept = 1;
     song_keep_sec = live_sec;
+    song_keep_fresh = sec_fresh;
     live_sec = -1;                              /* (the loop you made is not the song's first section) */
+    sec_fresh = -1;                             /* (the song's sections keep what is changed in them) */
 }
 static void song_restore(void)                 /* (audio ISR: seq_stop) */
 {
@@ -107,6 +112,7 @@ static void song_restore(void)                 /* (audio ISR: seq_stop) */
     }
     proj_apply(&song_keep, 1);
     live_sec = song_keep_sec;
+    sec_fresh = song_keep_fresh;
     song.sel = (uint8_t)(song_keep.sel < NTRK ? song_keep.sel : 0u);
     sync_reload = 1;
     ui.force = 1;

@@ -1147,6 +1147,7 @@ static void section_store(uint32_t s)
     fm1_irq_off();                                      /* (the audio ISR may be applying a section) */
     proj_capture(&proj_slot[s]);
     live_sec = (int8_t)s;
+    sec_fresh = (int8_t)s;                              /* (3.0.5) the next edits: the loop only, not this part */
     fm1_irq_on();
     sec_dirty |= (uint8_t)(1u << s);
 }
@@ -1155,6 +1156,7 @@ static void section_load(uint32_t s)                    /* stopped: the section 
     s &= 3u;
     project_apply(&proj_slot[s]);
     live_sec = (int8_t)s;
+    sec_fresh = -1;                                     /* (picked: edits stick to it again) */
 }
 static void sections_write(void)                        /* the dirty sections and song into flash */
 {
