@@ -44,7 +44,7 @@ static void sp_knob(uint32_t c, char *d, uint32_t cap)
     if (u[0] == '/') {
         str_cpy(d + str_len(d), " of ", cap - str_len(d));
         str_cpy(d + str_len(d), u + 1, cap - str_len(d));
-    } else if (u[0]) {
+    } else if (u[0] && !str_eq(u, l)) {                /* ("BPM 120 BPM": once) */
         if (u[0] != '%')
             str_cpy(d + str_len(d), " ", cap - str_len(d));
         str_cpy(d + str_len(d), u, cap - str_len(d));
@@ -63,9 +63,8 @@ static void sp_track(void)                             /* "track 2", "drums" */
     sp_cat(n);
 }
 
-static void sp_sound(void)                             /* "JUNO SUB 106" (the engine, then the sound) */
+static void sp_sound_of(const track_t *t)              /* "JUNO SUB 106" (the engine, then the sound) */
 {
-    const track_t *t = TSEL;
     const engine_t *e = ENGINES[t->eng_req % NENGINES];
     char b[16];
     if (is_drum(t))
@@ -88,6 +87,7 @@ static void sp_sound(void)                             /* "JUNO SUB 106" (the en
         sp_cat(b);
     }
 }
+static void sp_sound(void) { sp_sound_of(TSEL); }
 
 static const char *sp_title(void)                      /* the screen's name, as its header says it */
 {
@@ -110,6 +110,78 @@ static const char *sp_title(void)                      /* the screen's name, as 
     return pg->scope == SC_ENGINE && !is_drum(TSEL) ? e->page_title[pg->id[0] != P_E0] : pg->title;
 }
 
+static void sp_kit(void)                               /* the drum track's kit: "HEX BOOM" */
+{
+    char v[12];
+    const char *u;
+    param_format(&DRUM_KIT_DESC, TDRUM->p[P_E0], v, &u);
+    sp_cat(v);
+}
+
+/* the screens that are not a page of four knobs: what a glance at them tells */
+static int sp_special(void)
+{
+    uint32_t i;
+    char n[8];
+    if (ui.menu || ui.layer != LY_PLAY)
+        return 0;
+#if FELUCCA_ARRANGER
+    if (on_song_page()) {
+        if (song_bank) {                                /* (3.0.5) the saved songs */
+            sp_cat(". saved songs. song ");
+            fmt_int(n, (int32_t)ui.sslot + 1);
+            sp_cat(n);
+            sp_cat(song_info_of(ui.sslot) ? ", used" : ", empty");
+            return 1;
+        }
+        sp_cat(arrangement_enabled ? ". song mode. " : ". loop mode. ");
+        for (i = 0; i < arrangement.count && i < ARR_STEPS; i++) {
+            char sec[2] = {(char)('A' + (arrangement.entry[i].scene & 3u)), 0};
+            if (i)
+                sp_cat(", ");
+            sp_cat("part ");
+            sp_cat(sec);
+            if (arrangement.entry[i].bars) {
+                sp_cat(" ");
+                fmt_int(n, arrangement.entry[i].bars);
+                sp_cat(n);
+                sp_cat(arrangement.entry[i].bars == 1u ? " bar" : " bars");
+            } else {
+                sp_cat(" loop");
+            }
+            if (str_len(sp_buf) > ANN_MAX - 24u)
+                break;
+        }
+        return 1;
+    }
+#endif
+    if (!ui.home && cur_page()->scope == SC_TRK) {     /* TRACKS: the four, the selected one first */
+        sp_cat(". ");
+        sp_track();
+        sp_cat(" selected. ");
+        for (i = 0; i < NTRK; i++) {
+            if (i)
+                sp_cat(", ");
+            if (i == TRK_DRUM) {
+                sp_cat("drums ");
+                sp_kit();
+            } else {
+                fmt_int(n, (int32_t)i + 1);
+                sp_cat(n);
+                sp_cat(" ");
+                sp_sound_of(&trk[i]);
+            }
+        }
+        return 1;
+    }
+    if (on_drum_page()) {                              /* the drum kit screen: the kit */
+        sp_cat(". kit ");
+        sp_kit();
+        return 1;
+    }
+    return 0;
+}
+
 static uint32_t sp_sound_sig(void)
 {
     const track_t *t = TSEL;
@@ -123,7 +195,8 @@ static void sp_screen(int all)
     char k[24], n[8];
     sp_buf[0] = 0;
     sp_cat(sp_title());
-    if (ui.layer == LY_PLAY && !ui.menu) {
+    if (sp_special()) {
+    } else if (ui.layer == LY_PLAY && !ui.menu) {
         if (!(is_drum(TSEL) && (str_eq(sp_title(), "DRUMS") || str_eq(sp_title(), "drum kit")))) {
             sp_cat(". ");                               /* (not "drums. drums.") */
             sp_track();

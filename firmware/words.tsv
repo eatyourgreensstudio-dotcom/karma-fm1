@@ -210,3 +210,15 @@ PW/SQ	pulse and square
 PW/NO	pulse and noise
 PW/PW	pulse and pulse
 PLAITS PL	plaits
+# STEP	# steps
+1 STEP	1 step
++# st	plus # semitones
+-# st	minus # semitones
+# st	# semitones
+PAT	pattern
+CH1 #	track 1 channel #
+CH2 #	track 2 channel #
+CH3 #	track 3 channel #
+CH4 #	drum channel #
+OTHER SEL	other channels play the selected track
+MODEL DRUM	model drum
