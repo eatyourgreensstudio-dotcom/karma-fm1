@@ -3,7 +3,7 @@
 /* Felucca user interface. Four columns map to KNOB 1..4. Rendering is lazy:
  * every element remembers what it last drew and is redrawn only on change. */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "KARMA 3.0.5"  /* (3.0.5: three saved songs on the SONG screen, the song order kept by itself, SAVE + 5..8 then the loop (#3), ELEMENTS / PLAITS lighter, no crash browsing PLAITS, SWARM clean; 3.0.4: no overload with ELEMENTS BOW / BLOW (half rate) and a steady split of the cores; the new flash chip (UC25HQ80); clean fades, no stuck MIDI notes, kicks kept (after SLOOP 2.8.3 to 2.8.5); 3.0.3: a project loaded from the menu never overwrites another slot; 3.0.2: SYNC tempo steady; 3.0.1: the PLAITS song-mode crash fixed)  KARMA, free firmware for the FM-1: after SLOOP 2.6, based on Felucca (3.0: the editor reads the number, 2.5.1 and later) */
+#define FELUCCA_VERSION "KARMA 3.1"  /* (3.1: the screen reader, for Charles Vestal's FM-1 Screen Reader (#2); 3.0.5: three saved songs on the SONG screen, the song order kept by itself, SAVE + 5..8 then the loop (#3), ELEMENTS / PLAITS lighter, no crash browsing PLAITS, SWARM clean; 3.0.4: no overload with ELEMENTS BOW / BLOW (half rate) and a steady split of the cores; the new flash chip (UC25HQ80); clean fades, no stuck MIDI notes, kicks kept (after SLOOP 2.8.3 to 2.8.5); 3.0.3: a project loaded from the menu never overwrites another slot; 3.0.2: SYNC tempo steady; 3.0.1: the PLAITS song-mode crash fixed)  KARMA, free firmware for the FM-1: after SLOOP 2.6, based on Felucca (3.0: the editor reads the number, 2.5.1 and later) */
 #endif
 static void project_save(uint32_t slot);
 static void arrangement_save(void);

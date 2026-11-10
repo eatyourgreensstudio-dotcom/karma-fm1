@@ -16,7 +16,7 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 
 ---
 
-> **Status:** 3.0.5, running on a real FM-1. Install it from the browser with the [web installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/)
+> **Status:** 3.1, running on a real FM-1. Install it from the browser with the [web installer](https://eatyourgreensstudio-dotcom.github.io/karma-fm1/webapp/installer/)
 > (Chrome or Edge, a USB data cable); the same page puts the official firmware back. Never for sale, free forever.
 
 ## What's inside
@@ -31,6 +31,7 @@ Four tracks, a drum synth, a 64-step sequencer, generators that keep writing whi
 - **USB.** Shows up as **FM-1 KARMA**: a class-compliant audio interface (stereo, or six-channel STEMS: each track on its own plus the effects) and MIDI in and out. The sequencer can play out as MIDI (one channel a track) and follow a DAW's clock and play button.
 - **Two cores.** The FM-1's second processor core renders tracks alongside the first, balanced as they play, so dense patterns and heavy engines stay clean.
 - **Screens.** OP-1-inspired pixel art drawn for KARMA: every track has a character that reacts to the notes.
+- **Screen reader.** KARMA speaks its screen through Charles Vestal's [FM-1 Screen Reader](https://charlesvestal.github.io/fm1-reader/), with VoiceOver, NVDA, JAWS or TalkBack ([guide](GUIDE.md#screen-reader-31)).
 
 ## Install
 

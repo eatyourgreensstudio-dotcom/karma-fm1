@@ -1110,6 +1110,25 @@ The editor writes presets, the FM6 bank and backups to flash only while the song
 
 ---
 
+### Screen reader (3.1)
+
+KARMA speaks its screen through Charles Vestal's **FM-1 Screen Reader** (<https://charlesvestal.github.io/fm1-reader/>), for blind and low-vision players. Connect the FM-1 by USB, open the reader page in Chrome or Edge and connect it to the FM-1: it speaks with its own voice, or hands the words to VoiceOver, NVDA, JAWS or TalkBack. KARMA sends nothing until a reader connects.
+
+| What you do | What you hear |
+|---|---|
+| The reader connects | the whole screen: the page, the track and its sound, the knobs, the tempo, playing or stopped |
+| **PRESETS** | the sound and its place in the list: "JUNO BASS, 3 of 40" |
+| **ALGORITHM** | the track: "track 2" |
+| A page opens | its name, the track, the sound and its four knobs |
+| A knob turns | its name and value: "cutoff 13%" |
+| **PLAY**, **OCT−** / **OCT+** | "play", "stop", "octave plus 1" |
+| A message on the screen | the message: "SAVED" |
+| **TRACKS** | the selected track, then all four and their sounds |
+| The **SONG** screen | loop or song mode and its parts ("part A 4 bars"); the saved songs, used or empty |
+| The drum kit screen | the kit |
+
+The screen's short names (such as "CUT") are read as words with KARMA's words file, which the reader fetches from KARMA's site. Not spoken yet: the layers' contents (the steps, the mixer), the HOME menu and the notes you play.
+
 ## 25. Backup, rescue, going back, troubleshooting
 
 ### Backup and restore
