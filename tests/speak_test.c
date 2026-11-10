@@ -84,7 +84,7 @@ int main(void)
     check(heard(" of "), "PRESETS turned: the sound and its place in the list (\"3 of 40\")");
     clear();
     encs[panel.enc[EN_ALGO]] = 1; frame(); sframes(20);
-    check(heard("track 2"), "ALGORITHM turned: the new track is said");
+    check(heard("track 2") || heard("2 selected"), "ALGORITHM turned: the new track is said");
     clear();
     tap(B_ENV); sframes(20);
     check(nsaid >= 1u, "a page opened: its name and knobs are said");

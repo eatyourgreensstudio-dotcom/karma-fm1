@@ -156,8 +156,13 @@ static int sp_special(void)
     }
 #endif
     if (!ui.home && cur_page()->scope == SC_TRK) {     /* TRACKS: the four, the selected one first */
-        sp_cat(". ");
-        sp_track();
+        sp_cat(". ");                               /* "tracks. 3 selected." (not "tracks. track 3") */
+        if (song.sel == TRK_DRUM) {
+            sp_cat("drums");
+        } else {
+            fmt_int(n, (int32_t)song.sel + 1);
+            sp_cat(n);
+        }
         sp_cat(" selected. ");
         for (i = 0; i < NTRK; i++) {
             if (i)
