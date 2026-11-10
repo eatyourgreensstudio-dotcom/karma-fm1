@@ -62,6 +62,7 @@ static struct {
     int32_t ratio[4];
     uint8_t dim;
 } opk;
+static uint8_t opk_drawn;                              /* draw_columns ran this frame (ui_speak.c) */
 static void draw_column(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc,
                         int32_t ratio, uint32_t icon)
 {
@@ -858,6 +859,7 @@ static void draw_columns(void)                         /* the four knobs of the 
     const char *lab[4], *val[4], *unit[4];
     uint32_t c;
     draw_columns_set();
+    opk_drawn = 1;
     for (c = 0; c < 4u; c++) {
         lab[c] = opk.lab[c];
         val[c] = opk.val[c];

@@ -112,7 +112,10 @@ static uint32_t page_first(uint32_t fam)            /* the family's first page t
     return 0;
 }
 
-/* transient message in the top bar: a + b */
+/* transient message in the top bar: a + b (KARMA_ANN: and to a screen reader, announce.c) */
+#if KARMA_ANN
+static void ann_say(const char *a, const char *b, uint32_t flags);
+#endif
 static void ui_say(const char *a, const char *b)
 {
     uint32_t n;
@@ -120,6 +123,9 @@ static void ui_say(const char *a, const char *b)
     n = str_len(ui.msg);
     str_cpy(ui.msg + n, b, sizeof ui.msg - n);
     ui.msg_t = 40;
+#if KARMA_ANN
+    ann_say(a, b, 1u);                                 /* (ANN_NOW: the answer to what was just done) */
+#endif
 }
 
 static void ui_message(const char *s) { ui_say(s, ""); }

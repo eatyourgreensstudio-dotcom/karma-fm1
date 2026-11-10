@@ -254,6 +254,14 @@ static void fm1_main(void)
             }
         }
 #if FELUCCA_OTA
+#if KARMA_ANN
+        {   /* a screen reader's SysEx (announce.c), before the editor and the updater look */
+            const uint8_t *p;
+            uint32_t n;
+            if (ota_frame_get(&p, &n) && ann_frame(p, n, fm1_ms))
+                ota_frame_done();
+        }
+#endif
         ed_service();                                   /* web editor SysEx */
         ota_service();                                  /* M-UPGRADE handshake */
         if (usb.ota_req) {                              /* M-UPGRADE upgrade command */
@@ -292,6 +300,10 @@ static void fm1_main(void)
         felucca_dbg.stage = 2;
         ui_leds();
         ui_draw();
+#if KARMA_ANN
+        speak(fm1_ms);                                  /* the screen reader: what changed */
+        ann_tick(fm1_ms);
+#endif
         felucca_dbg.stage = 8;
         autosave_tick();                                /* the working project into flash, when quiet */
 #if FELUCCA_ARRANGER
@@ -301,6 +313,14 @@ static void fm1_main(void)
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
             ui_input();
 #if FELUCCA_OTA
+#if KARMA_ANN
+            {
+                const uint8_t *p;
+                uint32_t n;
+                if (ota_frame_get(&p, &n) && ann_frame(p, n, fm1_ms))
+                    ota_frame_done();
+            }
+#endif
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif
         }

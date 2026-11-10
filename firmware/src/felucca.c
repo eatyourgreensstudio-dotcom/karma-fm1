@@ -62,7 +62,16 @@
 #include "seq.c"
 #include "audio.c"
 #include "panel.c"
+#ifndef KARMA_ANN
+#define KARMA_ANN 1              /* a screen reader on the computer (fm1-reader): announce.c, ui_speak.c */
+#endif
 #include "ui.c"
+#if KARMA_ANN
+#include "ann_words.h"           /* the link to KARMA's words file (tools/gen_words.py, firmware/words.tsv) */
+#define ANN_NAME FELUCCA_VERSION
+#define ANN_MAX 160u             /* a SAY in the SysEx queue as it is (SXQ 64 packets: (160 + 9) / 3 = 56) */
+#include "announce.c"
+#endif
 #include "ui_song.c"
 #include "ui_studio.c"
 #include "ui_op.c"            /* the bands the LIVE screens share: header, knob readouts, track bar */
@@ -72,6 +81,9 @@
 #include "ui_layers.c"       /* hold a function button: what the keys and knobs do (TE style) */
 #include "ui_menu.c"
 #include "ui_input.c"
+#if KARMA_ANN
+#include "ui_speak.c"            /* what the screen shows, for the screen reader */
+#endif
 #ifndef FELUCCA_FLASH
 #define FELUCCA_FLASH 1          /* flash driver + storage.c */
 #endif
@@ -193,6 +205,14 @@ static void ota_commit(const uint8_t *parm)
 #endif
 #if FELUCCA_OTA
 #include "editor.c"          /* web editor SysEx (needs the OTA SysEx plumbing) */
+#if KARMA_ANN
+static int ann_wire_send(const uint8_t *p, uint32_t n)   /* never waits: no room (nobody reading), not sent */
+{
+    if (!usb.config || usb.suspended || sx_busy || SXQ - (so_w - so_r) < (n + 2u) / 3u)
+        return -1;
+    return ota_wire_send(p, n);
+}
+#endif
 #endif
 #if FELUCCA_CDC
 #include "console.c"
