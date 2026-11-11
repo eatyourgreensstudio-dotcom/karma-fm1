@@ -104,6 +104,8 @@ static const char *sp_title(void)                      /* the screen's name, as 
 #endif
     if (ui.home)
         return "home";
+    if (vis_shown())
+        return "visualiser. HOME: back";                /* (HOME on HOME: the full-screen visualiser) */
     if (pg->scope == SC_TRK)
         return "home";                                  /* (the TRACKS page: its header says HOME) */
     if (on_drum_page())
@@ -156,6 +158,8 @@ static int sp_special(void)
         return 1;
     }
 #endif
+    if (vis_shown())
+        return 1;
     if (!ui.home && cur_page()->scope == SC_TRK) {     /* HOME (the TRACKS page): the selected track, its knobs, the four */
         sp_cat(". ");                               /* "home. track 3 selected." */
         sp_track();
@@ -253,7 +257,7 @@ static void speak(uint32_t now)
     }
     sp.cols = opk_drawn && ui.layer == LY_PLAY && !ui.menu;
     opk_drawn = 0;
-    ctx = (uint32_t)ui.page * 31u + ui.home * 7u + (uint32_t)ui.layer * 131u + ui.menu * 977u + song.sel * 3u +
+    ctx = (uint32_t)vis_shown() * 50021u + (uint32_t)ui.page * 31u + ui.home * 7u + (uint32_t)ui.layer * 131u + ui.menu * 977u + song.sel * 3u +
           (uint32_t)sp.cols * 15485863u;
 #if FELUCCA_ARRANGER
     ctx += (uint32_t)on_song_page() * 7919u;

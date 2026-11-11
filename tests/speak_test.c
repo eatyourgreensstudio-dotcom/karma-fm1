@@ -87,6 +87,12 @@ int main(void)
     clear();
     encs[panel.enc[EN_SELECT]] = -2; frame(); sframes(20);
     clear();
+    tap(B_HOME); sframes(20);
+    check(heard("visualiser"), "HOME on HOME: \"visualiser\"");
+    clear();
+    tap(B_HOME); sframes(20);
+    check(heard("home. track 1"), "HOME again: back to HOME");
+    clear();
     {
         uint32_t s0 = sp_sound_sig();
         encs[panel.enc[EN_PRESET]] = 1; frame(); sframes(20);
