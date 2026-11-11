@@ -3616,7 +3616,7 @@ const TEXT = {
     savedSlot: "保存しました: スロット ", loadedSlot: "読み込みました: スロット ", emptySlot: "空のスロットです: ",
     confirmSave: "スロット {n} に上書き保存しますか？", confirmLoad: "スロット {n} を読み込みますか？ 今の音色とパターンは置き換わります。",
     confirmClear: "シーケンスを全部消しますか？", confirmInit: "音色を初期化しますか？",
-    samples: "サンプル", smpHelp: "WAV をドロップするか選んでください。1 スロットに 16 ファイルまで、モノ 22050 Hz の ADPCM で合計約 7 秒。SAMPLE エンジンの SET（または SLICE エンジンの SRC）で USR1〜USR4 を選ぶと鳴ります。ドラムキットは「ドラムキット」ページで。",
+    samples: "サンプル", smpHelp: "WAV をドロップするか選んでください。1 スロットに 16 ファイルまで、モノ 22050 Hz の ADPCM で合計約 7 秒。スロットはドラムキット（「ドラムキット」ページ）か TEXTURE の音（GLO → TEXTURE → SRC = USR1〜USR4）。",
     zones: "ゾーン", smpName: "名前", chooseFiles: "ファイルを選ぶ", upload: "書き込む", erase: "消去", clearList: "リストを消す",
     file: "ファイル", root: "ルート", keys: "鍵盤", length: "長さ", remove: "外す",
     chopOpen: "音を開く", chopHelp: "録音（WAV、MP3、AIFF…）を開くかドロップし、チョップを決めてスロットへ。1 キーに 1 チョップ。長い録音（7 秒以上）でも、使うチョップを選び長さを調整できます。",
@@ -3732,14 +3732,14 @@ const TEXT = {
     kitNo4: "このファームウェアには USR4 がありません（SLOOP 2.4 以降）。",
     kitStep3: "FM-1 に送る",
     kitWhereFM1: "FM-1 では: トラック 4（ドラム）→ KIT = {x}。保存したプロジェクトもこのキットを覚えています。",
-    smpIntro: "FM-1 に入れる自分の音。スロットは 4 つ（USR1〜USR4）、各約 7 秒。スロットには楽器（トラック 1〜3 の SAMPLE エンジンで鳴らす）か、ドラムキット（「ドラムキット」ページで作る）が入ります。",
+    smpIntro: "FM-1 に入れる自分の音。スロットは 4 つ（USR1〜USR4）、各約 7 秒。KARMA ではスロットにドラムキット（「ドラムキット」ページで作る）か、ミックスの下に流れる TEXTURE の音（GLO → TEXTURE → SRC = USR1〜USR4: 最初の音をループ）が入ります。シンセトラックはサンプルを鳴らしません。",
     smpStep1: "スロットを選ぶ",
     smpStep2: "音を作る",
-    smpStep3: "FM-1 に送って鳴らす",
+    smpStep3: "FM-1 に送る",
     smpModeFiles: "ファイルから（1 ファイル = 1 音）",
     smpModeChop: "録音を切り分ける（CHOP）",
-    smpFilesHelp: "楽器用: 各ファイルが自分の音程で鳴り、間の鍵盤は近いファイルを音程を変えて鳴らします。\nピアノ、ベース、パッド、声、数個のワンショットに。ファイル名に音名を入れる（PIANO_C4.wav）か、下で設定。1 スロット 16 ファイルまで、合計約 7 秒。",
-    smpChopHelp: "1 つの録音（ループ、ブレイク、フレーズ）を切って、1 キーに 1 片。\n① 録音を開くかドロップ ② 切る位置を決める: 再生中に TAP（スペースキー）、ヒット検出、グリッド、等分 ③ 要らない片のチェックを外し、長すぎたら短く ④ 下の 3 で送信。",
+    smpFilesHelp: "WAV ファイル 16 個まで、合計約 7 秒。TEXTURE では最初のファイルが自分の音程でミックスの下をループします（パッド、ドローン、環境音）。ドラムは「ドラムキット」ページで（パッドごとに 1 音）。",
+    smpChopHelp: "1 つの録音（ループ、ブレイク、フレーズ）を切り分けます。\n① 録音を開くかドロップ ② 切る位置を決める: 再生中に TAP（スペースキー）、ヒット検出、グリッド、等分 ③ 要らない片のチェックを外し、長すぎたら短く ④ WAV をダウンロードして「ドラムキット」ページのパッドへ。または下の 3 で送信（TEXTURE では最初の片がループ）。",
     smpDrop: "WAV ファイルをここにドロップ",
     smpDropHint: "またはクリックして選ぶ（複数可）",
     smpKeymap: "鍵盤の割り当て",
@@ -3750,10 +3750,10 @@ const TEXT = {
     smpSlotFree: "USR{n} は空です。",
     smpKitHint: "（ドラムキット USR3+4 に使っているなら、ここに送るとキットの半分が消えます。）",
     smpSendTo: "USR{n} に送る",
-    smpPlayOn: "このスロットを鳴らすトラック:",
-    smpWhere: "FM-1 では: シンセトラック、エンジン SAMPLE、SET = USR{n}（EDIT ページの KNOB 1）。上のボタンで自動設定。",
-    smpNoEngine: "このファームウェアでは自動設定できません: SAMPLE エンジンで SET = USR を選んでください。",
-    smpPlaying: "トラック",
+    smpPlayOn: "使う:",
+    smpWhere: "FM-1 では: GLO → TEXTURE → SRC = USR{n}（上のボタンで設定）。TEXTURE の LEVEL、TONE、MOVE で整えます。ドラムキットは「ドラムキット」ページで。",
+    smpNoEngine: "このファームウェアの TEXTURE はスロットを使えません: FM-1 で設定してください。",
+    smpPlaying: "TEXTURE",
     smpFull: "1 スロット 16 ファイルまで",
     chopSendBelow: "送信は下の 3 で。",
     /* SLOOP 2.5: DRUM SYNTH */
@@ -3820,7 +3820,7 @@ const TEXT = {
     savedSlot: "Saved to slot ", loadedSlot: "Loaded slot ", emptySlot: "Empty slot: ",
     confirmSave: "Overwrite slot {n}?", confirmLoad: "Load slot {n}? The current sound and pattern will be replaced.",
     confirmClear: "Clear the whole sequence?", confirmInit: "Reset the sound to the engine defaults?",
-    samples: "Samples", smpHelp: "Drop or choose WAV files. Up to 16 files per slot, stored as mono 22050 Hz ADPCM (about 7 s in all). Select USR1–USR4 with SET on the SAMPLE engine (or SRC on the SLICE engine). Drum kits: the Drum kit page.",
+    samples: "Samples", smpHelp: "Drop or choose WAV files. Up to 16 files per slot, stored as mono 22050 Hz ADPCM (about 7 s in all). A slot is a drum kit (the Drum kit page) or the TEXTURE bed (GLO → TEXTURE → SRC = USR1–USR4).",
     zones: "zones", smpName: "Name", chooseFiles: "Choose files", upload: "Upload", erase: "Erase", clearList: "Clear list",
     file: "File", root: "Root", keys: "Keys", length: "Length", remove: "Remove",
     chopOpen: "Open a sound", chopHelp: "Open or drop a recording (WAV, MP3, AIFF…), mark the chops, send them to a slot: one chop per key. Any length: a recording longer than a slot (7 s) works, keep the chops you want and adjust them.",
@@ -3936,14 +3936,14 @@ const TEXT = {
     kitNo4: "This firmware has no USR4 (SLOOP 2.4 and later).",
     kitStep3: "Send it to the FM-1",
     kitWhereFM1: "On the FM-1: track 4 (drums) → KIT = {x}. A project you save remembers the kit.",
-    smpIntro: "Your own sounds on the FM-1. Four slots (USR1–USR4) of about 7 s each. A slot holds an instrument, played by a synth track with the SAMPLE engine, or a drum kit (made on the Drum kit page).",
+    smpIntro: "Your own sounds on the FM-1. Four slots (USR1–USR4) of about 7 s each. In KARMA a slot holds a drum kit (made on the Drum kit page), or a sound for the TEXTURE bed under the mix (GLO → TEXTURE → SRC = USR1–USR4: its first sound, looped). The synth tracks do not play samples.",
     smpStep1: "Choose a slot",
     smpStep2: "Make the sound",
-    smpStep3: "Send it and play it",
+    smpStep3: "Send it",
     smpModeFiles: "From files (one note per file)",
     smpModeChop: "Chop a recording",
-    smpFilesHelp: "For an instrument: each file plays at its own note, and the keys in between play the nearest file, pitched.\nGood for a piano, a bass, a pad, a voice, or a few one-shots. Put the note in the file name (PIANO_C4.wav) or set it below. Up to 16 files, about 7 s in all.",
-    smpChopHelp: "Cut one recording (a loop, a break, a phrase) into pieces, one per key.\n① Open or drop it. ② Mark the cuts: TAP while it plays (or the space bar), Find hits, Grid or Equal parts. ③ Untick the pieces you don't want, shorten them if it is too long. ④ Send it in step 3 below.",
+    smpFilesHelp: "Up to 16 WAV files, about 7 s in all. As a TEXTURE bed, the first file loops under the mix at its own pitch: a pad, a drone, a field recording. For drums, use the Drum kit page (one sound per pad).",
+    smpChopHelp: "Cut one recording (a loop, a break, a phrase) into pieces.\n① Open or drop it. ② Mark the cuts: TAP while it plays (or the space bar), Find hits, Grid or Equal parts. ③ Untick the pieces you don't want, shorten them if it is too long. ④ Download WAVs and drop them on the Drum kit page's pads; or send them in step 3 below (as a TEXTURE bed, the first piece loops).",
     smpDrop: "Drop WAV files here",
     smpDropHint: "or click to choose them (several at once)",
     smpKeymap: "Which keys play which file",
@@ -3954,10 +3954,10 @@ const TEXT = {
     smpSlotFree: "USR{n} is empty.",
     smpKitHint: "(If it is half of your USR3+4 drum kit, sending here replaces that half.)",
     smpSendTo: "Send to USR{n}",
-    smpPlayOn: "Play this slot on:",
-    smpWhere: "On the FM-1: a synth track, engine SAMPLE, SET = USR{n} (KNOB 1 on the EDIT page). The buttons above set it for you.",
-    smpNoEngine: "This firmware cannot be set from here: choose SAMPLE and SET = USR on the track.",
-    smpPlaying: "Track",
+    smpPlayOn: "Use it:",
+    smpWhere: "On the FM-1: GLO → TEXTURE → SRC = USR{n} (the button above sets it). TEXTURE's LEVEL, TONE and MOVE shape it. For a drum kit, use the Drum kit page.",
+    smpNoEngine: "This firmware has no TEXTURE with your slots: set it on the FM-1.",
+    smpPlaying: "TEXTURE",
     smpFull: "A slot takes 16 files at most",
     chopSendBelow: "Sending: step 3 below.",
     /* SLOOP 2.5: DRUM SYNTH */
@@ -5734,8 +5734,7 @@ function renderSamples() {
       } });
     u.prog = el("progress", { max: 1, value: 0, hidden: true });
     u.send = el("button", { class: "pri", ic: "symbol_upload", onclick: smpSendPage });
-    u.play = el("div", { class: "seg" }, ...[0, 1, 2].map((i) => el("button", { type: "button", "data-i": i, style: `--c:${TCOL[i]}`, class: "trk",
-      onclick: () => smpUseOn(i, P.slot) }, `${t("track")} ${i + 1}`)));
+    u.play = el("div", { class: "seg" }, el("button", { type: "button", onclick: () => smpTexture(P.slot) }, "TEXTURE"));   /* (KARMA: no SAMPLE engine) */
     u.where = el("p", { class: "dim" });
     box.replaceChildren(el("div", { class: "card" },
       el("h2", { ic: "symbol_waves" }, t("samples")),
@@ -5803,7 +5802,7 @@ function smpButtons() {
   if (P.mode === "files") ready = P.draft.files.length && draftBytes(P.draft) <= SMP.MAX_DATA && P.draft.name;
   else { const U = chopUsed(), over = U.use.reduce((a, q) => a + ((q.end - q.start + 1) >> 1), 0) > SMP.MAX_DATA; ready = CH.x && U.use.length && !over && CH.name; }
   u.send.disabled = smpBusy || !ready;
-  for (const b of u.play.children) b.disabled = smpBusy || !x.zones || !hasTracks();
+  for (const b of u.play.children) b.disabled = smpBusy || !x.zones || !dev.dump;
   u.where.textContent = t("smpWhere").replace(/\{n\}/g, k + 1);
 }
 async function smpSendPage() {
@@ -5813,19 +5812,15 @@ async function smpSendPage() {
   P.ui.prog.hidden = true;
   renderSamples();
 }
-/* track i plays slot k: the track selected, engine SAMPLE (its first preset), SET = USRk */
-function smpUseOn(i, k) {
-  if (!dev || !hasTracks()) return;
-  op(async () => {
-    if (dev.sel !== i) { dev.sel = parse[CMD.TRACK](await rq(req.track(i))).sel; await afterSoundChange(); }
-    const e = dev.info.engines.indexOf("SAMPLE");
-    if (e < 0) { sayK("smpNoEngine"); return; }
-    if (dev.dump.engine !== e) { selfLoad(); parse[CMD.PRESET](await rq(req.preset(e, 0))); await afterSoundChange(); }
-    const d = dev.pdesc[dev.info.pe0], v = d && d.names ? d.names.indexOf(`USR${k + 1}`) : -1;
-    if (v < 0) { sayK("smpNoEngine"); return; }
-    userSet(0, dev.info.pe0, v + d.min, true);
-    sayK("smpPlaying", ` ${i + 1}: SAMPLE, SET = USR${k + 1}`);
-  });
+/* the TEXTURE bed plays slot k: GLO > TEXTURE > SRC = USRk (KARMA's synth tracks have no SAMPLE engine; the
+   slot's first sound loops under the mix, fx.c) */
+function smpTexture(k) {
+  if (!dev || !dev.dump) return;
+  const i = dev.gdesc.findIndex((d) => d && d.names && d.names.includes("VINYL") && d.names.includes(`USR${k + 1}`));
+  if (i < 0) { sayK("smpNoEngine"); return; }
+  const d = dev.gdesc[i];
+  userSet(1, i, d.names.indexOf(`USR${k + 1}`) + d.min, true);
+  sayK("smpPlaying", ` SRC = USR${k + 1}`);
 }
 
 /* ---------------------------------------------------------- drum kit (2.4) --- */
