@@ -120,6 +120,13 @@ int main(void)
     clear();
     ui_message("SAVED"); sframes(4);
     check(heard("SAVED"), "a message on the screen is said (\"SAVED\")");
+    go_home(); sframes(20);
+    boot_t = 0; sp.started = 0; clear();                 /* a reader there while the FM-1 starts */
+    sframes(40);
+    check(nsaid == 0u, "during the start-up animation: nothing said");
+    sframes(120);
+    check(heard("home. track") && heard("swing "), "after it: HOME, with its knobs");
+    clear();
     {
         static const uint8_t bye[] = {0x7D, 0x53, 0x52, 2};
         uint32_t before;

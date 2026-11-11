@@ -250,6 +250,12 @@ static void speak(uint32_t now)
     uint32_t c, ctx, snd;
     char k[24];
     int all = ann_where();
+    if (boot_t < BOOT_END) {                           /* the start-up animation: the screen comes after it */
+        opk_drawn = 0;
+        if (all)
+            sp.started = 0;
+        return;
+    }
     if (!ann_on()) {
         sp.started = 0;
         opk_drawn = 0;
