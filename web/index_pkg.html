@@ -117,6 +117,8 @@ const TEXT = {
     denied: "MIDI（SysEx）の使用が許可されませんでした。アドレスバーのサイト設定で MIDI を許可して、もう一度押してください。",
     notfound: "FM-1 が見つかりません。USB ケーブル（データ通信用か）を確かめ、MIDI を使う他のアプリを閉じてから、もう一度押してください。",
     nf_noports: "パソコンに MIDI 機器がひとつも見えていません。FM-1 がまだブラウザに届いていません:",
+    nf_noports_a: "スマホに MIDI 機器がひとつも見えていません。FM-1 がまだブラウザに届いていません:",
+    nf_nofm1_a: "スマホにほかの MIDI 機器は見えていますが、FM-1 が見えていません:",
     nf_nofm1: "ほかの MIDI 機器は見えていますが、FM-1 が見えていません:",
     nf_busy: "FM-1 はつながっていますが、ほかのアプリが使っています:",
     nf_silent: "FM-1 はつながっていますが、応答しませんでした:",
@@ -124,6 +126,9 @@ const TEXT = {
     h_direct: "ハブ・ドック・モニター経由ではなく、パソコンに直接つないでください。",
     h_on: "FM-1 の電源を入れ、ホーム画面が出るまで待ってください。",
     h_mac: "Mac の場合: 「アクセサリの接続を許可しますか」と出たら「許可」を押してください（システム設定 → プライバシーとセキュリティ → アクセサリの接続を許可）。",
+    h_acable: "データ通信用のケーブルを使ってください（USB-C ケーブルには充電専用のものが多くあります）: USB-C どうし、または FM-1 付属のケーブルと USB-C アダプター（OTG）。ハブは使わずに直接つないでください。",
+    h_otg: "スマホによっては（Xiaomi、OPPO、realme、OnePlus など）、OTG がオンのときだけ USB 機器につながります: 設定 →「OTG」で検索 → オンにしてください。しばらく使わないと自動でオフになります。",
+    h_computer: "それでも見つからなければ、パソコンから同じページでインストールしてください。",
     h_close: "MIDI を使うほかのアプリとブラウザのタブをすべて閉じてください（DAW、KARMA などのエディタ、M-UPGRADE、FM-SWITCH）。Windows では FM-1 を同時に使えるアプリはひとつだけです。",
     h_replug: "USB ケーブルを抜いて 5 秒待ち、挿し直してください。",
     h_power: "FM-1 の電源を一度切って、もう一度入れてください。",
@@ -163,6 +168,8 @@ const TEXT = {
     denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
     notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
     nf_noports: "Your computer sees no MIDI device at all, so the FM-1 is not reaching the browser yet:",
+    nf_noports_a: "Your phone sees no MIDI device at all, so the FM-1 is not reaching the browser yet:",
+    nf_nofm1_a: "Your phone sees other MIDI gear, but no FM-1:",
     nf_nofm1: "Your computer sees other MIDI gear, but no FM-1:",
     nf_busy: "The FM-1 is connected, but another app is using it:",
     nf_silent: "The FM-1 is connected but did not answer:",
@@ -170,6 +177,9 @@ const TEXT = {
     h_direct: "Plug it straight into the computer, not into a hub, dock or monitor.",
     h_on: "Switch the FM-1 on and wait until its screen shows the home page.",
     h_mac: "On a Mac: if a message asks to allow the accessory to connect, click Allow (System Settings → Privacy & Security → Allow accessories to connect).",
+    h_acable: "Use a data cable (many USB-C cables only charge): USB-C to USB-C, or the FM-1's cable with a USB-C adapter (OTG). Plug it straight into the phone, not into a hub.",
+    h_otg: "Some phones (Xiaomi, OPPO, realme, OnePlus and others) connect USB devices only while OTG is on: Settings → search for \"OTG\" → turn it on. It switches itself off after a few minutes without use.",
+    h_computer: "Still not found: install from a computer on this same page.",
     h_close: "Close every other app and browser tab that uses MIDI: a DAW, the KARMA or another editor, M-UPGRADE, FM-SWITCH. On Windows only one app at a time can use the FM-1.",
     h_replug: "Unplug the USB cable, wait 5 seconds and plug it back in.",
     h_power: "Switch the FM-1 off and on again.",
@@ -202,6 +212,10 @@ const DEV = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform 
    shown as a list under the status; it turns green when an FM-1 is plugged in meanwhile */
 const HELP = { noports: ["h_cable", "h_direct", "h_on", "h_mac", "h_again"], nofm1: ["h_cable", "h_direct", "h_on", "h_mac", "h_again"],
                busy: ["h_close", "h_replug", "h_again"], silent: ["h_replug", "h_power", "h_close", "h_again"] };
+/* (2026-11-11) Android: every failure 11-09..11 was "noports" on Android (no MIDI device at all): a charging-only
+   cable, or the phone's OTG switch off (some phones turn it off by themselves); a computer is the way out */
+const ANDROID = /Android/.test(navigator.userAgent);
+const HELP_ANDROID = ["h_acable", "h_otg", "h_on", "h_replug", "h_again", "h_computer"];
 let helpReason = null, helpFound = false;
 const showHelp = (reason) => {
   helpReason = reason;
@@ -209,11 +223,12 @@ const showHelp = (reason) => {
   if (!reason) { box.hidden = true; return; }
   box.hidden = false;
   box.classList.toggle("found", helpFound);
-  $("help-head").textContent = helpFound ? t("found") : t("nf_" + reason);
+  const phone = ANDROID && (reason === "noports" || reason === "nofm1");
+  $("help-head").textContent = helpFound ? t("found") : t("nf_" + reason + (phone ? "_a" : ""));
   const ol = $("help-list");
   ol.textContent = "";
   if (!helpFound)
-    for (const k of HELP[reason] || HELP.noports) { const li = document.createElement("li"); li.textContent = t(k); ol.appendChild(li); }
+    for (const k of (phone ? HELP_ANDROID : HELP[reason] || HELP.noports)) { const li = document.createElement("li"); li.textContent = t(k); ol.appendChild(li); }
 };
 const OS = /Android/.test(navigator.userAgent) ? "android" : /CrOS/.test(navigator.userAgent) ? "chromeos"
   : /Mac/.test(navigator.platform) ? "mac" : /Win/.test(navigator.platform) ? "windows" : /Linux/.test(navigator.platform) ? "linux" : "other";

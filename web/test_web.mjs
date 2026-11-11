@@ -1535,9 +1535,10 @@ async function updater() {
                  await why(acc(["FM-1 KARMA", { busy: true }])), await why(acc(["FM-1 KARMA"]))];
       ok(r.join() === "noports,nofm1,busy,silent", `fm1ota.js: 'not found' says why: no MIDI, other gear, FM-1 in use, FM-1 silent (${r.join()})`);
       const page = readFileSync(new URL("./index_pkg.html", import.meta.url), "utf8");
-      ok(["nf_noports", "nf_nofm1", "nf_busy", "nf_silent", "h_cable", "h_direct", "h_on", "h_mac", "h_close", "h_replug", "h_power", "h_again", "found"]
+      ok(["nf_noports", "nf_nofm1", "nf_busy", "nf_silent", "h_cable", "h_direct", "h_on", "h_mac", "h_close", "h_replug", "h_power", "h_again", "found", "h_acable", "h_otg", "h_computer", "nf_noports_a", "nf_nofm1_a"]
            .every((k) => (page.match(new RegExp(`(^|[^A-Za-z_])${k}: "`, "gm")) || []).length === 2),
          "installer: every 'not found' help text in English and Japanese");
+      ok(/const HELP_ANDROID = \["h_acable", "h_otg",/.test(page) && /phone \? HELP_ANDROID :/.test(page), "installer: Android gets its own 'not found' list (data cable, OTG)");
       /* (2026-11-08) the counts name the other gear (is a new FM-1 under an unknown name?), never a person's device */
       const e8 = await new Updater(acc(["Arturia KeyStep Pro"], ["Ari's iPhone"])).install(image, "FM-1_900").then(() => null, (y) => y);
       ok(e8 && e8.reason === "nofm1" && e8.names.length === 2, "fm1ota.js: 'not found' lists the MIDI names it met");
