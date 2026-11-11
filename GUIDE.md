@@ -1123,11 +1123,13 @@ KARMA speaks its screen through Charles Vestal's **FM-1 Screen Reader** (<https:
 | A knob turns | its name and value: "cutoff 13%" |
 | **PLAY**, **OCT−** / **OCT+** | "play", "stop", "octave plus 1" |
 | A message on the screen | the message: "SAVED" |
-| **TRACKS** | the selected track, then all four and their sounds |
+| **HOME** | the selected track, its SWING, LEVEL, STEPS and PAN, then all four tracks and their sounds (3.1.1) |
+| A knob on HOME, **SELECT** | "swing 2", "steps 17"; SELECT: the tempo, "126 B P M" (not while a clock from outside sets it) (3.1.1) |
+| HOME on HOME | "visualiser" (3.1.1) |
 | The **SONG** screen | loop or song mode and its parts ("part A 4 bars"); the saved songs, used or empty |
-| The drum kit screen | the kit |
+| The drum kit screen | the kit; its knobs as they turn (3.1.1) |
 
-The screen's short names (such as "CUT") are read as words with KARMA's words file, which the reader fetches from KARMA's site. Not spoken yet: the layers' contents (the steps, the mixer), the HOME menu and the notes you play.
+The screen's short names (such as "CUT") are read as words with KARMA's words file, which the reader fetches from KARMA's site. Not spoken yet: the layers' contents (the steps, the mixer) and the HOME menu. Knob values are said while a knob turns, so playing the keys stays quiet.
 
 ## 25. Backup, rescue, going back, troubleshooting
 
