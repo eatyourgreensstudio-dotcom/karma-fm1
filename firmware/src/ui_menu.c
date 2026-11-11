@@ -93,19 +93,21 @@ static void draw_menu(void)
                 for (k = 0; k < 4; k++)
                     cv_rect(x + k * 14, 16, 10, 10, TE_COL[k]);
             }
-            cv_text(4, 36, &FONT_S, "SLOOP + FELUCCA BASED", C_AMB);
+            cv_text(4, 36, &FONT_S, "BY ARIEL MUCHNIK", C_AMB);
             cv_text(4, 54, &FONT_S, FELUCCA_VERSION, C_HI);
             cv_text(236 - text_w(&FONT_S, __DATE__), 54, &FONT_S, __DATE__, C_GRAY);   /* build date */
-            cv_text(cv_text(4, 72, &FONT_S, "LEO KUROSHITA", C_HI) + 8, 72, &FONT_S, "@KUROGEDELIC", C_AMB);
+            cv_text(4, 72, &FONT_S, "FELUCCA: LEO KUROSHITA", C_HI);
             cv_text(4, 88, &FONT_S, "H\xDCGELTON INSTRUMENTS", C_HI);   /* Latin-1 U-umlaut */
-            cv_text(4, 104, &FONT_S, "HUGELTON.COM", C_AMB);
+            cv_text(cv_text(4, 104, &FONT_S, "@KUROGEDELIC", C_AMB) + 8, 104, &FONT_S, "HUGELTON.COM", C_AMB);
             cv_text(4, 119, &FONT_S, "GPL-3.0, NO WARRANTY", C_HI);
             cv_text(4, 132, &FONT_S, "GITHUB: KARMA-FM1", C_AMB);   /* (the source: github.com/eatyourgreensstudio-dotcom/karma-fm1) */
-            cv_text(4, 146, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
-            cv_text(4, 159, &FONT_S, "SAMPLES: VERSILIAN (CC0)", C_DIM);
-            cv_text(4, 172, &FONT_S, "+ SONIC PI (CC0)", C_DIM);
-            cv_text(4, 185, &FONT_S, "PHASE: CRISPYZEBRA (GPL)", C_DIM);
-            cv_text(4, 198, &FONT_S, "VOICE: REF. KLATTSCH (MIT)", C_DIM);
+            /* (2026-11-11: the sounds' sources as KARMA has them, LICENSING.md in full; SLOOP's samples, PHASE and
+             * VOICE engines are gone) */
+            cv_text(4, 146, &FONT_S, "BASED ON SLOOP (ISOD89)", C_DIM);
+            cv_text(4, 159, &FONT_S, "303: X0X  JUNO: FM-106", C_DIM);
+            cv_text(4, 172, &FONT_S, "CODE: MUTABLE INSTRUMENTS", C_DIM);
+            cv_text(4, 185, &FONT_S, "DRUMS: LXR-02, ERICA SYNTHS", C_DIM);
+            cv_text(4, 198, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
         } else {
             int32_t x = 4;
             for (i = 0; i < MS_COUNT; i++) {        /* the sections as tabs: this one lit */
