@@ -63,6 +63,22 @@ static struct {
     uint8_t dim;
 } opk;
 static uint8_t opk_drawn;                              /* draw_columns ran this frame (ui_speak.c) */
+#if KARMA_ANN
+/* a screen of its own (HOME, the drum kit) shows its knobs with op_knobs: they go into opk, as draw_columns' do, so
+ * the screen reader says them and their turns (3.1.1, GitHub issue #2: HOME's SWING LEVEL STEPS PAN) */
+static void opk_take(const char *const lab[4], const char *const val[4], const char *const *unit)
+{
+    uint32_t c;
+    opk_drawn = 1;
+    if (lab[0] == opk.lab[0])
+        return;                                         /* (draw_columns: already there) */
+    for (c = 0; c < 4u; c++) {
+        str_cpy(opk.lab[c], lab[c] ? lab[c] : "", sizeof opk.lab[c]);
+        str_cpy(opk.val[c], val[c] ? val[c] : "", sizeof opk.val[c]);
+        str_cpy(opk.unit[c], unit && unit[c] ? unit[c] : "", sizeof opk.unit[c]);
+    }
+}
+#endif
 static void draw_column(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc,
                         int32_t ratio, uint32_t icon)
 {

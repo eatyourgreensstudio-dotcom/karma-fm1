@@ -86,10 +86,16 @@ static int op_is_num(const char *s)
  * in the knob's colour; the knob being turned: its value white, underlined; a value that does nothing
  * now (dim: a bit per knob): grey. A label left empty: an empty column. unit may be 0. A message
  * replaces the band (as te_dials) */
+#if KARMA_ANN
+static void opk_take(const char *const lab[4], const char *const val[4], const char *const *unit);   /* (ui_draw.c) */
+#endif
 static void op_knobs(const char *const lab[4], const char *const val[4], const char *const *unit, const int32_t ratio[4],
                      uint32_t dim, uint32_t sig, uint32_t *cache)
 {
     uint32_t k;
+#if KARMA_ANN
+    opk_take(lab, val, unit);                           /* every frame, for the screen reader (ui_speak.c) */
+#endif
     sig = studio_hash(sig + dim * 977u, ui.msg_t ? ui.msg : "");
     for (k = 0; k < 4u; k++) {
         sig = studio_hash(sig * 7u + (uint32_t)ratio[k] + (ui.hot_t && ui.hot_col == k) * 5003u, lab[k]);

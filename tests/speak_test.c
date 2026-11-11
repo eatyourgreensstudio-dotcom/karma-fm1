@@ -75,6 +75,17 @@ int main(void)
     check(hellos >= 1u, "HELLO answered (name and words link)");
     check(nsaid >= 1u && heard("B P M") && heard("track"), "a new reader hears the whole screen (track, tempo)");
     check(heard("stopped"), "... and that it is stopped");
+    check(heard("home. track 1 selected") && heard("swing ") && heard("steps "), "HOME: the track, then SWING LEVEL STEPS PAN (issue #2)");
+    clear();
+    encs[panel.enc[EN_K3]] = 1; frame(); sframes(20);
+    check(heard("steps 17"), "HOME: KNOB 3 turned: \"steps 17\"");
+    clear();
+    encs[panel.enc[EN_K3]] = -1; frame(); sframes(20);
+    clear();
+    encs[panel.enc[EN_SELECT]] = 2; frame(); sframes(20);
+    check(heard("122 B P M"), "SELECT turned: the tempo");
+    clear();
+    encs[panel.enc[EN_SELECT]] = -2; frame(); sframes(20);
     clear();
     {
         uint32_t s0 = sp_sound_sig();
@@ -84,7 +95,7 @@ int main(void)
     check(heard(" of "), "PRESETS turned: the sound and its place in the list (\"3 of 40\")");
     clear();
     encs[panel.enc[EN_ALGO]] = 1; frame(); sframes(20);
-    check(heard("track 2") || heard("2 selected"), "ALGORITHM turned: the new track is said");
+    check(heard("track 2"), "ALGORITHM turned: the new track is said");
     clear();
     tap(B_ENV); sframes(20);
     check(nsaid >= 1u, "a page opened: its name and knobs are said");

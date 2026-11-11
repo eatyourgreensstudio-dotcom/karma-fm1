@@ -13,6 +13,7 @@ static struct {
     char kv[4][24];                                    /* each knob as last said: "CUT 13%" */
     uint8_t started, playing, cols;
     int8_t oct;
+    int16_t bpm;
 } sp;
 
 static void sp_cat(const char *s)
@@ -104,7 +105,7 @@ static const char *sp_title(void)                      /* the screen's name, as 
     if (ui.home)
         return "home";
     if (pg->scope == SC_TRK)
-        return "tracks";
+        return "home";                                  /* (the TRACKS page: its header says HOME) */
     if (on_drum_page())
         return "drum kit";
     return pg->scope == SC_ENGINE && !is_drum(TSEL) ? e->page_title[pg->id[0] != P_E0] : pg->title;
@@ -155,15 +156,23 @@ static int sp_special(void)
         return 1;
     }
 #endif
-    if (!ui.home && cur_page()->scope == SC_TRK) {     /* TRACKS: the four, the selected one first */
-        sp_cat(". ");                               /* "tracks. 3 selected." (not "tracks. track 3") */
-        if (song.sel == TRK_DRUM) {
-            sp_cat("drums");
-        } else {
-            fmt_int(n, (int32_t)song.sel + 1);
-            sp_cat(n);
-        }
+    if (!ui.home && cur_page()->scope == SC_TRK) {     /* HOME (the TRACKS page): the selected track, its knobs, the four */
+        sp_cat(". ");                               /* "home. track 3 selected." */
+        sp_track();
         sp_cat(" selected. ");
+        if (sp.cols) {                                  /* its knobs first: SWING LEVEL STEPS PAN (issue #2) */
+            char k[24];
+            uint32_t c;
+            for (c = 0; c < 4u; c++) {
+                sp_knob(c, k, sizeof k);
+                if (k[0]) {
+                    if (c)
+                        sp_cat(", ");
+                    sp_cat(k);
+                }
+            }
+            sp_cat(". ");
+        }
         for (i = 0; i < NTRK; i++) {
             if (i)
                 sp_cat(", ");
@@ -268,7 +277,9 @@ static void speak(uint32_t now)
         fmt_int(n, (int32_t)tot);
         sp_cat(n);
         ann_later(sp_buf, ANN_NOW, 120u, now);
-    } else if (sp.cols) {                              /* a knob turning: its name and value */
+    } else if (sp.cols && ui.hot_t) {                  /* a knob turning: its name and value (only while a knob is
+                                                        * turned: a drum key played on the KIT screen picks its
+                                                        * sound, and is not said) */
         for (c = 0; c < 4u; c++) {
             sp_knob(c, k, sizeof k);
             if (k[0] && !str_eq(k, sp.kv[c])) {
@@ -276,6 +287,15 @@ static void speak(uint32_t now)
                 break;
             }
         }
+    }
+    if (sp.started && song.g[G_BPM] != sp.bpm && !mclk_on()) {   /* SELECT, tap tempo: the tempo (not while a
+                                                                    * clock from outside sets it) */
+        char n[8];
+        sp_buf[0] = 0;
+        fmt_int(n, song.g[G_BPM]);
+        sp_cat(n);
+        sp_cat(" B P M");
+        ann_later(sp_buf, ANN_NOW, 200u, now);
     }
     if (sp.started && song.playing != sp.playing)
         ann_say(song.playing ? "play" : "stop", 0, ANN_NOW);
@@ -296,6 +316,7 @@ static void speak(uint32_t now)
     sp.snd = snd;
     sp.playing = song.playing;
     sp.oct = song.octave;
+    sp.bpm = song.g[G_BPM];
     if (sp.cols)
         for (c = 0; c < 4u; c++)
             sp_knob(c, sp.kv[c], sizeof sp.kv[c]);
