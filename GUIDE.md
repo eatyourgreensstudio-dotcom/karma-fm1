@@ -1032,7 +1032,7 @@ The first time, the computer sees the FM-1 as a slightly different device (MIDI 
 
 The FM-1 has **four sample slots**, **USR1–USR4**, of about **7.4 s** each (22 kHz mono). A slot holds **a drum kit**, played by the drum track: **KIT = USR1 … USR4**, or **USR3+4**, one big kit of about **15 s** over two slots. KARMA's synth tracks do not play samples. You fill the slots from the web editor.
 
-The editor's **Samples** page also has **CHOP**, to cut a recording into sounds: open or drop a recording (WAV, MP3, AIFF…), cut it into up to 16 chops, **Download WAVs**, then drop them on the [Drum kit](#a-drum-kit-editor--drum-kit) pads. (The page's buttons that play a slot on a synth track do not work in KARMA: those engines are gone.)
+The editor's **Samples** page also has **CHOP**, to cut a recording into sounds: open or drop a recording (WAV, MP3, AIFF…), cut it into up to 16 chops, **Download WAVs**, then drop them on the [Drum kit](#a-drum-kit-editor--drum-kit) pads. A slot can also be the **TEXTURE** bed under the mix: send your sound to a slot, then press **TEXTURE** on the Samples page (or set GLO → TEXTURE → SRC = USR1–USR4 on the FM-1): its first sound loops.
 
 **CHOP** in detail:
 
@@ -1100,7 +1100,7 @@ Open it from the [installer page](https://eatyourgreensstudio-dotcom.github.io/k
 | **Tracks** | the four channel strips: level, pan, mute, select; SOLO and REC shown as on the device |
 | **Song** | the song order of the [SONG screen](#14-song-mode-sections-chains-songs): a row per section (A–D), its **bars** (1–64) and how many **times** in a row; **▲ ▼** move a row, **✕** removes it, **Add**; **At the end**: stop or start again. **Read from the FM-1**, **Send to the FM-1** (16 entries in all; stop the song first). A section whose slot is empty is marked: save it on the FM-1 first (SAVE + key 5–8) |
 | **Library** | your sound library, kept in the browser: **Save current sound**, search by name or tag, filter by engine, sort, **Audition**, **To device slot**, **Rename**, **Tags**, **Duplicate**, **Delete**, **Export** / **Import** / **Export library**; copy factory presets in. Next to it the **32 user presets on the device**: **Load**, **Store current sound**, **To library**, **Erase**, **Export bank**. Drag sounds between the library and the slots |
-| **Samples** | CHOP: cut a recording into sounds for a drum kit (see [above](#23-your-own-samples-and-drum-kits)) |
+| **Samples** | a sound for a slot (the TEXTURE bed) and CHOP: cut a recording into sounds for a drum kit (see [above](#23-your-own-samples-and-drum-kits)) |
 | **Drum kit** | your own drum kits, in three steps (see [above](#a-drum-kit-editor--drum-kit)) |
 | **Drum synth** | your own HEX kits MY HEX 1–4: every value of every sound (see [above](#your-own-hex-kits-my-hex-14)) |
 | **Projects** | the four project slots (**Load**, **Save**) and **Backup** (see below) |
