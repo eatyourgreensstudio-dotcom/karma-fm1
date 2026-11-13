@@ -209,25 +209,74 @@ static void click_render(int32_t *ml, int32_t *mr, uint32_t n)
 /* (3.0.4, from SLOOP 2.8.3 by isod89) the voice for a drum hit: a free voice; all busy, the sound's own voice if it still
  * sounds (it starts over, as on a drum machine: a 16th hi-hat no longer takes every voice with its own tails); else the
  * oldest, a kick last. Before, the oldest went whatever it was: on a busy beat the kick lost its voice and was cut */
-static voice_t *drum_pick(uint32_t note)
+/* (3.1.2) overload: the HEX drums cost the most on CPU0 (~0.1 ms a voice a block, measured on an FM-1: six voices, the
+ * reverb, the delay and the CLOUD were 30 .. 68 late halves a second, a crackle). When audio.c sheds, the drums go first
+ * while 4 or more sound: their oldest tail (not a kick) fades out and fewer play at once; ~2 s without an overload gives
+ * one back. Never under DRUM_CAP_MIN */
+#define DRUM_CAP_MIN 3u
+#define DRUM_CALM_HALVES 344u                   /* (~2 s) */
+static uint8_t drum_cap = NDRUM;
+static uint16_t drum_calm;
+static uint32_t drum_active(void)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < NDRUM; i++)
+        n += drums.v[i].active ? 1u : 0u;
+    return n;
+}
+static voice_t *drum_oldest(void)               /* the oldest that is not a kick; all kicks: the oldest */
 {
     voice_t *v = 0;
     uint32_t i, best = 0xFFFFFFFFu;
-    for (i = 0; i < NDRUM; i++)
-        if (!drums.v[i].active)
-            return &drums.v[i];
-    for (i = 0; i < NDRUM; i++)
-        if (drums.v[i].note == note)
-            return &drums.v[i];
-    for (i = 0; i < NDRUM; i++) {                   /* the oldest that is not a kick; all kicks: the oldest */
+    for (i = 0; i < NDRUM; i++) {
         uint32_t kick = drums.v[i].note == 35u || drums.v[i].note == 36u;
         uint32_t key = (kick ? 0x80000000u : 0u) | (drums.v[i].age & 0x7FFFFFFFu);
-        if (key < best) {
+        if (drums.v[i].active && key < best) {
             best = key;
             v = &drums.v[i];
         }
     }
-    return v ? v : &drums.v[0];
+    return v;
+}
+static int drum_shed(void)                      /* audio.c's overload: 1 = a drum voice let go */
+{
+    uint32_t n = drum_active();
+    voice_t *v;
+    drum_calm = 0;
+    if (n <= DRUM_CAP_MIN || !(v = drum_oldest()))
+        return 0;
+    v->active = 0;
+    drum_cut((uint32_t)(v - drums.v));          /* (its sound and sends fade: no click) */
+    drum_cap = (uint8_t)(n - 1u);
+    return 1;
+}
+static void drum_calm_half(int over)            /* each half: no overload for a while, one voice back */
+{
+    if (over) {
+        drum_calm = 0;
+    } else if (drum_cap < NDRUM && ++drum_calm >= DRUM_CALM_HALVES) {
+        drum_cap++;
+        drum_calm = 0;
+    }
+}
+static voice_t *drum_pick(uint32_t note)
+{
+    voice_t *v = 0;
+    uint32_t i, best = 0xFFFFFFFFu, room = drum_active() < drum_cap;
+    for (i = 0; i < NDRUM && room; i++)         /* (a free one while under the cap) */
+        if (!drums.v[i].active)
+            return &drums.v[i];
+    for (i = 0; i < NDRUM; i++)
+        if (drums.v[i].active && drums.v[i].note == note)   /* (its own, still sounding: it starts over) */
+            return &drums.v[i];
+    (void)best;
+    v = drum_oldest();                              /* the oldest that is not a kick; all kicks: the oldest */
+    if (v)
+        return v;
+    for (i = 0; i < NDRUM; i++)                     /* (none sounds: a free one) */
+        if (!drums.v[i].active)
+            return &drums.v[i];
+    return &drums.v[0];
 }
 
 /* a synthesised voice: note on the 16 sounds snd (a factory kit, SYN1..4), the oldest voice stolen */

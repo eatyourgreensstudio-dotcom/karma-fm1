@@ -152,6 +152,10 @@ static void shed_voice(void)
 {
     uint32_t p, i;
     voice_t *best = 0;
+    if (drum_shed()) {                          /* (3.1.2) the drums first while 4 or more sound (drums.c) */
+        shed_count++;
+        return;
+    }
     for (p = 0; p < NPART; p++)
         for (i = 0; i < NVOICE; i++) {
             voice_t *v = &trk[p].v[i];

@@ -115,6 +115,49 @@ int main(void)
         lx_osc_freq(&o, 1.0f, 0);
         check(o.band != 4u, "WAVE turned back to SIN during a hit: the sine, not the square table");
     }
+    {                                                /* the overload guard: the drums shed first, then come back */
+        uint32_t n0, n1, n2, h;
+        voice_t *k;
+        reset(0);
+        drum_cap = NDRUM; drum_calm = 0;
+        drum_on(36, 110); drum_on(42, 100); drum_on(38, 100); drum_on(46, 100); drum_on(49, 100); drum_on(51, 100);
+        for (b = 0; b < 4; b++) block();
+        n0 = drum_active();
+        snprintf(t, sizeof t, "overload guard: six drum sounds at once (%u)", n0);
+        check(n0 == 6, t);
+        for (h = 0; h < 10; h++) drum_shed();
+        n1 = drum_active();
+        for (k = 0, l = 0; l < NDRUM; l++) if (drums.v[l].active && drums.v[l].note == 36u) k = &drums.v[l];
+        snprintf(t, sizeof t, "overload: the drums shed down to %u, never under 3, the kick kept (%u)", DRUM_CAP_MIN, n1);
+        check(n1 == DRUM_CAP_MIN && k != 0, t);
+        drum_on(37, 100); drum_on(39, 100);
+        n2 = drum_active();
+        snprintf(t, sizeof t, "overload: new hits steal while capped, still %u at once (%u)", (unsigned)drum_cap, n2);
+        check(n2 <= drum_cap, t);
+        for (h = 0; h < DRUM_CALM_HALVES * 3u + 3u; h++) drum_calm_half(0);
+        snprintf(t, sizeof t, "calm for ~6 s: all %u drum voices back (%u)", NDRUM, (unsigned)drum_cap);
+        check(drum_cap == NDRUM, t);
+        for (b = 0; b < 200; b++) block();
+        {   /* a shed voice fades: the steps around the cut no larger than the sound's own just before it */
+            int32_t pd = 0, w = 0, base = 0;
+            reset(0);
+            drum_on(46, 110); drum_on(49, 110); drum_on(51, 110); drum_on(42, 100);
+            for (b = 0; b < 40; b++) {
+                if (b == 20)
+                    drum_shed();
+                block();
+                for (l = 0; l < 32; l++) {
+                    int32_t d = ml[l] - pd, a = d < 0 ? -d : d;
+                    if (b >= 12 && b <= 19 && a > base) base = a;
+                    if (b >= 20 && b <= 22 && a > w) w = a;
+                    pd = ml[l];
+                }
+            }
+            snprintf(t, sizeof t, "a shed voice fades (steps around the cut %d, before it %d)", (int)w, (int)base);
+            check(w <= base + base / 8, t);
+        }
+        drum_cap = NDRUM;
+    }
     dsu_defaults();
     printf(fails ? "HEX fixes: %d FAILED\n" : "HEX fixes: all ok\n", fails);
     return fails != 0;
