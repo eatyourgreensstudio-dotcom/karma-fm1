@@ -101,11 +101,12 @@ static void draw_menu(void)
             cv_text(cv_text(4, 104, &FONT_S, "@KUROGEDELIC", C_AMB) + 8, 104, &FONT_S, "HUGELTON.COM", C_AMB);
             cv_text(4, 119, &FONT_S, "GPL-3.0, NO WARRANTY", C_HI);
             cv_text(4, 132, &FONT_S, "GITHUB: KARMA-FM1", C_AMB);   /* (the source: github.com/eatyourgreensstudio-dotcom/karma-fm1) */
-            /* (2026-11-11: the sounds' sources as KARMA has them, LICENSING.md in full; SLOOP's samples, PHASE and
+            /* (2026-11-11: the sounds' sources as KARMA has them (Plaits, Elements, Clouds, Grids: Emilie Gillet's code; the
+             * Mutable Instruments name is not used on derivative works, their guidelines), LICENSING.md in full; SLOOP's samples, PHASE and
              * VOICE engines are gone) */
             cv_text(4, 146, &FONT_S, "BASED ON SLOOP (ISOD89)", C_DIM);
             cv_text(4, 159, &FONT_S, "303: X0X  JUNO: FM-106", C_DIM);
-            cv_text(4, 172, &FONT_S, "CODE: MUTABLE INSTRUMENTS", C_DIM);
+            cv_text(4, 172, &FONT_S, "CODE: EMILIE GILLET", C_DIM);
             cv_text(4, 185, &FONT_S, "DRUMS: LXR-02, ERICA SYNTHS", C_DIM);
             cv_text(4, 198, &FONT_S, "FONT: TERMINUS (OFL)", C_DIM);
         } else {

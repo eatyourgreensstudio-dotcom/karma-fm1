@@ -45,6 +45,9 @@ static struct {
     uint32_t age;
     int16_t set;                 /* SMP_SETS index of "PERC" (GM map), -1 = none */
     int32_t tail;                /* declick: the last output of cut voices, decaying */
+    int32_t trev, tdly, tcld;    /* (3.1.2) .. and their reverb, delay and CLOUD sends: they stepped to 0, a click in
+                                  * the echo, the reverb and the grains */
+    int32_t gs[NDRUM][3];        /* each voice's reverb, delay and CLOUD send gains in the last block, Q15 */
     int32_t peak;                /* largest |output| since the UI last looked (TRACKS meter) */
     uint8_t kit[NDRUM];
     int32_t filter[NDRUM], env[NDRUM];
@@ -57,6 +60,16 @@ static struct {
 } drums = {.set = -2};
 
 static int32_t ds_buf[CTL];
+
+/* voice k stops (stolen, choked, ended): what it was playing fades out, its sends too (drums_mix) */
+static void drum_cut(uint32_t k)
+{
+    const int32_t s = drums.v[k].s[7];
+    drums.tail += s;
+    drums.trev += mulq15(s, drums.gs[k][0]);
+    drums.tdly += mulq15(s, drums.gs[k][1]);
+    drums.tcld += mulq15(s, drums.gs[k][2]);
+}
 
 static int32_t drum_set(void)
 {
@@ -227,11 +240,11 @@ static void __attribute__((noinline)) drum_synth_on(uint32_t note, uint32_t vel,
         for (i = 0; i < NDRUM; i++)
             if (drums.v[i].active && drums.v[i].note == 46u) {
                 drums.v[i].active = 0;
-                drums.tail += drums.v[i].s[7];
+                drum_cut(i);
             }
     v = drum_pick(note);                            /* (3.0.4, SLOOP 2.8.3: a free one, its own, else the oldest but a kick) */
     if (v->active)
-        drums.tail += v->s[7];
+        drum_cut((uint32_t)(v - drums.v));
     i = (uint32_t)(v - drums.v);
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
@@ -311,11 +324,11 @@ static void drum_on(uint32_t note, uint32_t vel)
         for (i = 0; i < NDRUM; i++)
             if (drums.v[i].active && drums.v[i].note == 46u) {
                 drums.v[i].active = 0;
-                drums.tail += drums.v[i].s[7];          /* fade what it was playing, not a step */
+                drum_cut(i);                            /* fade what it was playing, not a step */
             }
     v = drum_pick(note);                            /* (3.0.4, SLOOP 2.8.3: a free one, its own, else the oldest but a kick) */
     if (v->active)
-        drums.tail += v->s[7];                      /* stolen voice: fade its last value */
+        drum_cut((uint32_t)(v - drums.v));          /* stolen voice: fade its last value */
     v->note = (uint8_t)note;
     v->vel = (uint8_t)vel;
     v->active = 1;
@@ -376,17 +389,30 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
 {
     uint32_t k, i;
     int32_t lvl = song.g[G_DRLVL] * 200, send, dsend, csend, pk = drums.peak;
-    int32_t kboost = (int32_t)((DRUM_BOOST_Q8 * (drum_kit() < 7u ? DRUM_KIT_TRIM[drum_kit()] : 256u)) >> 8);
+    uint32_t kt = drum_kit();
+    int32_t kboost;
+    if (kt >= DRUM_SYN && kt < DRUM_KITS)            /* (3.1.2) MY HEX: the trim of the HEX kit it started from (it was 256: the
+                                                       * first EDIT knob turned made the kit 3 .. 8.5 dB louder) */
+        kt = dsu.k[(kt - DRUM_SYN) % DSU_N].src % DSU_NSRC;
+    kboost = (int32_t)((DRUM_BOOST_Q8 * (kt < 7u ? DRUM_KIT_TRIM[kt] : 256u)) >> 8);
     int32_t pan = trk[TRK_DRUM].p[P_PAN], gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
-    for (i = 0; i < n && drums.tail; i++) {         /* declick tail, ~0.4 ms */
+#define DRUM_FADE(x) ((x) -= (x) / 16 + ((x) > 0 ? 1 : (x) < 0 ? -1 : 0))
+    for (i = 0; i < n && (drums.tail | drums.trev | drums.tdly | drums.tcld); i++) {   /* declick tails, ~0.4 ms */
         if (mono) {
             mono[i] += drums.tail;
         } else {
             ml[i] += drums.tail;
             mr[i] += drums.tail;
         }
-        drums.tail -= drums.tail / 16 + (drums.tail > 0 ? 1 : drums.tail < 0 ? -1 : 0);
+        rev[i] += drums.trev;
+        dly[i] += drums.tdly;
+        cloud_bus[i] += drums.tcld;
+        DRUM_FADE(drums.tail);
+        DRUM_FADE(drums.trev);
+        DRUM_FADE(drums.tdly);
+        DRUM_FADE(drums.tcld);
     }
+#undef DRUM_FADE
     for (k = 0; k < NDRUM; k++) {               /* synthesised voices: render, then as below */
         voice_t *v = &drums.v[k];
         uint32_t m = n < CTL ? n : CTL;             /* (the mix runs in blocks of CTL) */
@@ -394,6 +420,9 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
             continue;
         drum_voice_sends(k, mono != 0, &send, &dsend);
         csend = drum_cloud[drums.lane[k] % DRUM_LANES] * 258;   /* the sound's own send to the CLOUD (cloud.c) */
+        drums.gs[k][0] = send;                      /* (3.1.2: for drum_cut) */
+        drums.gs[k][1] = dsend;
+        drums.gs[k][2] = csend;
         if (!(drums.synth[k] == 2 ? hex_render(&drums.hx[k], ds_buf, m) : ds_render(&drums.ds[k], ds_buf, m)))
             v->active = 0;
         for (i = 0; i < m; i++) {
@@ -420,7 +449,7 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
                 dly[i] += mulq15(s, dsend);
         }
         if (!v->active) {
-            drums.tail += v->s[7];                  /* ended: no step at the end */
+            drum_cut(k);                            /* ended: no step at the end */
             v->s[7] = 0;
         }
     }
@@ -436,6 +465,9 @@ static inline void drums_mix(int32_t *ml, int32_t *mr, int32_t *rev, int32_t *dl
             continue;
         drum_voice_sends(k, mono != 0, &send, &dsend);
         csend = drum_cloud[drums.lane[k] % DRUM_LANES] * 258;   /* the sound's own send to the CLOUD (cloud.c) */
+        drums.gs[k][0] = send;                      /* (3.1.2: for drum_cut) */
+        drums.gs[k][1] = dsend;
+        drums.gs[k][2] = csend;
         g = mulq15(lvl, v->vel * 258);
         g += g * 3 >> 2;                           /* x1.75 (+5 dB): as loud as the synthesised kits */
         for (i = 0; i < n; i++) {

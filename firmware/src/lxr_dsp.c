@@ -130,6 +130,8 @@ static void lx_osc_freq(lx_osc_t *o, float pitchMod, int table)  /* osc_setFreq 
     const float f = o->freq * pitchMod;
     if (!table && (o->wave == LW_SINE || o->wave == LW_NOISE)) {
         o->inc = lx_u32((((4096 * f) / LX_FS)) * 1048576);        /* freq2PhaseIncr */
+        o->band = 0;                                              /* (3.1.2: not the table of a SAW / SQR / PWM it was:
+                                                                   * WAVE turned back to SIN during a hit played a square) */
     } else {
         const uint32_t r = lx_u32(f / 440.f);                     /* freqToTableIndex: 4 under 440 Hz, then an octave */
         o->inc = lx_u32((((1024 * f) / LX_FS)) * 4194304);        /* freq2PhaseIncr1024 */
@@ -239,7 +241,8 @@ static float lx_pitch_slope(uint32_t data2)           /* DecayEg_setSlope */
 }
 static float lx_eg_time(uint32_t data2, float amount) /* slopeEg2_calcTime (USE_BIG_SAMPLE_BUFFER) */
 {
-    const float val = (data2) / 127.0f;
+    const float val = (data2 > 126u ? 126u : data2) / 127.0f;   /* (3.1.2: 127 gave a step of 0: ATK 127 never rose or a
+                                                                 * clap's repeats droned on, DEC 127 never ended; 127 = 126) */
     const float ret = (1.0f - ((1.0f + amount) * val / (1.0f + amount * lx_fabsf(val)))) * 2.f;
     return ret > 1.f ? 1.f : ret;
 }
