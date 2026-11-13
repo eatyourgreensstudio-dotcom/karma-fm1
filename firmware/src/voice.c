@@ -148,10 +148,15 @@ static void voice_kill(voice_t *v) { voice_kill_n(v, KILL_BLOCKS); }
  * voice budget keeps them: a dense chord on a heavy engine thins out from the top, bass and lead stay. */
 static uint32_t shed_count;
 
+static int cloud_shed(void);                    /* (cloud.c, after) */
 static void shed_voice(void)
 {
     uint32_t p, i;
     voice_t *best = 0;
+    if (cloud_shed()) {                         /* (3.1.2) the CLOUD's grains first (they fade by themselves), */
+        shed_count++;
+        return;
+    }
     if (drum_shed()) {                          /* (3.1.2) the drums first while 4 or more sound (drums.c) */
         shed_count++;
         return;

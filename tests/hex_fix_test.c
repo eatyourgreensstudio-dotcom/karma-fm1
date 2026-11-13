@@ -158,6 +158,36 @@ int main(void)
         }
         drum_cap = NDRUM;
     }
+    {                                                /* the CLOUD under overload: fewer grains, then back */
+        static int32_t in[CTL], cl[CTL], cr[CTL];
+        uint32_t on, h, j;
+        int16_t dens = song.g[G_CLDENS];
+        song.g[G_CLDENS] = 0;                          /* her steady rate at its fastest: every grain */
+        cl_cap = CL_NG;
+        for (b = 0; b < 2000; b++) {
+            for (j = 0; j < CTL; j++) in[j] = (int32_t)((j * 977u + b * 131u) % 16000u) - 8000, cl[j] = cr[j] = 0;
+            cloud_process(in, cl, cr, CTL);
+        }
+        for (on = 0, j = 0; j < CL_NG; j++) on += cloud_cl.g[j].on;
+        snprintf(t, sizeof t, "CLOUD at DENS 0: %u grains at once", on);
+        check(on > CL_CAP_MIN + 2u, t);
+        for (h = 0; h < 20; h++) {
+            cloud_shed();
+            for (j = 0; j < CTL; j++) in[j] = 4000, cl[j] = cr[j] = 0;
+            cloud_process(in, cl, cr, CTL);
+        }
+        for (b = 0; b < 3000; b++) {
+            for (j = 0; j < CTL; j++) in[j] = (int32_t)((j * 977u + b * 131u) % 16000u) - 8000, cl[j] = cr[j] = 0;
+            cloud_process(in, cl, cr, CTL);
+        }
+        for (on = 0, j = 0; j < CL_NG; j++) on += cloud_cl.g[j].on;
+        snprintf(t, sizeof t, "CLOUD under overload: at most %u grains (%u), never under %u", (unsigned)cl_cap, on, CL_CAP_MIN);
+        check(on <= cl_cap && cl_cap == CL_CAP_MIN, t);
+        for (h = 0; h < 172u * 8u; h++) cloud_calm_half(0);
+        snprintf(t, sizeof t, "calm for ~8 s: all %u grains allowed again (%u)", CL_NG, (unsigned)cl_cap);
+        check(cl_cap == CL_NG, t);
+        song.g[G_CLDENS] = dens;
+    }
     dsu_defaults();
     printf(fails ? "HEX fixes: %d FAILED\n" : "HEX fixes: all ok\n", fails);
     return fails != 0;

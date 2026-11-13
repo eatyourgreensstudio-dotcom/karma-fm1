@@ -139,6 +139,12 @@ static void cl_play(cl_t *C, const cl_par_t *P, const CL_RING_T *ring, uint32_t 
     for (i = 0; i < CL_NG; i++)
         if (!C->g[i].on)
             avail[na++] = (uint8_t)i;
+#ifdef CL_CAP_MIN
+    if (CL_NG - na >= cl_cap)                         /* (KARMA 3.1.2: the overload's cap, cloud.c) */
+        na = 0;
+    else if (na > cl_cap - (CL_NG - na))
+        na = cl_cap - (CL_NG - na);
+#endif
     for (t = 0; t < n; t++) {
         uint32_t w = cl_word(&C->rng);
         int seed;

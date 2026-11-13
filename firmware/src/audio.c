@@ -105,7 +105,8 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             audio_max_us = us;
         if ((shed_over & 3u) == 3u)
             shed_req = 1;                               /* two in a row */
-        drum_calm_half(shed_over & 1u);                 /* (3.1.2: the drums' voices come back after ~2 s calm) */
+        drum_calm_half(shed_over & 1u);                 /* (3.1.2: the drums' voices come back after ~2 s calm, */
+        cloud_calm_half(shed_over & 1u);                /*  the CLOUD's grains after ~1 s) */
         song.cpu_q8 = (song.cpu_q8 * 15u + (us * 256u) / (HALF_FRAMES * 1000000u / FS)) / 16u;
         if (fm1_audio_free_half() != half)
             felucca_dbg.late++;                         /* the DMA moved on while we rendered */

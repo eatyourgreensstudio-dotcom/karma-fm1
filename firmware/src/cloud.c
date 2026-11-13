@@ -42,6 +42,11 @@ static const int16_t CL_ULAW[256] = {                 /* mu-law -> 16 bits (MuLa
     372, 356, 340, 324, 308, 292, 276, 260, 244, 228, 212, 196, 180, 164, 148, 132,
     120, 112, 104, 96, 88, 80, 72, 64, 56, 48, 40, 32, 24, 16, 8, 0,
 };
+/* (3.1.2) overload: grains at once at most this many (cloud_dsp.c cl_play). Measured on an FM-1: DENS 0 (her steady
+ * rate at its fastest: 16 grains) with HEX drums and three tracks, ~110 late halves a second. When audio.c sheds, the
+ * cloud gives up grains first (never under CL_CAP_MIN); ~1 s without an overload gives two back */
+#define CL_CAP_MIN 4u
+static uint8_t cl_cap = CL_NG;
 #include "cloud_dsp.c"
 
 static int16_t punch_ring[CLD_N] __attribute__((section(".pool")));   /* (punch.c: its ring, shared) */
@@ -87,6 +92,28 @@ static void cloud_init(void)
 }
 
 /* in[]: what the tracks sent, this block (cleared here for the next); the grains are added to l[] and r[] */
+static int cloud_shed(void)                           /* audio.c's overload (voice.c shed_voice): 1 = fewer grains */
+{
+    uint32_t i, on = 0;
+    if (!cld.live)
+        return 0;
+    for (i = 0; i < CL_NG; i++)
+        on += cloud_cl.g[i].on ? 1u : 0u;
+    if (on <= CL_CAP_MIN)
+        return 0;
+    cl_cap = (uint8_t)(on - 2u < CL_CAP_MIN ? CL_CAP_MIN : on - 2u);   /* (the grains playing end by themselves: no click) */
+    return 1;
+}
+static void cloud_calm_half(int over)                 /* each half: ~1 s without an overload, two grains back */
+{
+    static uint16_t calm;
+    if (over) {
+        calm = 0;
+    } else if (cl_cap < CL_NG && ++calm >= 172u) {
+        cl_cap = (uint8_t)(cl_cap + 2u > CL_NG ? CL_NG : cl_cap + 2u);
+        calm = 0;
+    }
+}
 static void cloud_process(int32_t *in, int32_t *l, int32_t *r, uint32_t n)
 {
     static int32_t wl[CTL], wr[CTL];
