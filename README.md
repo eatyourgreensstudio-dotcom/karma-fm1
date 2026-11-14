@@ -65,3 +65,5 @@ or firmware made from it, share its complete source under the same licence.
 KARMA is not affiliated with or endorsed by M-VAVE, Mutable Instruments, Erica Synths, Korg, Teenage Engineering,
 Hügelton Instruments or Juan Jiant. M-VAVE and FM-1 are trademarks of their owners. The README of SLOOP, which KARMA grew
 from, is kept as [SLOOP-README.md](SLOOP-README.md).
+
+You can also try KARMA in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
