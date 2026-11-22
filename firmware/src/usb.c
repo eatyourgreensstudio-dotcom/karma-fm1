@@ -201,7 +201,22 @@ static struct {
     volatile uint8_t ota_req;    /* F0 22 24 35 7F F7: M-UPGRADE upgrade command (FELUCCA_OTA) */
     uint8_t rx_pend;             /* EP1 OUT packet seen, not yet taken (the MIDI ring was too full) */
     uint32_t rx_held, rx_bad;    /* packets held back (NAK) for room, malformed events ignored */
+#if FELUCCA_UAC
+    /* (3.1.6) the self-heal: a Mac that restarts with the FM-1 on finds it before its audio driver is loaded and
+     * never comes back for the audio (MIDI works, the FM-1 is missing from the audio devices; a replug fixes it).
+     * An audio driver asks about the stream soon after the configuration; none within HEAL_POLLS, the FM-1
+     * reconnects (as a replug), at most HEAL_MAX times until a driver shows up */
+    uint8_t audio_seen;          /* a request to the audio interfaces since the configuration */
+    uint8_t heals;               /* reconnects since a driver last showed up */
+    volatile uint8_t heal_req;   /* usb_poll -> the main loop (usb_retry): reconnect now */
+    uint32_t cfg_polls;          /* polls since the configuration without an audio request */
+    uint32_t heals_all;          /* (diagnostics) */
+#endif
 } usb;
+#if FELUCCA_UAC
+#define HEAL_POLLS (2000u * 12u)                        /* 12 s (usb_poll runs at 2 kHz) */
+#define HEAL_MAX 2u
+#endif
 
 #if FELUCCA_OTA
 /* M-UPGRADE SysEx (ota.c): one received frame at a time (7-bit bytes between
@@ -648,6 +663,16 @@ static void ep0_service(void)
     usb.setups++;
     wvalue = (uint16_t)(s[2] | s[3] << 8);
     wlength = (uint16_t)(s[6] | s[7] << 8);
+#if FELUCCA_UAC
+    /* (3.1.6 self-heal) an audio driver is there: a class request to the audio control or streaming interface or
+     * the stream's endpoint, or the streaming interface's setting asked or set */
+    if (((s[0] & 0x60u) == 0x20u && (((s[0] & 0x1Fu) == 1u && (s[4] == 0 || s[4] == UAC_AS_IF)) ||
+                                     ((s[0] & 0x1Fu) == 2u && s[4] == 0x84u))) ||
+        ((s[1] == 0x0Bu || s[1] == 0x0Au) && (s[0] & 0x1Fu) == 1u && s[4] == UAC_AS_IF)) {
+        usb.audio_seen = 1;
+        usb.heals = 0;
+    }
+#endif
     switch ((uint32_t)s[0] << 8 | s[1]) {
     case 0x0005:                                        /* SET_ADDRESS */
         usb.pend_addr = s[2] & 0x7Fu;
@@ -668,6 +693,10 @@ static void ep0_service(void)
         if (s[2] > 1u)
             goto stall;
         usb.config = s[2];
+#if FELUCCA_UAC
+        usb.audio_seen = 0;                             /* (3.1.6 self-heal: the driver's requests come after this) */
+        usb.cfg_polls = 0;
+#endif
         if (usb.config == 1u)
             ep1_config();
         else
@@ -1398,6 +1427,10 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
             }
         }
     }
+#if FELUCCA_UAC
+    if (usb.config == 1u && !usb.audio_seen && usb.heals < HEAL_MAX && ++usb.cfg_polls == HEAL_POLLS)
+        usb.heal_req = 1;                               /* (3.1.6) configured, no audio driver: reconnect */
+#endif
     iu = sie_rd(S_INTRUSB);
 #ifdef FELUCCA_LOADER
     it = sie_rd(S_INTRTX1) | sie_rd(S_INTRTX2) << 8;    /* the update loader reads both */
@@ -1416,6 +1449,10 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
         usb.resets++;
         sie_wr(S_FADDR, 0);
         usb.config = 0;
+#if FELUCCA_UAC
+        usb.audio_seen = 0;
+        usb.cfg_polls = 0;
+#endif
         usb.suspended = 0;
         mo_r = mo_w;                                    /* nothing stale for the next host */
         usb.sx_on = 0;
@@ -1483,6 +1520,18 @@ static void usb_start(void)                             /* boot, or main-loop re
 static void usb_retry(uint32_t now_ms)
 {
     static uint32_t t;
+#if FELUCCA_UAC
+    if (usb.heal_req && usb.up && !usb.detached) {     /* (3.1.6 self-heal) as a replug: off, back on in ~1 s */
+        usb.heal_req = 0;
+        usb.heals++;
+        usb.heals_all++;
+        usb.up = 0;                                     /* first: usb_poll (TIMER5) stops touching the SIE */
+        usb.config = 0;
+        fm1_usb_off();                                  /* the D+ pull-up off: the host sees a disconnect */
+        t = now_ms;
+        return;
+    }
+#endif
     if (usb.up || usb.detached || now_ms - t < 1000u)
         return;
     t = now_ms;
